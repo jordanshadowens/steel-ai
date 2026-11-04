@@ -1,0 +1,15 @@
+{
+  "name": "steel-ai",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "setup": "npm --prefix UI ci --ignore-scripts",
+    "build": "npm --prefix UI run build",
+    "check": "npm --prefix UI run check",
+    "test": "npm --prefix UI test && node --test packages/sdk/index.test.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
