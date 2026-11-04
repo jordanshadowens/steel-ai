@@ -52,6 +52,22 @@
   font-size: 12px;
 }
 
+@media (max-width: 720px) {
+  .shell-nav {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .shell-nav nav {
+    flex-wrap: wrap;
+  }
+  .shell-health {
+    margin-left: 0;
+  }
+}
+
 .shell-health .status-ok {
   color: #7ddf9a;
 }

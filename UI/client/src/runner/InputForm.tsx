@@ -1,5 +1,6 @@
 import type { WorkflowDefinition, WorkflowInput } from '../api/contracts';
 import { fieldMeta, getPresentation, isVisible, resolveControl } from './inputPresentation';
+import { RecordPicker } from './RecordPicker';
 
 // Metadata-driven project-inputs form. Unknown legacy object inputs keep an
 // explicit advanced JSON control; hidden conditional fields keep their values
@@ -87,6 +88,12 @@ function FieldControl({ def, inp, value, error, disabled, onChange }: {
         <>
           <span className="status-line">Advanced JSON — preserved exactly.</span>
           <textarea id={id} rows={3} value={typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value)} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+        </>
+      )}
+      {control === 'record' && inp.designer && (
+        <>
+          <RecordPicker id={id} binding={inp.designer} value={value} disabled={disabled} onChange={onChange} />
+          <span className="status-line">Bound to {inp.designer.type} records (verified at run start).</span>
         </>
       )}
       {hint !== '' && <span className="status-line">{hint}</span>}

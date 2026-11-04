@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { WorkflowDefinition, WorkflowStep } from '../api/contracts';
+import { useGetDesignerWorkspaceQuery } from '../api/steelApi';
 import { CheckField, DataRefPicker, NumberField, SelectField, TextField } from './fields';
 import { PRED_OPS, PROJECT_TABLES, REASON_TOOLS } from './adapter';
 import { availableRefs } from './preflight';
@@ -185,31 +186,155 @@ export function ReasoningConfig({ step, bodyOf, edit }: { step: WorkflowStep; bo
   );
 }
 
+interface DesignerScope {
+  type?: string;
+  workspace?: string;
+  limit?: number;
+  filters?: Array<{ field?: string; op?: string; value?: unknown; values?: unknown[] }>;
+}
+
 export function DatabaseConfig({ step, bodyOf, edit }: { step: WorkflowStep; bodyOf: string | null; edit: EditFn }) {
-  const cfg = (step.config ?? {}) as { table?: string; project_id_from?: { from?: string }; limit?: number };
+  const cfg = (step.config ?? {}) as { table?: string; project_id_from?: { from?: string }; limit?: number; designer?: DesignerScope };
+  const ws = useGetDesignerWorkspaceQuery(undefined);
+  const designerTypes = ws.data?.types ?? [];
+  const scoped = cfg.designer !== undefined;
+  const scope: DesignerScope = cfg.designer ?? {};
+  const scopeType = designerTypes.find((t) => t.name === scope.type || t.type_id === scope.type) ?? null;
+  const scopeFields = (scopeType?.fields ?? []).filter((f) => f.status === 'active');
+
+  const setScope = (next: DesignerScope | null) => edit((d) => {
+    const t = findStep(d, step.step_id, bodyOf);
+    if (!t) return;
+    const c = { ...(t.config ?? {}) } as Record<string, unknown>;
+    if (next === null) {
+      delete c.designer;
+      if (typeof c.table !== 'string') c.table = PROJECT_TABLES[0];
+    } else {
+      delete c.table;
+      delete c.project_id_from;
+      c.designer = next;
+    }
+    t.config = c;
+  });
+  const patchScope = (patch: Partial<DesignerScope>) => setScope({ ...scope, ...patch });
+
   return (
     <section aria-label="Lookup">
       <h3>What to look up</h3>
-      <SelectField
-        label="Table"
-        value={cfg.table ?? PROJECT_TABLES[0]}
-        options={PROJECT_TABLES.map((t) => ({ value: t, label: t }))}
-        onChange={(v) => patchCfg(edit, step.step_id, bodyOf, { table: v })}
-      />
-      <TextField
-        label="Project id from (optional)"
-        placeholder="scope.project"
-        value={cfg.project_id_from?.from ?? ''}
-        onCommit={(v) => edit((d) => {
-          const t = findStep(d, step.step_id, bodyOf);
-          if (!t) return;
-          const c = { ...(t.config ?? {}) } as Record<string, unknown>;
-          if (v.trim() === '') delete c.project_id_from;
-          else c.project_id_from = { from: v.trim() };
-          t.config = c;
-        })}
-      />
-      <NumberField label="Limit" min={1} value={cfg.limit} onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { limit: v })} />
+      <div className="toolbar" role="radiogroup" aria-label="Lookup scope">
+        <label className="status-line">
+          <input type="radio" name={`scope-${step.step_id}`} checked={!scoped} onChange={() => setScope(null)} /> Project table
+        </label>
+        <label className="status-line">
+          <input type="radio" name={`scope-${step.step_id}`} checked={scoped} onChange={() => setScope({ type: designerTypes[0]?.name ?? '' })} /> Designer records
+        </label>
+      </div>
+      {!scoped ? (
+        <>
+          <SelectField
+            label="Table"
+            value={cfg.table ?? PROJECT_TABLES[0]}
+            options={PROJECT_TABLES.map((t) => ({ value: t, label: t }))}
+            onChange={(v) => patchCfg(edit, step.step_id, bodyOf, { table: v })}
+          />
+          <TextField
+            label="Project id from (optional)"
+            placeholder="scope.project"
+            value={cfg.project_id_from?.from ?? ''}
+            onCommit={(v) => edit((d) => {
+              const t = findStep(d, step.step_id, bodyOf);
+              if (!t) return;
+              const c = { ...(t.config ?? {}) } as Record<string, unknown>;
+              if (v.trim() === '') delete c.project_id_from;
+              else c.project_id_from = { from: v.trim() };
+              t.config = c;
+            })}
+          />
+          <NumberField label="Limit" min={1} value={cfg.limit} onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { limit: v })} />
+        </>
+      ) : (
+        <>
+          <p className="status-line">Runs FIND Record over the live published spec at run time (local store only).</p>
+          <SelectField
+            label="Designer type"
+            value={scope.type ?? ''}
+            options={designerTypes.map((t) => ({ value: t.name, label: `${t.name} (v${t.version})` }))}
+            emptyLabel={ws.isLoading ? 'Loading…' : designerTypes.length === 0 ? '(no published types)' : '— pick —'}
+            onChange={(v) => patchScope({ type: v, filters: [] })}
+          />
+          {(scope.filters ?? []).map((f, i) => (
+            <div key={i} className="map-row">
+              <select
+                aria-label={`Filter ${i + 1} field`}
+                value={f.field ?? ''}
+                onChange={(e) => {
+                  const filters = [...(scope.filters ?? [])];
+                  filters[i] = { ...filters[i], field: e.target.value };
+                  patchScope({ filters });
+                }}
+              >
+                <option value="">— field —</option>
+                {scopeFields.map((x) => (
+                  <option key={x.field_id} value={x.name}>
+                    {x.name} [{x.ftype}]
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label={`Filter ${i + 1} operator`}
+                value={f.op ?? '='}
+                onChange={(e) => {
+                  const filters = [...(scope.filters ?? [])];
+                  const op = e.target.value;
+                  filters[i] = op === 'IN' ? { field: filters[i].field, op, values: [] } : { field: filters[i].field, op, value: '' };
+                  patchScope({ filters });
+                }}
+              >
+                <option value="=">=</option>
+                <option value="IN">IN</option>
+              </select>
+              {f.op === 'IN' ? (
+                <textarea
+                  aria-label={`Filter ${i + 1} values, one per line`}
+                  rows={2}
+                  placeholder="one value per line"
+                  value={((f.values ?? []) as unknown[]).map((v) => String(v)).join('\n')}
+                  onChange={(e) => {
+                    const filters = [...(scope.filters ?? [])];
+                    filters[i] = { ...filters[i], values: e.target.value.split('\n').map((l) => l.trim()).filter((l) => l !== '') };
+                    patchScope({ filters });
+                  }}
+                />
+              ) : (
+                <input
+                  type="text"
+                  aria-label={`Filter ${i + 1} value`}
+                  value={f.value === undefined ? '' : String(f.value)}
+                  onChange={(e) => {
+                    const filters = [...(scope.filters ?? [])];
+                    filters[i] = { ...filters[i], value: smartValue(e.target.value) };
+                    patchScope({ filters });
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                className="btn"
+                aria-label={`Remove filter ${i + 1}`}
+                onClick={() => patchScope({ filters: (scope.filters ?? []).filter((_, n) => n !== i) })}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <div className="toolbar">
+            <button type="button" className="btn" onClick={() => patchScope({ filters: [...(scope.filters ?? []), { field: scopeFields[0]?.name ?? '', op: '=', value: '' }] })}>
+              + Filter
+            </button>
+          </div>
+          <NumberField label="Limit" min={1} value={scope.limit} onCommit={(v) => patchScope({ limit: v ?? undefined })} />
+        </>
+      )}
     </section>
   );
 }

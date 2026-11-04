@@ -36,9 +36,12 @@ export function fieldMeta(def: WorkflowDefinition, name: string): InputFieldMeta
   return getPresentation(def)?.fields?.[name] ?? {};
 }
 
-export type ResolvedControl = 'text' | 'number' | 'boolean' | 'select' | 'rows' | 'json';
+export type ResolvedControl = 'text' | 'number' | 'boolean' | 'select' | 'rows' | 'json' | 'record';
 
 export function resolveControl(inp: WorkflowInput, meta: InputFieldMeta): ResolvedControl {
+  // A designer binding is semantic (the server verifies the record), so it
+  // takes precedence over display-only control overrides.
+  if (inp.designer) return 'record';
   if (meta.control && meta.control !== 'auto') return meta.control;
   switch (inp.type) {
     case 'number': return 'number';
@@ -90,6 +93,15 @@ export function coerceValue(inp: WorkflowInput, control: ResolvedControl, raw: u
     const n = Number(text);
     if (!Number.isFinite(n)) throw new Error(`${label} must be a number`);
     return n;
+  }
+  if (control === 'record') {
+    // Record pickers submit record_ids (mode record) or field values (mode
+    // value); the server verifies existence against the live spec.
+    if (raw === undefined || raw === null || raw === '') {
+      if (inp.required) throw new Error(`${label} is required`);
+      return undefined;
+    }
+    return raw;
   }
   // text / select
   const text = String(raw ?? '');

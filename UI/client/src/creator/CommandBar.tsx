@@ -26,9 +26,16 @@ export interface ValidationReport {
   valid: boolean;
 }
 
-function apiMessage(err: unknown): string {
+export function apiMessage(err: unknown): string {
   if (err && typeof err === 'object' && 'data' in err) {
-    const data = (err as { data?: { error?: string } }).data;
+    const data = (err as { data?: { error?: string; errors?: unknown } }).data;
+    if (Array.isArray(data?.errors)) {
+      const msgs = (data.errors as unknown[]).filter((e): e is string => typeof e === 'string' && e.trim() !== '');
+      if (msgs.length > 0) {
+        const shown = msgs.slice(0, 2).join(' ');
+        return msgs.length > 2 ? `${shown} (+${msgs.length - 2} more — click Validate for the full list)` : shown;
+      }
+    }
     if (data?.error) return data.error;
   }
   if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);

@@ -2,7 +2,7 @@
   "name": "@steel-ai/workflow-ui",
   "version": "0.1.0",
   "type": "module",
-  "description": "Steel AI workflow and template integration client",
+  "description": "Steel AI workflow and template authoring client",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "tsc -p tsconfig.client-react.json --noEmit && vite build",
@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "dependencies": {
     "@fontsource/montserrat": "5.3.0",

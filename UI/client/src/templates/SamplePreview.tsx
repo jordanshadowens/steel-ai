@@ -3,6 +3,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setSampleValue } from '../store/templateEditor';
 import { smartValue } from './specEdit';
 import type { Spec } from './specEdit';
+import { SlotDesignerBinding, type SlotBinding } from './SlotDesignerBinding';
 
 // Representative preview from explicitly supplied example data, labeled
 // Sample. It renders through the real pipeline but writes no customer
@@ -14,12 +15,13 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
   const [meta, setMeta] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bindings, setBindings] = useState<Record<string, SlotBinding | null>>({});
 
   useEffect(() => () => {
     if (url) URL.revokeObjectURL(url);
   }, [url]);
 
-  const empty = slots.filter((s) => (samples[s] ?? '').trim() === '');
+  const empty = slots.filter((s) => (samples[s] ?? '').trim() === '' && !bindings[s]?.record_id);
 
   const render = async () => {
     setBusy(true);
@@ -31,14 +33,16 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
     setMeta(null);
     try {
       const sample: Record<string, unknown> = {};
+      const designer: Record<string, SlotBinding> = {};
       for (const s of slots) {
         const raw = (samples[s] ?? '').trim();
         if (raw !== '') sample[s] = smartValue(raw);
+        else if (bindings[s]?.record_id) designer[s] = bindings[s] as SlotBinding;
       }
       const r = await fetch('/api/templates/preview', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ spec, sample }),
+        body: JSON.stringify({ spec, sample, ...(Object.keys(designer).length > 0 ? { designer } : {}) }),
       });
       if (!r.ok) {
         const body = (await r.json().catch(() => ({}))) as { error?: string; errors?: string[] };
@@ -72,6 +76,7 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
             placeholder="example value (JSON for lists/objects)"
             onChange={(e) => dispatch(setSampleValue({ slot: s, value: e.target.value }))}
           />
+          <SlotDesignerBinding slot={s} value={bindings[s] ?? null} onChange={(next) => setBindings((prev) => ({ ...prev, [s]: next }))} />
         </div>
       ))}
       {empty.length > 0 && slots.length > 0 && (

@@ -1,0 +1,11 @@
+Steel AI Developer Connector — NOTICE (developer connector)
+
+This package is a standalone developer SDK/connector. It contains no
+Steel engine, database, editor, acquisition, or verification source;
+it implements only the public steel-connector/1 transport, local
+configuration, an OpenAI-compatible local provider client, and the
+outbound poll/draft/submit loop.
+
+Third-party software: none bundled (Node.js built-ins only).
+The private Steel AI Server and Steel Studio remain under their own
+proprietary licenses and are NOT part of this package.

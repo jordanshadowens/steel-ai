@@ -7,9 +7,11 @@
     "setup": "npm --prefix UI ci --ignore-scripts",
     "build": "npm --prefix UI run build",
     "check": "npm --prefix UI run check",
-    "test": "npm --prefix UI test && node --test packages/sdk/index.test.js"
+    "test": "npm --prefix UI test && node --test packages/sdk/index.test.js && npm --prefix packages/connector test",
+    "test:connector": "npm --prefix packages/connector test"
   },
   "engines": {
     "node": ">=24"
-  }
+  },
+  "homepage": "https://steelai.dev/"
 }

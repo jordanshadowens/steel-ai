@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { useStore } from 'react-redux';
 import type { WorkflowDefinition, WorkflowStep } from '../api/contracts';
 import { useListSkillsQuery } from '../api/steelApi';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
+import type { RootState } from '../store/store';
 import { selectStep, setPanel, updateDraft } from '../store/workflowEditor';
-import { TYPE_LABELS, deleteStep, renameStep } from './adapter';
+import { TYPE_LABELS, addWorkflowInput, defaultStartStaleFields, deleteStep, removeWorkflowInput, renameStep, renameWorkflowInput, syncDefaultStartFields } from './adapter';
 import { ApprovalConfig, BranchConfig, DatabaseConfig, InputCollectionConfig, LoopConfig, ReasoningConfig, RoutingSection, SkillRetrievalConfig, findStep } from './stepConfigs';
 import type { EditFn } from './stepConfigs';
 import { MappingEditor } from './stepConfigs';
@@ -12,6 +14,7 @@ import { SkillStepInspector } from './SkillStepInspector';
 import { ArtifactStepInspector } from './ArtifactStepInspector';
 import { DocStepInspector } from './DocStepInspector';
 import { CheckField, DataRefPicker, NumberField, SelectField, TextField } from './fields';
+import { DesignerBindingPicker } from '../designer/DesignerBindingPicker';
 import { InputPresentationEditor } from './InputPresentationEditor';
 import { availableRefs, bodyRefs } from './preflight';
 import { useNotify } from './notices';
@@ -25,12 +28,17 @@ export function Inspector({ bodySel, setBodySel, validationStatus = null, requir
   const selectedStepId = useAppSelector((s) => s.workflowEditor.selectedStepId);
   const skills = useListSkillsQuery();
   const floating = useFloatingPanel();
+  const reduxStore = useStore<RootState>();
   useEffect(() => { if (floating.ref.current) floating.ref.current.scrollTop = 0; }, [selectedStepId, bodySel]);
 
   if (!draft) return null;
 
   const edit: EditFn = (fn) => {
-    const next = JSON.parse(JSON.stringify(draft)) as WorkflowDefinition;
+    // Fresh base avoids losing a just-committed blur edit when a button
+    // click handler from the same render follows (blur dispatches first,
+    // then click must build on the committed draft, not the stale prop).
+    const fresh = reduxStore.getState().workflowEditor.draft ?? draft;
+    const next = JSON.parse(JSON.stringify(fresh)) as WorkflowDefinition;
     fn(next);
     dispatch(updateDraft(next));
   };
@@ -183,7 +191,28 @@ function StepEditor({ def, step, bodyOf, edit, onEditBody, skillsVersion }: {
   );
 }
 
+// Input name commits on blur/Enter (one undo entry per rename, caret
+// never jumps, intermediate typing never scatters refs). Empty commits
+// are preserved so validation reports them actionably on Save/Validate.
+function InputNameField({ index, value, onCommit }: { index: number; value: string; onCommit: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  useEffect(() => setText(value), [value]);
+  return (
+    <input
+      type="text"
+      aria-label={`Input ${index + 1} name`}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => { if (text !== value) onCommit(text.trim()); }}
+      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+    />
+  );
+}
+
 function WorkflowSettings({ def, edit, validationStatus }: { def: WorkflowDefinition; edit: EditFn; validationStatus: 'valid' | 'invalid' | null }) {
+  const dispatch = useAppDispatch();
+  const reduxStore = useStore<RootState>();
+  const freshDef = (): WorkflowDefinition => reduxStore.getState().workflowEditor.draft ?? def;
   const refs = [...(def.inputs ?? []).map((i) => ({ ref: i.name, label: i.name, detail: `input · ${i.type ?? 'string'}` })),
     ...(def.steps ?? []).map((s) => ({ ref: s.step_id, label: s.step_id, detail: `output of ${s.name || s.step_id}` }))];
   const policy = (def.policy ?? {}) as { execution_approval?: string; skill_approval?: string; four_eyes?: boolean };
@@ -208,15 +237,15 @@ function WorkflowSettings({ def, edit, validationStatus }: { def: WorkflowDefini
         <h3>Inputs <span className="count-badge">{def.inputs?.length ?? 0} fields</span></h3>
         <div className="input-column-head" aria-hidden="true"><span>Field</span><span>Type</span><span>Req.</span><span /></div>
         {(def.inputs ?? []).map((inp, i) => (
-          <div key={i} className="map-row settings-input-row">
-            <input
-              type="text"
-              aria-label={`Input ${i + 1} name`}
+          <div key={i}>
+          <div className="map-row settings-input-row">
+            <InputNameField
+              index={i}
               value={inp.name}
-              onChange={(e) => edit((d) => {
-                const t = d.inputs?.[i];
-                if (t) t.name = e.target.value;
-              })}
+              onCommit={(v) => {
+                const next = renameWorkflowInput(freshDef(), i, v);
+                if (next) dispatch(updateDraft(next));
+              }}
             />
             <select
               aria-label={`Input ${i + 1} type`}
@@ -246,25 +275,48 @@ function WorkflowSettings({ def, edit, validationStatus }: { def: WorkflowDefini
               type="button"
               className="btn"
               aria-label={`Remove input ${inp.name}`}
-              onClick={() => edit((d) => {
-                d.inputs?.splice(i, 1);
-              })}
+              onClick={() => {
+                const next = removeWorkflowInput(freshDef(), i);
+                if (next) dispatch(updateDraft(next));
+              }}
             >
               ×
             </button>
+          </div>
+          <DesignerBindingPicker
+            value={inp.designer ?? null}
+            onChange={(next) => edit((d) => {
+              const t = d.inputs?.[i];
+              if (!t) return;
+              if (next === null) delete t.designer;
+              else t.designer = next;
+            })}
+          />
           </div>
         ))}
         {(def.inputs ?? []).length === 0 && <p className="status-line">No inputs.</p>}
         <button
           type="button"
           className="btn"
-          onClick={() => edit((d) => {
-            d.inputs = d.inputs ?? [];
-            d.inputs.push({ name: `input${d.inputs.length + 1}`, type: 'string', required: false });
-          })}
+          onClick={() => dispatch(updateDraft(addWorkflowInput(freshDef())))}
         >
           + Add input
         </button>
+        {defaultStartStaleFields(def).length > 0 && (
+          <p className="status-line" role="alert">
+            <span className="status-bad">Start still collects {defaultStartStaleFields(def).join(', ')}, which is not a declared input. </span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                const next = syncDefaultStartFields(freshDef());
+                if (next) dispatch(updateDraft(next));
+              }}
+            >
+              Sync start fields to inputs
+            </button>
+          </p>
+        )}
       </section>
       <section aria-label="Policy">
         <h3>Policy</h3>

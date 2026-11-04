@@ -1,29 +1,42 @@
 # Steel AI
 
-Building the foundation of your AI systems.
+[Website](https://steelai.dev/) · [Developer access guide](https://steelai.dev/developer-guide.html) · [Installation guide](INSTALL.md)
 
-Public React/TypeScript Workflow Creator, Runner, template-authoring interface, and developer contracts. Redux Toolkit manages state/API access; Motion provides transitions.
+Visual workflow authoring, a developer SDK, and a locally installed connector for your own LLM. The server checks proposed calculations and preserves accepted versions for reuse.
 
-## Develop
+## Install the developer tools
 
-Requires Node.js 24+ and npm. Run `npm run setup`, `npm run check`, `npm test`, and `npm run build`. Run `npm --prefix UI run dev` and open the printed `/app/` URL. The dev proxy expects a separately licensed Steel runtime at `http://127.0.0.1:3100`, exposing `/api`.
+Requires Node.js 24+ and npm. Clone this repository, then:
 
-This source builds the client. It is not a standalone engine or runtime installer. The server, interpreter, database/graph memory, capability acquisition/repair implementation and native Document/Spreadsheet/Presentation editors remain proprietary and are not bundled here. Without a runtime, data/run/approval/AI operations are unavailable; the UI reports that state. Template configuration forms are public; native editor implementations are excluded.
+```sh
+npm run setup
+npm run check
+npm test
+npm run build
+npm --prefix UI run dev
+```
 
-## Contracts
+Open the printed `/app/` URL. The UI proxy expects an authorized Steel runtime at `http://127.0.0.1:3100`. Without one, backend features are unavailable. This checkout is the client and integration surface; it does not include the proprietary runtime or native editors.
 
-`packages/sdk/contracts.ts` exports API/workflow/template types under Apache-2.0. `UI/client/src/api/steelApi.ts` contains the application's typed API integration. Never put model credentials in browser code.
+## Connect your local LLM
+
+The connector runs on YOUR developer machine. No inbound port is required:
+
+```sh
+node packages/connector/src/cli.js init --server http://127.0.0.1:3100 --provider http://127.0.0.1:11434/v1 --model YOUR_MODEL
+node packages/connector/src/cli.js health
+node packages/connector/src/cli.js compat
+node packages/connector/src/cli.js run
+```
+
+Before health/run, set `STEEL_API_KEY` to a dedicated connector credential supplied by your server owner. Your local provider credential, if needed, goes in `STEEL_PROVIDER_KEY`. Configure the provider's actual OpenAI-compatible base URL; `/v1` is appropriate only if your provider serves it. See [connector setup](packages/connector/QUICKSTART.md) for pairing, scope, configuration and custom adapters. No npm registry publication is claimed; use the checked-out source or install the local package.
+
+Hosted keys from steelai.dev currently test the status API only. They do not authorize connector jobs or hosted workflow execution. Join the developer waitlist or contact us at the website for runtime access.
+
+## Components
+
+The public application is React/TypeScript with Redux Toolkit. `packages/sdk` provides the JavaScript client and external contracts. `packages/connector` provides the outbound local-model bridge. The server owns verification, approvals, execution, and persistence. The embedded database/graph memory, interpreter, capability acquisition and repair, and native Document/Spreadsheet/Presentation editors stay private.
 
 ## License
 
-Application source: AGPL-3.0-only. Standalone SDK contracts: Apache-2.0. See LICENSING.md and the full license texts. Third-party dependencies retain their own licenses; proprietary components are not licensed by this repository.
-
-## JavaScript SDK
-
-```js
-import { SteelClient } from "@steel-ai/sdk";
-const steel = new SteelClient({baseUrl: "http://127.0.0.1:3100/api"});
-console.log(await steel.workflows());
-```
-
-SDK transport tests use synthetic response fixtures, not a live runtime.
+Application: AGPL-3.0-only. Standalone SDK and connector: Apache-2.0. See [LICENSING.md](LICENSING.md). Third-party licenses remain intact. Public clients do not grant access to or redistribution rights for the proprietary runtime.

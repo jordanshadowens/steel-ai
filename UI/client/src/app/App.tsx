@@ -5,12 +5,14 @@ import type { Route } from './router';
 import { CreatorPage } from '../creator/CreatorPage';
 import { RunnerPage } from '../runner/RunnerPage';
 import { TemplatesPage } from '../templates/TemplatesPage';
+import { DesignerPage } from '../designer/DesignerPage';
 import './App.css';
 
 const DESTINATIONS: Array<{ route: Route; label: string }> = [
   { route: 'creator', label: 'Workflow Creator' },
   { route: 'runner', label: 'Workflow Runner' },
   { route: 'templates', label: 'Templates' },
+  { route: 'designer', label: 'Data Designer' },
 ];
 
 export function App() {
@@ -53,11 +55,12 @@ export function App() {
             animate={{ opacity: 1 }}
             exit={reduceMotion ? undefined : { opacity: 0 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            aria-label={route === 'creator' ? 'Workflow Creator' : route === 'runner' ? 'Workflow Runner' : 'Templates'}
+            aria-label={route === 'creator' ? 'Workflow Creator' : route === 'runner' ? 'Workflow Runner' : route === 'templates' ? 'Templates' : 'Data Designer'}
           >
             {route === 'creator' && <CreatorPage />}
             {route === 'runner' && <RunnerPage />}
             {route === 'templates' && <TemplatesPage />}
+            {route === 'designer' && <DesignerPage />}
           </motion.div>
         </AnimatePresence>
       </main>

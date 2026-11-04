@@ -9,7 +9,26 @@ export interface WorkflowInput {
   name: string;
   type: string;
   required?: boolean;
+  designer?: DesignerInputBinding;
   [key: string]: unknown;
+}
+
+// Workflow-input binding to designer records. mode "record" (default)
+// submits a record_id; mode "value" submits one field's value.
+export interface DesignerInputBinding {
+  type: string;
+  field?: string;
+  mode?: 'record' | 'value';
+  workspace?: string;
+}
+
+export interface SmqlQueryResult {
+  outcome: 'ok' | 'unknown';
+  reason?: string;
+  rows: Array<Record<string, unknown>>;
+  stats?: Record<string, unknown>;
+  warnings?: string[];
+  planHash?: string;
 }
 
 export interface WorkflowStep {
@@ -233,3 +252,150 @@ export type StepType =
   | 'output_composition'
   | 'document_generation'
   | 'artifact_generation';
+
+// Data Designer mirrors (UI/src/server/designerRoutes.ts). The backend
+// stays authoritative; these types must track it, never extend it.
+
+export type DesignerFtype = 'text' | 'integer' | 'decimal' | 'boolean' | 'date' | 'timestamp' | 'enum';
+
+export interface DesignerField {
+  field_id: string;
+  name: string;
+  ftype: DesignerFtype;
+  position: number;
+  required: boolean;
+  unique: boolean;
+  repeated: boolean;
+  default: unknown;
+  validation: Record<string, unknown>;
+  status: 'active' | 'retired';
+}
+
+export interface DesignerRelationship {
+  rel_id: string;
+  src_type: string;
+  dst_type: string;
+  name: string;
+  reverse_name: string | null;
+  cardinality: 'one' | 'many';
+  delete_behavior: 'restrict' | 'cascade' | 'set_null';
+  status: 'active' | 'retired';
+}
+
+export interface DesignerTypeRow {
+  type_id: string;
+  workspace_id: string;
+  name: string;
+  status: 'active' | 'archived';
+  version: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DesignerTypeDetail extends DesignerTypeRow {
+  fields: DesignerField[];
+  relationships: DesignerRelationship[];
+  draft_sha256: string;
+  validated: { ok: boolean; draft_sha256: string; current: boolean } | null;
+}
+
+export interface DesignerValidationError {
+  code: string;
+  message: string;
+  field?: string | null;
+  field_id?: string;
+  rel_id?: string;
+  [key: string]: unknown;
+}
+
+export interface DesignerValidateResult {
+  ok: boolean;
+  errors: DesignerValidationError[];
+  draft_sha256: string;
+}
+
+export interface DesignerMigrationOp {
+  op: string;
+  field_id?: string;
+  rel_id?: string;
+  name?: string;
+  keys?: string[];
+  [key: string]: unknown;
+}
+
+export interface DesignerPublishResult {
+  ok: boolean;
+  version: number;
+  ops: DesignerMigrationOp[];
+  destructive: Array<DesignerMigrationOp & { reason: string }>;
+  records_checked: number;
+  backfilled: number;
+  backup_path: string | null;
+  backup_note: string | null;
+  spec_sha256: string;
+}
+
+export interface DesignerPublishRefusal {
+  error: string;
+  report: {
+    errors?: DesignerValidationError[];
+    violations?: Array<{ record_id: string; field: string; code: string; message: string }>;
+    ops?: DesignerMigrationOp[];
+    destructive?: Array<DesignerMigrationOp & { reason: string }>;
+    draft_sha256?: string;
+  } | null;
+}
+
+export interface DesignerVersionRow {
+  version: number;
+  status: 'published' | 'superseded';
+  spec_sha256: string;
+  created_by: string;
+  created_at?: string;
+  published_at?: string;
+}
+
+export interface DesignerSpec {
+  type_id: string;
+  workspace_id: string;
+  name: string;
+  version: number;
+  status: string;
+  spec_sha256: string;
+  fields: DesignerField[];
+  relationships: DesignerRelationship[];
+}
+
+export interface DesignerRecord {
+  record_id: string;
+  workspace_id: string;
+  type_id: string;
+  type_name: string;
+  type_version: number;
+  lifecycle: 'active' | 'deleted';
+  values: Record<string, unknown>;
+  field_ids: Record<string, string>;
+  links?: Array<{ rel: string; rel_id: string; dst_record: string; link_id: string }>;
+  [key: string]: unknown;
+}
+
+export interface DesignerLink {
+  link_id: string;
+  rel_id: string;
+  src_record: string;
+  dst_record: string;
+  created_at?: string;
+}
+
+export interface DesignerWorkspace {
+  workspace: string;
+  types: DesignerTypeDetail[];
+}
+
+export interface DesignerImportReport {
+  ok: boolean;
+  errors: DesignerValidationError[];
+  conflicts: Array<{ name: string; reason: string }>;
+  warnings: Array<{ name: string; warning: string }>;
+  creates: string[];
+}

@@ -14,6 +14,8 @@ vi.mock('../api/steelApi', () => ({
   useListTemplatesQuery: () => ({ data: { templates: [] } }),
   useGetTemplateVersionsQuery: () => ({ data: { versions: [] } }),
   useGetTemplateVersionQuery: () => ({ data: { slots: [] } }),
+  useGetDesignerWorkspaceQuery: () => ({ data: { types: [] }, isLoading: false, error: undefined }),
+  useListDesignerRecordsQuery: () => ({ data: { records: [] }, isLoading: false, error: undefined }),
 }));
 
 afterEach(cleanup);

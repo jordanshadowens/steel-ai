@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'creator' | 'runner' | 'templates';
+export type Route = 'creator' | 'runner' | 'templates' | 'designer';
 
 // History routing in production (/ → Creator). Before the route cutover the
 // bundle is served from /app/, where pathname routing cannot work, so the
@@ -10,10 +10,12 @@ export function parseRoute(): Route {
   if (pathname.startsWith('/app')) {
     if (hash.startsWith('#/runner')) return 'runner';
     if (hash.startsWith('#/templates')) return 'templates';
+    if (hash.startsWith('#/designer')) return 'designer';
     return 'creator';
   }
   if (pathname === '/runner' || pathname.startsWith('/runner/')) return 'runner';
   if (pathname === '/templates' || pathname.startsWith('/templates/')) return 'templates';
+  if (pathname === '/designer' || pathname.startsWith('/designer/')) return 'designer';
   return 'creator';
 }
 

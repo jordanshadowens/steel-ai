@@ -6,6 +6,20 @@ import type {
   ReviseResult,
   RunRow,
   SkillRow,
+  DesignerField,
+  DesignerImportReport,
+  DesignerLink,
+  DesignerMigrationOp,
+  DesignerPublishResult,
+  DesignerRecord,
+  DesignerRelationship,
+  DesignerSpec,
+  DesignerTypeDetail,
+  DesignerTypeRow,
+  DesignerWorkspace,
+  SmqlQueryResult,
+  DesignerValidateResult,
+  DesignerVersionRow,
   TemplateKind,
   TemplateRow,
   TemplateValidateResult,
@@ -21,7 +35,7 @@ import type {
 export const steelApi = createApi({
   reducerPath: 'steelApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Workflow', 'WorkflowVersion', 'Run', 'Approval', 'Skill', 'Template', 'TemplateVersion', 'Document'],
+  tagTypes: ['Workflow', 'WorkflowVersion', 'Run', 'Approval', 'Skill', 'Template', 'TemplateVersion', 'Document', 'DesignerType', 'DesignerRecord'],
   endpoints: (build) => ({
     health: build.query<{ ok: boolean }, void>({
       query: () => '/health',
@@ -174,6 +188,149 @@ export const steelApi = createApi({
       },
       providesTags: ['Document'],
     }),
+    listDesignerTypes: build.query<{ types: DesignerTypeRow[] }, { include_archived?: boolean } | void>({
+      query: (args) => (args?.include_archived ? '/designer/types?include_archived=1' : '/designer/types'),
+      providesTags: ['DesignerType'],
+    }),
+    getDesignerType: build.query<{ type: DesignerTypeDetail }, string>({
+      query: (id) => `/designer/types/${encodeURIComponent(id)}`,
+      providesTags: (_r, _e, id) => [{ type: 'DesignerType', id }],
+    }),
+    getDesignerWorkspace: build.query<DesignerWorkspace, { include_archived?: boolean } | void>({
+      query: (args) => (args?.include_archived ? '/designer/workspace?include_archived=1' : '/designer/workspace'),
+      providesTags: ['DesignerType'],
+    }),
+    createDesignerType: build.mutation<{ ok: boolean; type: DesignerTypeRow }, { name: string }>({
+      query: (body) => ({ url: '/designer/types', method: 'POST', body }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    renameDesignerType: build.mutation<{ ok: boolean; type: DesignerTypeRow }, { id: string; name: string }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}`, method: 'PATCH', body }),
+      invalidatesTags: (_r, _e, { id }) => ['DesignerType', { type: 'DesignerType', id }],
+    }),
+    duplicateDesignerType: build.mutation<{ ok: boolean; type: DesignerTypeRow }, { id: string; name: string }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/duplicate`, method: 'POST', body }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    archiveDesignerType: build.mutation<{ ok: boolean; type: DesignerTypeRow }, { id: string }>({
+      query: ({ id }) => ({ url: `/designer/types/${encodeURIComponent(id)}/archive`, method: 'POST', body: {} }),
+      invalidatesTags: (_r, _e, { id }) => ['DesignerType', { type: 'DesignerType', id }],
+    }),
+    unarchiveDesignerType: build.mutation<{ ok: boolean; type: DesignerTypeRow }, { id: string }>({
+      query: ({ id }) => ({ url: `/designer/types/${encodeURIComponent(id)}/unarchive`, method: 'POST', body: {} }),
+      invalidatesTags: (_r, _e, { id }) => ['DesignerType', { type: 'DesignerType', id }],
+    }),
+    addDesignerField: build.mutation<{ ok: boolean; field: DesignerField }, { id: string } & Record<string, unknown>>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/fields`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'DesignerType', id }],
+    }),
+    updateDesignerField: build.mutation<{ ok: boolean; field: DesignerField }, { field_id: string; type_id: string } & Record<string, unknown>>({
+      query: ({ field_id, type_id: _typeId, ...body }) => ({ url: `/designer/fields/${encodeURIComponent(field_id)}`, method: 'PATCH', body }),
+      invalidatesTags: (_r, _e, { type_id }) => [{ type: 'DesignerType', id: type_id }],
+    }),
+    retireDesignerField: build.mutation<{ ok: boolean; field: DesignerField }, { field_id: string; type_id: string; retire: boolean }>({
+      query: ({ field_id, retire }) => ({ url: `/designer/fields/${encodeURIComponent(field_id)}/${retire ? 'retire' : 'unretire'}`, method: 'POST', body: {} }),
+      invalidatesTags: (_r, _e, { type_id }) => [{ type: 'DesignerType', id: type_id }],
+    }),
+    reorderDesignerFields: build.mutation<{ ok: boolean; fields: DesignerField[] }, { id: string; field_ids: string[] }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/reorder`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'DesignerType', id }],
+    }),
+    addDesignerRelationship: build.mutation<{ ok: boolean; relationship: DesignerRelationship }, Record<string, unknown>>({
+      query: (body) => ({ url: '/designer/relationships', method: 'POST', body }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    updateDesignerRelationship: build.mutation<{ ok: boolean; relationship: DesignerRelationship }, { rel_id: string } & Record<string, unknown>>({
+      query: ({ rel_id, ...body }) => ({ url: `/designer/relationships/${encodeURIComponent(rel_id)}`, method: 'PATCH', body }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    retireDesignerRelationship: build.mutation<{ ok: boolean; relationship: DesignerRelationship }, { rel_id: string }>({
+      query: ({ rel_id }) => ({ url: `/designer/relationships/${encodeURIComponent(rel_id)}/retire`, method: 'POST', body: {} }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    validateDesignerDraft: build.mutation<DesignerValidateResult, { id: string }>({
+      query: ({ id }) => ({ url: `/designer/types/${encodeURIComponent(id)}/validate`, method: 'POST', body: {} }),
+      invalidatesTags: (_r, _e, { id }) => [{ type: 'DesignerType', id }],
+    }),
+    publishDesignerType: build.mutation<DesignerPublishResult, { id: string; backfill?: Record<string, unknown>; acknowledgeDestructive?: boolean }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/publish`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, { id }) => ['DesignerType', { type: 'DesignerType', id }, 'DesignerRecord'],
+    }),
+    rollbackDesignerType: build.mutation<{ ok: boolean; version: number }, { id: string; to_version: number }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/rollback`, method: 'POST', body }),
+      invalidatesTags: (_r, _e, { id }) => ['DesignerType', { type: 'DesignerType', id }, 'DesignerRecord'],
+    }),
+    listDesignerVersions: build.query<{ versions: DesignerVersionRow[] }, string>({
+      query: (id) => `/designer/types/${encodeURIComponent(id)}/versions`,
+      providesTags: (_r, _e, id) => [{ type: 'DesignerType', id }],
+    }),
+    getDesignerVersion: build.query<{ spec: DesignerSpec }, { id: string; version: number }>({
+      query: ({ id, version }) => `/designer/types/${encodeURIComponent(id)}/versions/${version}`,
+    }),
+    diffDesignerVersions: build.query<{ ops: DesignerMigrationOp[] }, { id: string; from: number; to: number }>({
+      query: ({ id, from, to }) => `/designer/types/${encodeURIComponent(id)}/diff?from=${from}&to=${to}`,
+    }),
+    listDesignerRecords: build.query<{ records: DesignerRecord[] }, { id: string; lifecycle?: string; limit?: number }>({
+      query: ({ id, lifecycle, limit }) => {
+        const q = new URLSearchParams();
+        if (lifecycle) q.set('lifecycle', lifecycle);
+        if (limit) q.set('limit', String(limit));
+        const s = q.toString();
+        return `/designer/types/${encodeURIComponent(id)}/records${s ? `?${s}` : ''}`;
+      },
+      providesTags: ['DesignerRecord'],
+    }),
+    queryDesignerRecords: build.mutation<{ records: DesignerRecord[] }, { id: string; filters?: Record<string, unknown>; lifecycle?: string; limit?: number }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/records/query`, method: 'POST', body }),
+    }),
+    insertDesignerRecord: build.mutation<{ ok: boolean; record: DesignerRecord }, { id: string; values: Record<string, unknown> }>({
+      query: ({ id, ...body }) => ({ url: `/designer/types/${encodeURIComponent(id)}/records`, method: 'POST', body }),
+      invalidatesTags: ['DesignerRecord'],
+    }),
+    getDesignerRecord: build.query<{ record: DesignerRecord }, { record_id: string; links?: string }>({
+      query: ({ record_id, links }) => `/designer/records/${encodeURIComponent(record_id)}${links ? `?links=${links}` : ''}`,
+      providesTags: (_r, _e, { record_id }) => [{ type: 'DesignerRecord', id: record_id }],
+    }),
+    updateDesignerRecord: build.mutation<{ ok: boolean; record: DesignerRecord }, { record_id: string; values: Record<string, unknown> }>({
+      query: ({ record_id, ...body }) => ({ url: `/designer/records/${encodeURIComponent(record_id)}`, method: 'PATCH', body }),
+      invalidatesTags: (_r, _e, { record_id }) => ['DesignerRecord', { type: 'DesignerRecord', id: record_id }],
+    }),
+    deleteDesignerRecord: build.mutation<{ ok: boolean; deleted: string[] }, { record_id: string; purge?: boolean }>({
+      query: ({ record_id, purge }) => ({ url: `/designer/records/${encodeURIComponent(record_id)}${purge ? '?purge=1' : ''}`, method: 'DELETE' }),
+      invalidatesTags: ['DesignerRecord'],
+    }),
+    addDesignerLink: build.mutation<{ ok: boolean; link: DesignerLink }, { rel_id: string; src_record: string; dst_record: string }>({
+      query: (body) => ({ url: '/designer/links', method: 'POST', body }),
+      invalidatesTags: ['DesignerRecord'],
+    }),
+    removeDesignerLink: build.mutation<{ ok: boolean; link: DesignerLink }, { link_id: string }>({
+      query: ({ link_id }) => ({ url: `/designer/links/${encodeURIComponent(link_id)}`, method: 'DELETE' }),
+      invalidatesTags: ['DesignerRecord'],
+    }),
+    listDesignerLinks: build.query<{ links: DesignerLink[] }, { rel_id?: string; src_record?: string; dst_record?: string }>({
+      query: (args) => {
+        const q = new URLSearchParams();
+        if (args.rel_id) q.set('rel_id', args.rel_id);
+        if (args.src_record) q.set('src_record', args.src_record);
+        if (args.dst_record) q.set('dst_record', args.dst_record);
+        const s = q.toString();
+        return `/designer/links${s ? `?${s}` : ''}`;
+      },
+      providesTags: ['DesignerRecord'],
+    }),
+    exportDesignerSchema: build.mutation<Record<string, unknown>, { types?: string[] } | void>({
+      query: (args) => ({ url: `/designer/export${args?.types?.length ? `?types=${args.types.map(encodeURIComponent).join(',')}` : ''}`, method: 'GET' }),
+    }),
+    validateDesignerImport: build.mutation<DesignerImportReport, { doc: unknown; prefix?: string }>({
+      query: (body) => ({ url: '/designer/import/validate', method: 'POST', body }),
+    }),
+    importDesignerSchema: build.mutation<{ ok: boolean; created: Array<{ name: string; type_id: string }>; relationships: number }, { doc: unknown; prefix?: string }>({
+      query: (body) => ({ url: '/designer/import', method: 'POST', body }),
+      invalidatesTags: ['DesignerType'],
+    }),
+    smqlQuery: build.mutation<SmqlQueryResult, { smql: string }>({
+      query: (body) => ({ url: '/smql/query', method: 'POST', body }),
+    }),
   }),
 });
 
@@ -210,4 +367,38 @@ export const {
   useCreateTemplateVersionMutation,
   usePublishTemplateMutation,
   useListDocumentsQuery,
+  useListDesignerTypesQuery,
+  useGetDesignerTypeQuery,
+  useGetDesignerWorkspaceQuery,
+  useCreateDesignerTypeMutation,
+  useRenameDesignerTypeMutation,
+  useDuplicateDesignerTypeMutation,
+  useArchiveDesignerTypeMutation,
+  useUnarchiveDesignerTypeMutation,
+  useAddDesignerFieldMutation,
+  useUpdateDesignerFieldMutation,
+  useRetireDesignerFieldMutation,
+  useReorderDesignerFieldsMutation,
+  useAddDesignerRelationshipMutation,
+  useUpdateDesignerRelationshipMutation,
+  useRetireDesignerRelationshipMutation,
+  useValidateDesignerDraftMutation,
+  usePublishDesignerTypeMutation,
+  useRollbackDesignerTypeMutation,
+  useListDesignerVersionsQuery,
+  useGetDesignerVersionQuery,
+  useDiffDesignerVersionsQuery,
+  useListDesignerRecordsQuery,
+  useQueryDesignerRecordsMutation,
+  useInsertDesignerRecordMutation,
+  useGetDesignerRecordQuery,
+  useUpdateDesignerRecordMutation,
+  useDeleteDesignerRecordMutation,
+  useAddDesignerLinkMutation,
+  useRemoveDesignerLinkMutation,
+  useListDesignerLinksQuery,
+  useExportDesignerSchemaMutation,
+  useValidateDesignerImportMutation,
+  useImportDesignerSchemaMutation,
+  useSmqlQueryMutation,
 } = steelApi;

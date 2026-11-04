@@ -1,0 +1,39 @@
+{
+  "name": "@steel-ai/dev-connector",
+  "version": "0.1.0",
+  "description": "Locally installed outbound connector for a developer-owned LLM and Steel AI Server",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "steel-connector": "./src/cli.js"
+  },
+  "exports": {
+    ".": "./src/sdk.js"
+  },
+  "files": [
+    "src/",
+    "examples/",
+    "PROTOCOL.md",
+    "SECURITY.md",
+    "README.md",
+    "QUICKSTART.md",
+    "LICENSE",
+    "NOTICE",
+    "scripts/"
+  ],
+  "scripts": {
+    "test": "node --test test/test_connector_protocol.mjs",
+    "health": "node src/cli.js health",
+    "compat": "node src/cli.js compat"
+  },
+  "dependencies": {},
+  "homepage": "https://steelai.dev/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jordanshadowens/steel-ai.git",
+    "directory": "packages/connector"
+  }
+}

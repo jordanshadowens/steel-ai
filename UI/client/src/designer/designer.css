@@ -1,0 +1,150 @@
+/* Data Designer layout. Shared primitives (.btn, .field, .section-card,
+   .panel-card, table.grid, .toolbar, .badge) come from tokens.css. */
+
+.designer-page {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-width: 1100px;
+}
+
+.designer-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 14px;
+  flex-wrap: wrap;
+}
+
+.designer-typelist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.designer-typelist > li {
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+}
+
+.designer-typelist > li.designer-type-active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.designer-type-pick {
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.designer-type-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.designer-formgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0 12px;
+}
+
+@media (max-width: 720px) {
+  .designer-formgrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Narrow screens: wide schema tables scroll inside their card instead of
+   pushing the document wider than the viewport. */
+.designer-page .section-card {
+  overflow-x: auto;
+}
+
+/* Schema canvas (self-contained; no creator.css dependency) */
+
+.designer-canvas-wrap {
+  position: relative;
+  height: 520px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.designer-canvas-wrap .toolbar {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  z-index: 5;
+  margin: 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
+}
+
+.designer-viewport-controls {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+
+.entity-node {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: 8px 10px;
+  min-width: 190px;
+  max-width: 260px;
+}
+
+.entity-node-selected {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-soft), var(--shadow-panel);
+}
+
+.entity-node-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.entity-node-badges {
+  margin: 4px 0;
+}
+
+.entity-node-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entity-field-retired {
+  opacity: 0.55;
+  text-decoration: line-through;
+}

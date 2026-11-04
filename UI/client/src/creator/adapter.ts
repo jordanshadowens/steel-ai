@@ -76,6 +76,207 @@ export function defaultConfig(type: string): Record<string, unknown> {
   }
 }
 
+// New-workflow default start: exactly the factory shape (single
+// input_collection `start` named `Start`, prompt '', fields array, end
+// routing). Used to gate the bounded settings mirror below; any canvas
+// customization (second step, renamed start, custom prompt/routing, extra
+// config keys) opts out and preserves explicit fields.
+export function isDefaultStartDefinition(def: WorkflowDefinition): boolean {
+  const steps = def.steps ?? [];
+  if (steps.length !== 1) return false;
+  const s = steps[0];
+  if (s.step_id !== 'start' || s.type !== 'input_collection') return false;
+  if ((s.name ?? '') !== 'Start') return false;
+  if ((s.on_success ?? '') !== 'end') return false;
+  if (s.on_failure !== undefined) return false;
+  const c = (s.config ?? {}) as Record<string, unknown>;
+  if (typeof c.prompt !== 'string' || c.prompt !== '') return false;
+  if (!Array.isArray(c.fields) || !c.fields.every((f) => typeof f === 'string')) return false;
+  if (!Object.keys(c).every((k) => k === 'fields' || k === 'prompt')) return false;
+  return true;
+}
+
+// True when the default start fields mirror the declared inputs in order.
+// Add/remove mirror only while this holds, so explicit custom fields on
+// old workflows are never silently rewritten.
+export function defaultStartMirrorsInputs(def: WorkflowDefinition): boolean {
+  if (!isDefaultStartDefinition(def)) return false;
+  const fields = ((def.steps?.[0]?.config ?? {}) as { fields?: unknown }).fields as string[];
+  const names = (def.inputs ?? []).map((i) => i.name);
+  if (fields.length !== names.length) return false;
+  return fields.every((f, i) => f === names[i]);
+}
+
+function fixInputRef(ref: unknown, oldName: string, newName: string): unknown {
+  if (typeof ref !== 'string') return ref;
+  if (ref === oldName) return newName;
+  if (ref.startsWith(`${oldName}.`) || ref.startsWith(`${oldName}[`)) return newName + ref.slice(oldName.length);
+  return ref;
+}
+
+function rewriteInputRefsInPredicateList(
+  preds: Array<{ ref?: unknown }>,
+  oldName: string,
+  newName: string,
+): void {
+  for (const p of preds) {
+    if (p && typeof p.ref === 'string') p.ref = fixInputRef(p.ref, oldName, newName) as string;
+  }
+}
+
+function rewriteInputRefsInCondition(
+  cond: unknown,
+  oldName: string,
+  newName: string,
+): void {
+  if (!cond || typeof cond !== 'object') return;
+  const c = cond as { all?: unknown; any?: unknown; ref?: unknown };
+  if (Array.isArray(c.all)) rewriteInputRefsInPredicateList(c.all as Array<{ ref?: unknown }>, oldName, newName);
+  else if (Array.isArray(c.any)) rewriteInputRefsInPredicateList(c.any as Array<{ ref?: unknown }>, oldName, newName);
+  else if (typeof c.ref === 'string') c.ref = fixInputRef(c.ref, oldName, newName) as string;
+}
+
+function rewriteInputRefsInSteps(steps: WorkflowStep[], oldName: string, newName: string): void {
+  for (const s of steps) {
+    const c = (s.config ?? {}) as Record<string, unknown>;
+    if (s.type === 'input_collection' && Array.isArray(c.fields)) {
+      c.fields = (c.fields as unknown[]).map((f) => (f === oldName ? newName : f));
+    }
+    if (s.type === 'conditional_routing' && Array.isArray(c.rules)) {
+      for (const r of c.rules as Array<{ when?: unknown }>) {
+        rewriteInputRefsInCondition(r?.when, oldName, newName);
+      }
+    }
+    if (typeof c.over === 'string') c.over = fixInputRef(c.over, oldName, newName) as string;
+    const pidf = c.project_id_from as { from?: string } | undefined;
+    if (pidf && typeof pidf.from === 'string') pidf.from = fixInputRef(pidf.from, oldName, newName) as string;
+    for (const holder of ['inputs_mapping', 'mapping', 'mappings']) {
+      const m = c[holder] as Record<string, { from?: string }> | undefined;
+      if (m && typeof m === 'object') {
+        for (const k of Object.keys(m)) {
+          if (m[k] && typeof m[k].from === 'string') m[k].from = fixInputRef(m[k].from, oldName, newName) as string;
+        }
+      }
+    }
+    const skill = c.skill as { from?: string } | undefined;
+    if (skill && typeof skill.from === 'string') skill.from = fixInputRef(skill.from, oldName, newName) as string;
+    if (s.type === 'iteration' && Array.isArray(c.body)) {
+      rewriteInputRefsInSteps(c.body as WorkflowStep[], oldName, newName);
+    }
+    s.config = c;
+  }
+}
+
+// Undeclared fields on the default start (stale after a pre-fix rename,
+// or an empty intermediate). Custom valid subsets are NOT stale.
+export function defaultStartHasUndeclared(def: WorkflowDefinition): boolean {
+  if (!isDefaultStartDefinition(def)) return false;
+  const names = new Set((def.inputs ?? []).map((i) => i.name));
+  const fields = ((def.steps?.[0]?.config ?? {}) as { fields?: unknown }).fields;
+  if (!Array.isArray(fields)) return false;
+  return (fields as unknown[]).some((f) => typeof f === 'string' && !names.has(f));
+}
+
+export function defaultStartStaleFields(def: WorkflowDefinition): string[] {
+  if (!isDefaultStartDefinition(def)) return [];
+  const names = new Set((def.inputs ?? []).map((i) => i.name));
+  const fields = ((def.steps?.[0]?.config ?? {}) as { fields?: unknown }).fields;
+  if (!Array.isArray(fields)) return [];
+  return (fields as unknown[]).filter((f): f is string => typeof f === 'string' && !names.has(f));
+}
+
+function remirrorDefaultStart(out: WorkflowDefinition): void {
+  const start = out.steps?.[0];
+  if (!start || !isDefaultStartDefinition(out)) return;
+  const names = (out.inputs ?? []).map((i) => i.name).filter((n) => n !== '');
+  start.config = { ...(start.config ?? {}), fields: names };
+}
+
+// Bounded input-reference behavior (batch10):
+// - Rename propagates exact root matches across fields, every {from}
+//   holder, predicates, over/project/skill refs, outputs, iteration
+//   bodies, and presentation keys (suffixes preserved). Empty or
+//   unchanged names set the declared value but rewrite nothing, so
+//   intermediate typing never scatters empty refs; validation reports
+//   the invalid name actionably on Save/Validate.
+// - Add/remove mirror the default start fields ONLY while the workflow
+//   is still the factory default AND (fields mirror inputs in order OR
+//   fields contain undeclared stale names). Custom valid subsets and
+//   old multi-step workflows are untouched; dangling refs from removal
+//   are left for validation/preflight to surface, never silently
+//   deleted (except the mirrored/stale default field, which is not a
+//   custom binding).
+// - A stale default (pre-fix rename, empty intermediate) is repaired
+//   explicitly: the next non-empty rename/add/remove re-mirrors, and
+//   settings offers a Sync button. Nothing rewrites on load/open.
+// - Free-text configs (prompts, goals, query_template,
+//   calculation_nl) are never rewritten.
+// - Presentation field metadata moves on rename (when the new key is
+//   free); removal preserves orphan metadata rather than discarding
+//   entered labels/units.
+export function renameWorkflowInput(def: WorkflowDefinition, index: number, newName: string): WorkflowDefinition | null {
+  const inputs = def.inputs ?? [];
+  if (index < 0 || index >= inputs.length) return null;
+  const staleBefore = defaultStartHasUndeclared(def);
+  const out = JSON.parse(JSON.stringify(def)) as WorkflowDefinition;
+  const target = out.inputs?.[index];
+  if (!target) return null;
+  const oldName = target.name;
+  target.name = newName;
+  if (!oldName || !newName || oldName === newName) return out;
+  rewriteInputRefsInSteps(out.steps ?? [], oldName, newName);
+  for (const k of Object.keys(out.outputs ?? {})) {
+    const o = (out.outputs as Record<string, { from?: string }>)[k];
+    if (o && typeof o.from === 'string') o.from = fixInputRef(o.from, oldName, newName) as string;
+  }
+  const pres = (out.ui as Record<string, unknown> | undefined)?.input_presentation as
+    | { fields?: Record<string, { visibleWhen?: { field?: string } }> }
+    | undefined;
+  if (pres?.fields && typeof pres.fields === 'object') {
+    if (pres.fields[oldName] !== undefined && pres.fields[newName] === undefined) {
+      pres.fields[newName] = pres.fields[oldName];
+      delete pres.fields[oldName];
+    } else if (pres.fields[oldName] !== undefined && pres.fields[newName] !== undefined) {
+      delete pres.fields[oldName];
+    }
+    for (const meta of Object.values(pres.fields)) {
+      if (meta?.visibleWhen?.field === oldName) meta.visibleWhen.field = newName;
+    }
+  }
+  if (staleBefore && isDefaultStartDefinition(out)) remirrorDefaultStart(out);
+  return out;
+}
+
+export function addWorkflowInput(def: WorkflowDefinition): WorkflowDefinition {
+  const out = JSON.parse(JSON.stringify(def)) as WorkflowDefinition;
+  out.inputs = out.inputs ?? [];
+  const mirrorBefore = defaultStartMirrorsInputs(def);
+  const staleBefore = defaultStartHasUndeclared(def);
+  out.inputs.push({ name: `input${out.inputs.length + 1}`, type: 'string', required: false });
+  if (isDefaultStartDefinition(out) && (mirrorBefore || staleBefore)) remirrorDefaultStart(out);
+  return out;
+}
+
+export function removeWorkflowInput(def: WorkflowDefinition, index: number): WorkflowDefinition | null {
+  const inputs = def.inputs ?? [];
+  if (index < 0 || index >= inputs.length) return null;
+  const mirrorBefore = defaultStartMirrorsInputs(def);
+  const staleBefore = defaultStartHasUndeclared(def);
+  const out = JSON.parse(JSON.stringify(def)) as WorkflowDefinition;
+  out.inputs?.splice(index, 1);
+  if (isDefaultStartDefinition(out) && (mirrorBefore || staleBefore)) remirrorDefaultStart(out);
+  return out;
+}
+
+// Explicit user-approved repair for a stale default start (Sync button).
+// Returns null unless the default start has undeclared fields.
+export function syncDefaultStartFields(def: WorkflowDefinition): WorkflowDefinition | null {
+  if (!defaultStartHasUndeclared(def)) return null;
+  const out = JSON.parse(JSON.stringify(def)) as WorkflowDefinition;
+  remirrorDefaultStart(out);
+  return out;
+}
+
 function autoPosition(index: number): { x: number; y: number } {
   return { x: 40 + (index % 4) * 250, y: 60 + Math.floor(index / 4) * 130 };
 }
