@@ -1,0 +1,139 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.shell-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-nav);
+  color: var(--color-nav-ink);
+  padding: 0 12px;
+  height: 48px;
+  flex: none;
+}
+
+.shell-brand {
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 12px;
+}
+
+.shell-nav nav {
+  display: flex;
+  gap: 4px;
+}
+
+.shell-link {
+  background: transparent;
+  border: none;
+  color: var(--color-nav-ink);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  min-height: 32px;
+  opacity: 0.75;
+}
+
+.shell-link:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.shell-link-active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.14);
+  font-weight: 600;
+}
+
+.shell-health {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.shell-health .status-ok {
+  color: #7ddf9a;
+}
+
+.shell-offline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fdecea;
+  border-bottom: 1px solid var(--color-danger);
+  color: var(--color-ink);
+  padding: 8px 12px;
+  font-size: 13px;
+  flex: none;
+}
+
+.shell-main {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.shell-page {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+}
+
+.page-pad {
+  padding: 16px 20px;
+  max-width: 1100px;
+}
+
+.page-pad h1 {
+  font-size: 20px;
+  margin: 0 0 4px;
+}
+
+.page-sub {
+  color: var(--color-ink-muted);
+  margin: 0 0 16px;
+}
+
+.list-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border-soft);
+  padding: 10px 14px;
+  min-height: 44px;
+}
+
+.list-row:last-child {
+  border-bottom: none;
+}
+
+button.list-row:hover {
+  background: var(--color-surface-raised);
+}
+
+.list-row-selected {
+  background: var(--color-accent-soft);
+}
+
+.list-title {
+  font-weight: 600;
+}
+
+.list-meta {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+  white-space: nowrap;
+}
