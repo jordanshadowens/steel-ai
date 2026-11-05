@@ -1,6 +1,6 @@
 # Quickstart: end-to-end developer integration (synthetic, ~10 minutes)
 
-This tour runs the FULL loop — connector, Steel leg, and model leg —
+This tour runs the FULL loop â€” connector, Steel leg, and model leg â€”
 against isolated synthetic fixtures on loopback. It proves your install,
 config, protocol handling, and refusal paths. It does NOT prove real
 model inference: the synthetic provider returns scripted text, so a
@@ -37,7 +37,7 @@ node src\cli.js health   # expect informative failures (nothing listens there ye
 `init` writes config only. `health` failing here with `config: ok` and
 connection failures proves the CLI reads your config and reports
 actionably. (The suite in step 1 covers the live round-trips with
-ephemeral ports; wiring a persistent demo server is future work — see
+ephemeral ports; wiring a persistent demo server is future work â€” see
 the bridge port plan.)
 
 ## 3. Inspect exactly what the model would see
@@ -57,8 +57,8 @@ Use it before pairing with any server you do not fully trust.
    (loopback) + `--model`.
 2. Pair: set `STEEL_API_KEY` in your shell or `pair --steel` with an
    explicit paste. Keep your model credential in `STEEL_PROVIDER_KEY`
-   or `pair --provider` — it never leaves your machine.
-3. `node src\cli.js health`, then `node src\cli.js compat` — both must
+   or `pair --provider` â€” it never leaves your machine.
+3. `node src\cli.js health`, then `node src\cli.js compat` â€” both must
    be green before `run`.
 4. `node src\cli.js run` (or the `scripts/` start helpers).
 
@@ -66,11 +66,11 @@ Use it before pairing with any server you do not fully trust.
 
 Copy `examples/custom-adapter.mjs`, implement the documented
 `complete(messages, maxTokens)` function for your daemon, and point a
-tiny local shim at it — or wrap it so it serves OpenAI-compatible
+tiny local shim at it â€” or wrap it so it serves OpenAI-compatible
 `/chat/completions`. Only backends that pass `compat` plus a manual
 `run` review (check server verdicts: `accepted` vs `rejected` with
 codes) count as qualified. Unsupported answers (tool calls, streaming
-deltas, non-JSON transports) must fail actionably — never silently
+deltas, non-JSON transports) must fail actionably â€” never silently
 fall back to another model.
 
 ## Real-model gate (NOT covered by fixtures)
@@ -88,3 +88,7 @@ Ask your server owner to enable `STEEL_CONNECTOR_QUEUE=on` and configure `STEEL_
 A steelai.dev seven-day connection-test key only tests the hosted status API; it is not a connector credential. Hosted workflow execution is not enabled by this package. The server owner must provide a supported runtime endpoint.
 
 For a local runtime, use `http://127.0.0.1:3100`; remote endpoints must use HTTPS and explicitly enable `allow_remote_server` in your local config. No port on the developer machine needs to be opened. Start the connector before requesting a draft in Workflow Creator, Templates, or Studio Assistant. The default server generation timeout is 120 seconds. Unsupported tool calls fail explicitly.
+
+## Muse Wonder / Meta API
+
+See [Muse provider setup](MUSE_PROVIDER.md) for the tested endpoint/model, remote-provider opt-in, credential references and real-inference qualification.

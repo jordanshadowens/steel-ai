@@ -24,3 +24,7 @@ Connector v1 supports assistant proposals, template draft/revise and explicit sk
 Steel AI Server and Steel Studio have separate private distribution/build paths. They are not included in this public repository. Windows Studio NSIS/MSI development installers have been built; signing and clean-machine install acceptance remain open. A private Windows server folder is available to the owner but contains readable proprietary code and must not be redistributed as a protected binary. macOS/Linux server packages are not verified releases. Ask through https://steelai.dev/ for supported access rather than downloading third-party binaries.
 
 The public client and connector can be developed on supported Node platforms. That does not establish that every native server/editor platform is ready. The hosted website currently offers a waitlist and connection-test keys; a production per-account workflow sandbox is not yet enabled.
+
+## Muse Wonder as your provider
+
+The connector runs locally and can call Muse Wonder through the Meta API. Follow [Muse provider setup](packages/connector/MUSE_PROVIDER.md) for the configuration and separate Meta/Steel credential references. This hosted-provider option sends draft prompts to Meta; it is not local model inference.
