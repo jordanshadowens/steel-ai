@@ -8,3 +8,6 @@ UI/public/app/
 coverage/
 test-results/
 playwright-report/
+
+# Connector test scratch data
+packages/connector/test/tmp/

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectStep, updateDraft } from '../store/workflowEditor';
-import { STEP_TYPES, defaultConfig } from './adapter';
+import { STEP_TYPES, defaultConfig, definitionToFlow } from './adapter';
 import type { StepType } from '../api/contracts';
 import { useNotify } from './notices';
 
@@ -20,7 +20,10 @@ export function useInsertStep(): (type: StepType, at: { x: number; y: number } |
     let n = steps.length + 1;
     while (steps.some((s) => s.step_id === `step${n}`)) n++;
     const id = `step${n}`;
-    const pos = at ?? { x: 120, y: 120 };
+    const occupied = definitionToFlow(draft, null).nodes.filter((node) => node.type === 'step');
+    const pos = { ...(at ?? { x: 120, y: 120 }) };
+    // Keep both click and drop insertion clear of existing node hit targets.
+    while (occupied.some((node) => Math.abs(node.position.x - (pos.x - 100)) < 240 && Math.abs(node.position.y - (pos.y - 30)) < 120)) pos.y += 140;
     const next = {
       ...draft,
       steps: [...steps, { step_id: id, type, name: STEP_TYPES.find((t) => t.value === type)?.label ?? type, config: defaultConfig(type), on_success: 'end' }],
@@ -49,6 +52,7 @@ export function Palette() {
     const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
     const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
     insert(type, screenToFlowPosition({ x: cx, y: cy }));
+    setOpen(false);
   };
 
   return (

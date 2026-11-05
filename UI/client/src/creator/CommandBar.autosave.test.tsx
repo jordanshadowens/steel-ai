@@ -71,12 +71,13 @@ it('keeps failed saves dirty, surfaces a transient alert, and exposes settings t
   await act(async () => { vi.advanceTimersByTime(800); });
   expect(screen.getByRole('alert').textContent).toContain('Auto save paused');
   expect(isDirty(store.getState().workflowEditor)).toBe(true);
-  act(() => { store.dispatch(updateDraft({ ...store.getState().workflowEditor.draft!, name: 'Another edit while offline' })); });
   await act(async () => { vi.advanceTimersByTime(6000); });
   expect(screen.queryByRole('alert')).toBeNull();
   expect(mocks.save).toHaveBeenCalledTimes(1);
   mocks.save.mockImplementationOnce(() => ({ unwrap: async () => ({ ok: true, row: { version: 2, status: 'draft' } }) }));
-  await act(async () => { fireEvent.click(screen.getByText('Save', { selector: 'button' })); });
+  act(() => { store.dispatch(updateDraft({ ...store.getState().workflowEditor.draft!, name: 'Corrected draft' })); });
+  await act(async () => { vi.advanceTimersByTime(800); });
+  expect(mocks.save).toHaveBeenCalledTimes(2);
   expect(isDirty(store.getState().workflowEditor)).toBe(false);
   expect(screen.queryByText('Inputs & outputs')).toBeNull();
   fireEvent.click(screen.getByLabelText('Workflow menu'));

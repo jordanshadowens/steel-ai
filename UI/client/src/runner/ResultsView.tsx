@@ -37,7 +37,7 @@ export function ResultsView({ run, visited }: { run: RunRow; visited?: string[] 
       </p>
       {error && <p className="status-bad" role="alert">{error}</p>}
       <h3>Outputs</h3>
-      {Object.keys(outputs).length === 0 && <p className="status-line">No outputs.</p>}
+      {Object.keys(outputs).length === 0 && <p className="status-line">No workflow outputs are mapped. In Workflow settings, add an output binding to the calculation result, then save and publish a new version.</p>}
       {Object.keys(outputs).length > 0 && (
         <table className="grid">
           <thead><tr><th>Key</th><th>Value</th></tr></thead>

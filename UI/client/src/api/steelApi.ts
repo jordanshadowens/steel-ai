@@ -82,7 +82,7 @@ export const steelApi = createApi({
     }),
     publishWorkflow: build.mutation<{ approval_id: number; status: string }, { id: string; version: number }>({
       query: ({ id, ...body }) => ({ url: `/workflows/${encodeURIComponent(id)}/publish`, method: 'POST', body }),
-      invalidatesTags: ['Approval', 'Workflow'],
+      invalidatesTags: ['Approval', 'Workflow', 'WorkflowVersion'],
     }),
     listRuns: build.query<{ runs: RunRow[] }, { workflow_id?: string; status?: string } | void>({
       query: (args) => {
@@ -118,7 +118,7 @@ export const steelApi = createApi({
     }),
     decideApproval: build.mutation<{ approval: ApprovalRow; [key: string]: unknown }, { id: number; decision: string; decided_by?: string; comment?: string }>({
       query: ({ id, ...body }) => ({ url: `/approvals/${id}/decide`, method: 'POST', body }),
-      invalidatesTags: ['Approval', 'Run', 'Document', 'Workflow', 'Template'],
+      invalidatesTags: ['Approval', 'Run', 'Document', 'Workflow', 'WorkflowVersion', 'Template', 'TemplateVersion'],
     }),
     listSkills: build.query<{ skills: SkillRow[] }, string | void>({
       query: (origin) => (origin ? `/skills?origin=${encodeURIComponent(origin)}` : '/skills'),
@@ -176,7 +176,7 @@ export const steelApi = createApi({
     }),
     publishTemplate: build.mutation<{ approval_id: number; status: string }, { id: string; version: number }>({
       query: ({ id, ...body }) => ({ url: `/templates/${encodeURIComponent(id)}/publish`, method: 'POST', body }),
-      invalidatesTags: ['Approval', 'Template'],
+      invalidatesTags: ['Approval', 'Template', 'TemplateVersion'],
     }),
     listDocuments: build.query<{ documents: DocumentRow[] }, { run_id?: string; status?: string } | void>({
       query: (args) => {

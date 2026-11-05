@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { ApprovalRow } from '../api/contracts';
 import { useDecideApprovalMutation, useListApprovalsQuery } from '../api/steelApi';
 
@@ -33,6 +33,7 @@ export function ApprovalsInbox({ runId, onDecided }: { runId?: string; onDecided
 export function ApprovalCard({ approval: a, onDecided }: { approval: ApprovalRow; onDecided?: (view: { run_id?: string }) => void }) {
   const [decide, decideState] = useDecideApprovalMutation();
   const [comment, setComment] = useState('');
+  const commentId = useId();
   const askKind = (a.metadata as Record<string, unknown> | undefined)?.question === 'acquire_or_abort';
   const busy = decideState.isLoading;
 
@@ -53,9 +54,9 @@ export function ApprovalCard({ approval: a, onDecided }: { approval: ApprovalRow
       </div>
       <ApprovalContext approval={a} />
       <div className="field">
-        <span><label htmlFor={`comment-${a.approval_id}`}>Comment{askKind ? '' : ' (required to reject — describe what must change)'}</label></span>
+        <span><label htmlFor={commentId}>Comment{askKind ? '' : ' (required to reject — describe what must change)'}</label></span>
         <input
-          id={`comment-${a.approval_id}`}
+          id={commentId}
           type="text"
           value={comment}
           disabled={busy}

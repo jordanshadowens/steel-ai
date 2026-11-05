@@ -356,7 +356,7 @@ function WorkflowSettings({ def, edit, validationStatus }: { def: WorkflowDefini
         />
       </section>
       <section aria-label="Outputs" className="settings-outputs">
-        <h3>Output bindings <span className="count-badge">{Object.keys(outputs).length} mapped</span></h3>
+        <h3>Output bindings <span className="count-badge">{Object.values(outputs).filter((v) => v?.from?.trim()).length} mapped</span></h3>
         {Object.entries(outputs).map(([k, v]) => (
           <div key={k} className="map-row output-binding-row">
             <code className="num">{k}</code>

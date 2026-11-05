@@ -82,7 +82,11 @@ export function CommandBar({
   const saving = saveNewState.isLoading || saveVersionState.isLoading;
 
   useEffect(() => {
-    if (!draft || editor.openVersion === null || !dirty || saving || autoSavePaused || saveLock.current || !draft.workflow_id.trim()) return;
+    if (autoSavePaused && (!dirty || (draft && failedSnapshot.current !== JSON.stringify(draft)))) setAutoSavePaused(false);
+  }, [draft, dirty, autoSavePaused]);
+
+  useEffect(() => {
+    if (!draft || editor.openVersion === null || !dirty || saving || saveLock.current || !draft.workflow_id.trim()) return;
     if (failedSnapshot.current === JSON.stringify(draft)) return;
     const timer = window.setTimeout(() => { void doSave(true); }, 800);
     return () => window.clearTimeout(timer);
@@ -213,7 +217,7 @@ export function CommandBar({
       <span className="status-line num" role="status">
         {editor.openStatus ?? 'new'}
         {editor.openVersion !== null ? ` v${editor.openVersion}` : ''}
-        {saving ? ' · saving…' : autoSavePaused ? ' · auto save paused — click Save to retry' : dirty ? ' · unsaved changes' : ' · saved'}
+        {saving ? ' · saving…' : autoSavePaused ? ' · auto save paused — click Save to retry' : editor.openVersion === null ? ' · not saved yet' : dirty ? ' · unsaved changes' : ' · saved'}
         {validationStatus === 'valid' ? ' · valid' : validationStatus === 'invalid' ? ' · has issues' : ''}
       </span>
       <span className="command-spacer" />

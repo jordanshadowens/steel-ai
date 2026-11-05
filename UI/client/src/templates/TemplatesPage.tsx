@@ -144,7 +144,7 @@ export function TemplatesPage() {
           setStatus({ kind: 'error', text: 'Set a template id (letters, numbers, _ and -) before saving.' });
           return;
         }
-        const res = await createTemplate({ template_id: templateId, name, spec, kind }).unwrap();
+        const res = await createTemplate({ template_id: templateId, name, spec: kind === 'document' ? { ...spec, template_id: templateId } : spec, kind }).unwrap();
         if (!res.ok || !res.template) throw new Error('Save failed.');
         dispatch(openSpec({ templateId, version: res.template.version, spec: (res.template.spec ?? spec) as never, kind }));
         setStatus({ kind: 'ok', text: `Saved ${templateId} v${res.template.version} as draft.` });
@@ -249,7 +249,7 @@ export function TemplatesPage() {
                   <span className="status-line num" role="status">
                     {editor.openTemplateId ?? 'new template'}
                     {editor.openVersion !== null ? ` v${editor.openVersion}` : ' (unsaved)'}
-                    {dirty ? ' · unsaved changes' : ' · saved'}
+                    {editor.openVersion === null ? ' · not saved yet' : dirty ? ' · unsaved changes' : ' · saved'}
                   </span>
                   <span className="command-spacer" />
                   <button type="button" className="btn" disabled={editor.past.length === 0} onClick={() => dispatch(undoSpec())} aria-label="Undo">↩</button>

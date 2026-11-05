@@ -64,7 +64,7 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
         Fill every slot with example values, then render. The preview is labeled Sample: it never runs an estimate,
         issues a customer document, or touches release records.
       </p>
-      {slots.length === 0 && <p className="status-line">Validate the spec to list its data slots.</p>}
+      {slots.length === 0 && <p className="status-line">This template has no data slots. Render a preview to check its static content.</p>}
       {slots.map((s) => (
         <div className="field" key={s}>
           <span><label htmlFor={`sample-${s}`} className="num">{s}</label></span>
@@ -82,7 +82,7 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
       {empty.length > 0 && slots.length > 0 && (
         <p className="status-line status-warn">{empty.length} slot{empty.length === 1 ? '' : 's'} without example values — the renderer requires all slots.</p>
       )}
-      <button type="button" className="btn btn-primary" disabled={busy || slots.length === 0} onClick={() => void render()}>
+      <button type="button" className="btn btn-primary" disabled={busy || empty.length > 0} onClick={() => void render()}>
         {busy ? 'Rendering…' : 'Render sample preview'}
       </button>
       {error && <p className="status-bad" role="alert">{error}</p>}

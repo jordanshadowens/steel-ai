@@ -74,7 +74,7 @@ export function MappingEditor({ step, holder, refs, edit, title }: {
   const [adding, setAdding] = useState(false);
   return (
     <section aria-label={title} className="binding-section">
-      <h3>{title} <span className="count-badge">{Object.keys(mapping).length} mapped</span></h3>
+      <h3>{title} <span className="count-badge">{Object.values(mapping).filter((v) => v?.from?.trim()).length} mapped</span></h3>
       {Object.entries(mapping).map(([k, v]) => (
         <div key={k} className="map-row binding-row">
           <code className="num">{k}</code>
