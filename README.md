@@ -33,6 +33,10 @@ Before health/run, set `STEEL_API_KEY` to a dedicated connector credential suppl
 
 Join the developer waitlist or contact us at the website for runtime access.
 
+## Repository boundary
+
+This public repository is the local setup installed on the developer machine. The private AI system and hosted website source belong in steel-ai-core. See [repository layout](REPOSITORY_LAYOUT.md) for the boundary and operator checkout locations.
+
 ## Components
 
 The public application is React/TypeScript with Redux Toolkit. `packages/sdk` provides the JavaScript client and external contracts. `packages/connector` provides the outbound local-model bridge. The server owns verification, approvals, execution, and persistence. The embedded database/graph memory, interpreter, capability acquisition and repair, and native Document/Spreadsheet/Presentation editors stay private.
