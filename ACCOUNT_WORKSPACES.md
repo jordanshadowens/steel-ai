@@ -21,3 +21,9 @@ Account mode is a private-server integration, separate from the hosted website p
 The server owner must configure the public Firebase web settings and an authorized application domain. The email-link return URL must be the same origin at `/app/`. A localhost development origin is not automatically authorized in Firebase; do not disable authentication to get around this requirement. The ordinary local runtime uses explicit local mode and retains local draft recovery. Ask your server owner for supported access and use the [provider guide](packages/connector/MUSE_PROVIDER.md) for model setup.
 
 The restricted interpreter, database and native editor implementations remain private. Account separation does not itself provide process/container isolation for untrusted code; hosted execution stays off until its additional runtime gates pass.
+
+## Hosted website session integration
+
+The client supports an opt-in session-cookie runtime mode. The website exchanges a recent verified owner login for a one-hour Secure, HttpOnly, SameSite=Strict Firebase session cookie; browser JavaScript cannot read that credential. Creator checks the website session and the private runtime workspace before mounting. Cookie mutations require same-origin requests and a CSRF header. Waitlist accounts cannot acquire an owner session or open the runtime preview. Local/private bearer sign-in remains available separately.
+
+This integration is currently reviewed source and isolated-test functionality. It does not establish a live hosted execution service. The execution host/gateway and full signed-in browser walkthrough remain pending.

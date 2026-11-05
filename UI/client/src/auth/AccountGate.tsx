@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import { acceptAccount, configureRuntime, failRuntime, getSession, loadRuntimeConfig, sessionIsCurrent, subscribeSession } from './session';
+import { acceptAccount, acceptCookieAccount, configureRuntime, failRuntime, getSession, loadRuntimeConfig, sessionIsCurrent, subscribeSession } from './session';
 const EMAIL_KEY = 'steel.account.pending-email.v1';
 const MESSAGES: Record<string, string> = {
   INVALID_EMAIL: 'Enter a valid email address.', INVALID_OOB_CODE: 'This sign-in link is invalid or already used. Request a fresh link.',
@@ -93,11 +93,31 @@ export function AccountGate({ children }: { children: ReactNode }) {
     setVerified(false);
     let cancelled = false;
     const controller = new AbortController();
-    void loadRuntimeConfig(controller.signal).then((config) => { if (!cancelled) { configureRuntime(config); setVerified(true); } }).catch(() => { if (!cancelled) { failRuntime(); setVerified(true); } });
+    void loadRuntimeConfig(controller.signal).then(async (config) => {
+      if (cancelled) return;
+      configureRuntime(config);
+      if (config.mode === 'account' && config.authMethod === 'session-cookie') {
+        const epoch = getSession().epoch;
+        const response = await fetch('/api/session', {credentials:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal});
+        if (response.status !== 401) {
+          if (!response.ok) throw new Error('Unable to verify website session');
+          const value = await response.json();
+          if (!value.access?.runtimePreviewEligible) throw new Error('This account has waitlist access. Runtime preview is available only to the owner.');
+          const workspaceResponse = await fetch('/api/workspace', {credentials:'same-origin',cache:'no-store',redirect:'error',signal:controller.signal});
+          if (!workspaceResponse.ok) throw new Error('Runtime workspace unavailable');
+          const workspace = await workspaceResponse.json();
+          if (cancelled || !sessionIsCurrent(epoch)) return;
+          if (workspace.mode !== 'account' || workspace.skillsScope !== 'account') throw new Error('Private workspace not confirmed');
+          acceptCookieAccount(value);
+        }
+      }
+      if (!cancelled) setVerified(true);
+    }).catch((error) => { if (!cancelled) { failRuntime(error instanceof Error && error.message.startsWith('This account has waitlist access.') ? error.message : undefined); setVerified(true); } });
     return () => { cancelled = true; controller.abort(); };
   }, [attempt]);
   if (!verified || session.mode === 'boot') return <main className="account-gate"><h1>Steel AI</h1><p role="status">Checking this runtime…</p></main>;
   if (session.mode === 'error') return <main className="account-gate"><h1>Steel AI</h1><p role="alert">{session.message}</p><button className="btn" onClick={() => setAttempt((a) => a + 1)}>Retry runtime connection</button></main>;
-  if (session.mode === 'account' && !session.idToken) return <SignIn key={session.epoch} />;
+  if (session.mode === 'account' && !session.idToken && !session.cookieAuthenticated && session.config?.mode === 'account' && session.config.authMethod === 'session-cookie') return <main className="account-gate"><h1>Steel AI</h1><h2>Sign in on the website</h2><p role="status">{session.message ?? 'Use your Steel AI website account to open this workspace.'}</p><a className="btn btn-primary" href="/?signin=1">Go to website sign-in</a><p>Your account must be enabled for the runtime preview. Waitlist accounts retain private draft storage and connection testing.</p></main>;
+  if (session.mode === 'account' && !session.idToken && !session.cookieAuthenticated) return <SignIn key={session.epoch} />;
   return <div className="account-session" key={session.epoch}>{children}</div>;
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { acceptAccount, authenticatedFetch, configureRuntime, endAccount, getSession, loadRuntimeConfig, parseRuntimeConfig } from './session';
+import { acceptAccount, acceptCookieAccount, signOutAccount, authenticatedFetch, configureRuntime, endAccount, getSession, loadRuntimeConfig, parseRuntimeConfig } from './session';
 const config = { mode: 'account' as const, firebase: { apiKey: 'test-public-key', projectId: 'test-project', authDomain: 'test-project.firebaseapp.com' } };
 function login(uid = 'alice', token = 'test-alice-secret') { configureRuntime(config); acceptAccount({ localId: uid, email: uid + '@example.invalid', idToken: token }); }
 beforeEach(() => { vi.useFakeTimers(); configureRuntime(config); });
@@ -42,4 +42,25 @@ it('clears an expired account and never persists its token', async () => {
   expect(getSession().idToken).toBeUndefined();
   expect(getSession().message).toContain('not authorized');
   expect(JSON.stringify(window.sessionStorage)).not.toContain('test-alice-secret');
+});
+
+it('cookie mode sends no bearer credential and adds CSRF only for mutations', async () => {
+  configureRuntime({...config, authMethod:'session-cookie'});
+  acceptCookieAccount({uid:'owner',email:'owner@example.invalid',expiresAt:Date.now()+60000});
+  const f=vi.fn().mockImplementation(async()=>new Response('{}'));vi.stubGlobal('fetch',f);
+  await authenticatedFetch('/api/skills',{headers:{Authorization:'Bearer stale'}});
+  await authenticatedFetch('/api/workflows',{method:'POST',body:'{}'});
+  expect(f.mock.calls[0][1].credentials).toBe('same-origin');
+  expect(new Headers(f.mock.calls[0][1].headers).has('Authorization')).toBe(false);
+  expect(new Headers(f.mock.calls[0][1].headers).has('X-Steel-CSRF')).toBe(false);
+  expect(new Headers(f.mock.calls[1][1].headers).get('X-Steel-CSRF')).toBe('1');
+  expect(getSession().idToken).toBeUndefined();
+});
+it('cookie logout drops local state even if server logout fails and gives a useful warning', async()=>{
+ configureRuntime({...config,authMethod:'session-cookie'});
+ acceptCookieAccount({uid:'owner',email:'owner@example.invalid',expiresAt:Date.now()+60000});
+ vi.stubGlobal('fetch',vi.fn().mockRejectedValue(new Error('offline')));
+ const out=signOutAccount();expect(getSession().cookieAuthenticated).toBeUndefined();await out;
+ expect(getSession().message).toContain('could not be confirmed');
+ await expect(authenticatedFetch('/api/skills')).rejects.toThrow('Sign in');
 });

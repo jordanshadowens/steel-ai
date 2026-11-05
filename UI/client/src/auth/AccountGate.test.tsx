@@ -56,3 +56,28 @@ it('mounts only an authorized private workspace and removes it synchronously on 
   expect(screen.queryByText('Private Creator')).toBeNull();
   expect(screen.getByRole('button', { name: 'Send sign-in link' })).toBeTruthy();
 });
+
+it('restores an owner website session only after runtime workspace confirmation, without another login',async()=>{
+ const f=vi.fn(async(url:string|URL|Request,init?:RequestInit)=>{
+  if(String(url)==='/api/runtime-config')return response({...config,authMethod:'session-cookie'});
+  expect(init?.credentials).toBe('same-origin');
+  if(String(url)==='/api/session')return response({uid:'owner',email:'owner@example.invalid',expiresAt:Date.now()+60000,access:{runtimePreviewEligible:true}});
+  if(String(url)==='/api/workspace')return response({mode:'account',skillsScope:'account'});
+  throw new Error('Unexpected request');
+ });vi.stubGlobal('fetch',f);
+ render(<AccountGate><div>Private Creator</div></AccountGate>);
+ expect(await screen.findByText('Private Creator')).toBeTruthy();
+ expect(getSession().cookieAuthenticated).toBe(true);expect(getSession().idToken).toBeUndefined();
+ expect(screen.queryByLabelText('Email address')).toBeNull();
+});
+it('waitlist website session cannot mount Creator',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(url:string|URL|Request)=>String(url)==='/api/runtime-config'?response({...config,authMethod:'session-cookie'}):response({uid:'other',email:'other@example.invalid',expiresAt:Date.now()+60000,access:{runtimePreviewEligible:false}})));
+ render(<AccountGate><div>Private Creator</div></AccountGate>);
+ await screen.findByRole('alert');expect(screen.queryByText('Private Creator')).toBeNull();
+});
+it('signed-out hosted app points to website sign-in instead of presenting a second email form',async()=>{
+ vi.stubGlobal('fetch',vi.fn(async(url:string|URL|Request)=>String(url)==='/api/runtime-config'?response({...config,authMethod:'session-cookie'}):response({},401)));
+ render(<AccountGate><div>Private Creator</div></AccountGate>);
+ expect((await screen.findByRole('link',{name:'Go to website sign-in'})).getAttribute('href')).toBe('/?signin=1');
+ expect(screen.queryByLabelText('Email address')).toBeNull();expect(screen.queryByText('Private Creator')).toBeNull();
+});

@@ -9,7 +9,7 @@ import { DesignerPage } from '../designer/DesignerPage';
 import './App.css';
 import { useSyncExternalStore } from 'react';
 import { AccountGate } from '../auth/AccountGate';
-import { endAccount, getSession, subscribeSession } from '../auth/session';
+import { signOutAccount, getSession, subscribeSession } from '../auth/session';
 import { store } from '../store/store';
 import { isDirty } from '../store/workflowEditor';
 import { isSpecDirty } from '../store/templateEditor';
@@ -40,7 +40,7 @@ function WorkspaceApp() {
           const state = store.getState();
           if ((isDirty(state.workflowEditor) || isSpecDirty(state.templateEditor)) && !window.confirm('Sign out and discard unsaved changes? Saved work remains in your account.')) return;
           try { window.sessionStorage.removeItem('steel.account.pending-email.v1'); } catch { /* optional */ }
-          endAccount();
+          void signOutAccount();
         }}>Sign out</button>}
         <nav aria-label="Primary">
           {DESTINATIONS.map((d) => (
