@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { ProtectedFile } from '../auth/ProtectedFile';
 import type { ApprovalRow } from '../api/contracts';
 import { useDecideApprovalMutation, useListApprovalsQuery } from '../api/steelApi';
 
@@ -104,9 +105,7 @@ function ApprovalContext({ approval: a }: { approval: ApprovalRow }) {
       <div className="status-line">
         {runCtx} · exact customer bytes · sha {String(meta.pdf_sha256 ?? '').slice(0, 12)}
         <div>
-          <a href={`/api/documents/${encodeURIComponent(meta.doc_id)}/preview`} target="_blank" rel="noopener">
-            Preview exact bytes
-          </a>
+          <ProtectedFile path={`/api/documents/${encodeURIComponent(meta.doc_id)}/preview`}>Preview exact bytes</ProtectedFile>
           {' '}— approving releases this artifact and only this artifact.
         </div>
       </div>

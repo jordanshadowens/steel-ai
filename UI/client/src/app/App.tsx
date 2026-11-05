@@ -7,6 +7,12 @@ import { RunnerPage } from '../runner/RunnerPage';
 import { TemplatesPage } from '../templates/TemplatesPage';
 import { DesignerPage } from '../designer/DesignerPage';
 import './App.css';
+import { useSyncExternalStore } from 'react';
+import { AccountGate } from '../auth/AccountGate';
+import { endAccount, getSession, subscribeSession } from '../auth/session';
+import { store } from '../store/store';
+import { isDirty } from '../store/workflowEditor';
+import { isSpecDirty } from '../store/templateEditor';
 
 const DESTINATIONS: Array<{ route: Route; label: string }> = [
   { route: 'creator', label: 'Workflow Creator' },
@@ -16,6 +22,11 @@ const DESTINATIONS: Array<{ route: Route; label: string }> = [
 ];
 
 export function App() {
+  return <AccountGate><WorkspaceApp /></AccountGate>;
+}
+
+function WorkspaceApp() {
+  const session = useSyncExternalStore(subscribeSession, getSession);
   const route = useRoute();
   const reduceMotion = useReducedMotion();
   const health = useHealthQuery(undefined, { pollingInterval: 30000 });
@@ -24,6 +35,13 @@ export function App() {
     <div className="shell">
       <header className="shell-nav">
         <span className="shell-brand">Steel AI</span>
+        <span className="shell-account">{session.mode === 'account' ? session.email : 'Local workspace'}</span>
+        {session.mode === 'account' && <button className="shell-link" type="button" onClick={() => {
+          const state = store.getState();
+          if ((isDirty(state.workflowEditor) || isSpecDirty(state.templateEditor)) && !window.confirm('Sign out and discard unsaved changes? Saved work remains in your account.')) return;
+          try { window.sessionStorage.removeItem('steel.account.pending-email.v1'); } catch { /* optional */ }
+          endAccount();
+        }}>Sign out</button>}
         <nav aria-label="Primary">
           {DESTINATIONS.map((d) => (
             <button

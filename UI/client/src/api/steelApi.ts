@@ -1,4 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { authenticatedFetch, getSession, sessionIsCurrent } from '../auth/session';
 import type {
   ApprovalRow,
   DependenciesResult,
@@ -34,7 +35,14 @@ import type {
 // production; the Vite dev server proxies /api to the node:http backend.
 export const steelApi = createApi({
   reducerPath: 'steelApi',
-  baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
+  baseQuery: async (args, api, extraOptions) => {
+    const epoch = getSession().epoch;
+    const result = await fetchBaseQuery({ baseUrl: new URL('/api', window.location.origin).toString(), fetchFn: authenticatedFetch })(args, api, extraOptions);
+    if (!sessionIsCurrent(epoch)) return { error: { status: 'CUSTOM_ERROR', error: 'The previous workspace response was discarded after a session change.' } };
+    // Transport meta contains a Request with its Authorization header.
+    // Never dispatch that credential-bearing object into Redux.
+    return result.error ? { error: result.error } : { data: result.data };
+  },
   tagTypes: ['Workflow', 'WorkflowVersion', 'Run', 'Approval', 'Skill', 'Template', 'TemplateVersion', 'Document', 'DesignerType', 'DesignerRecord'],
   endpoints: (build) => ({
     health: build.query<{ ok: boolean }, void>({

@@ -3,6 +3,7 @@
 // in localStorage per workspace, never in the database, and missing
 // entries fall back to a deterministic grid so the canvas never jumps.
 import type { Edge, Node } from '@xyflow/react';
+import { getSession } from '../auth/session';
 import type { DesignerTypeDetail } from '../api/contracts';
 
 export interface EntityNodeData extends Record<string, unknown> {
@@ -29,6 +30,7 @@ export function positionKey(workspace: string): string {
 }
 
 export function loadPositions(workspace: string): PositionMap {
+  if (getSession().mode === 'account') return {};
   try {
     const raw = window.localStorage.getItem(positionKey(workspace));
     if (!raw) return {};
@@ -47,6 +49,7 @@ export function loadPositions(workspace: string): PositionMap {
 }
 
 export function savePositions(workspace: string, positions: PositionMap): void {
+  if (getSession().mode === 'account') return;
   try {
     window.localStorage.setItem(positionKey(workspace), JSON.stringify(positions));
   } catch {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authenticatedFetch } from '../auth/session';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { setSampleValue } from '../store/templateEditor';
 import { smartValue } from './specEdit';
@@ -39,7 +40,7 @@ export function SamplePreview({ spec, slots }: { spec: Spec; slots: string[] }) 
         if (raw !== '') sample[s] = smartValue(raw);
         else if (bindings[s]?.record_id) designer[s] = bindings[s] as SlotBinding;
       }
-      const r = await fetch('/api/templates/preview', {
+      const r = await authenticatedFetch('/api/templates/preview', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ spec, sample, ...(Object.keys(designer).length > 0 ? { designer } : {}) }),

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { authenticatedFetch } from '../auth/session';
 import type { AnyTemplateSpec, SheetTemplateSpec, SlideTemplateSpec, TemplateKind } from '../api/contracts';
 import {
   useCreateTemplateMutation,
@@ -180,7 +181,7 @@ export function TemplatesPage() {
     if (!editor.openTemplateId || editor.openVersion === null) return;
     setStudioBusy(true);
     try {
-      const res = await fetch(`/api/templates/${encodeURIComponent(editor.openTemplateId)}/steel?version=${editor.openVersion}`);
+      const res = await authenticatedFetch(`/api/templates/${encodeURIComponent(editor.openTemplateId)}/steel?version=${editor.openVersion}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setStatus({ kind: 'error', text: `Studio export failed: ${(body as { error?: string }).error ?? res.statusText}` });

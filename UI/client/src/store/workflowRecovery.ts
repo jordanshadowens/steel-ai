@@ -1,11 +1,13 @@
 import { workflowEditorReducer } from './workflowEditor';
 
-const KEY = 'steel.workflow-draft.v1';
+const KEY = 'steel.workflow-draft.local.v1';
+const LEGACY_KEY = 'steel.workflow-draft.v1';
 type EditorState = ReturnType<typeof workflowEditorReducer>;
 
 // Tab-local recovery only; explicit Save/Publish still owns server versions.
 export function loadWorkflowRecovery(storage: Storage): EditorState | undefined {
   try {
+    preserveLocalRecovery(storage);
     const raw = storage.getItem(KEY);
     if (!raw) return;
     const s = JSON.parse(raw) as EditorState;
@@ -16,6 +18,17 @@ export function loadWorkflowRecovery(storage: Storage): EditorState | undefined 
       openWorkflowId: s.openWorkflowId, openVersion: s.openVersion, openStatus: s.openStatus,
       skillSamples: s.skillSamples ?? {}, skillModes: s.skillModes ?? {} };
   } catch { return; }
+}
+
+// Old releases used one unscoped key for their local-only runtime. Preserve
+// that work under an explicitly local key; account mode never reads it.
+export function preserveLocalRecovery(storage: Storage): void {
+  try {
+    const old = storage.getItem(LEGACY_KEY);
+    const local = storage.getItem(KEY);
+    if (old && !local) storage.setItem(KEY, old);
+    if (old && (!local || local === old)) storage.removeItem(LEGACY_KEY);
+  } catch { /* Blocked storage must not interrupt sign-in. */ }
 }
 
 export function saveWorkflowRecovery(storage: Storage, state: EditorState): void {

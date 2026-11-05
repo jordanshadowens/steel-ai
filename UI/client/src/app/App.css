@@ -4,6 +4,13 @@
   height: 100%;
 }
 
+.account-session { height: 100%; }
+.account-gate { max-width: 560px; margin: 8vh auto; padding: 24px; }
+.account-gate form { display: grid; gap: 12px; }
+.account-gate input { min-height: 42px; padding: 8px; }
+.shell-account { font-size: 12px; overflow-wrap: anywhere; }
+@media (max-width: 760px) { .shell-nav { height: auto; min-height: 48px; flex-wrap: wrap; padding-block: 8px; } }
+
 .shell-nav {
   display: flex;
   align-items: center;

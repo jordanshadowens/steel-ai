@@ -32,3 +32,7 @@ The connector runs locally and can call Muse Wonder through the Meta API. Follow
 ## Workspaces and privacy
 
 See [account and workspace behavior](ACCOUNT_WORKSPACES.md) before connecting multiple developers. Ordinary local mode is one workspace; the website offers private draft storage, not hosted execution.
+
+## Account-aware Creator and Runner
+
+Serve the built client from the account runtime at `/app/`. It discovers `/api/runtime-config`, asks for email-link sign-in, and opens the private workspace only after the runtime confirms access. Do not point it at the website preview API and expect workflow execution. Configure an authorized Firebase application domain before testing email links; production domain settings are not changed by this installer. See [workspace behavior](ACCOUNT_WORKSPACES.md) for session and unsaved-edit limits.

@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getSession } from '../auth/session';
 import {
   Background,
   BackgroundVariant,
@@ -55,6 +56,7 @@ function viewportKey(workspace: string): string {
 }
 
 function loadViewport(workspace: string): { x: number; y: number; zoom: number } | null {
+  if (getSession().mode === 'account') return null;
   try {
     const raw = window.localStorage.getItem(viewportKey(workspace));
     if (!raw) return null;
@@ -167,6 +169,7 @@ function SchemaCanvasInner(props: SchemaCanvasProps) {
 
   const onMoveEnd = useCallback(
     (_e: unknown, viewport: { x: number; y: number; zoom: number }) => {
+      if (getSession().mode === 'account') return;
       try {
         window.localStorage.setItem(viewportKey(props.workspace), JSON.stringify(viewport));
       } catch {

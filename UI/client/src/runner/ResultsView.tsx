@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { authenticatedFetch } from '../auth/session';
 import type { RunRow } from '../api/contracts';
 
 export function fmtValue(v: unknown): string {
@@ -87,7 +88,7 @@ function ArtifactOutputs({ stepOutputs }: { stepOutputs: Record<string, unknown>
     setBusy(stepId);
     setNote(null);
     try {
-      const res = await fetch(`/api/templates/${encodeURIComponent(template.template_id)}/steel?version=${template.version}`);
+      const res = await authenticatedFetch(`/api/templates/${encodeURIComponent(template.template_id)}/steel?version=${template.version}`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         setNote(`Studio export failed: ${(body as { error?: string }).error ?? res.statusText}`);

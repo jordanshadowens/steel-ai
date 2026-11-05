@@ -1,9 +1,17 @@
 import { beforeEach, expect, it } from 'vitest';
 import { blankDefinition } from '../creator/adapter';
 import { openDefinition, setSkillMode, setSkillSample, updateDraft, workflowEditorReducer } from './workflowEditor';
-import { loadWorkflowRecovery, saveWorkflowRecovery } from './workflowRecovery';
+import { loadWorkflowRecovery, preserveLocalRecovery, saveWorkflowRecovery } from './workflowRecovery';
 
 beforeEach(() => sessionStorage.clear());
+
+it('preserves both local drafts when legacy recovery conflicts with the current local key', () => {
+  sessionStorage.setItem('steel.workflow-draft.v1', 'older unsaved draft');
+  sessionStorage.setItem('steel.workflow-draft.local.v1', 'newer unsaved draft');
+  preserveLocalRecovery(sessionStorage);
+  expect(sessionStorage.getItem('steel.workflow-draft.v1')).toBe('older unsaved draft');
+  expect(sessionStorage.getItem('steel.workflow-draft.local.v1')).toBe('newer unsaved draft');
+});
 
 it('recovers unsaved fields and sample values without marking the draft saved', () => {
   const initial = workflowEditorReducer(undefined, openDefinition({ workflowId: 'test', version: 1, definition: blankDefinition() }));

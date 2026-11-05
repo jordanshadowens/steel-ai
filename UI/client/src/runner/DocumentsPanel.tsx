@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { authenticatedFetch } from '../auth/session';
+import { ProtectedFile } from '../auth/ProtectedFile';
 import type { DocumentRow } from '../api/contracts';
 import { useListApprovalsQuery, useListDocumentsQuery } from '../api/steelApi';
 import { ApprovalCard } from './ApprovalsInbox';
@@ -58,13 +60,9 @@ function DocumentCard({ doc: d, runId }: { doc: DocumentRow; runId: string }) {
           <button type="button" className="btn" aria-expanded={previewOpen} onClick={() => setPreviewOpen(!previewOpen)}>
             {previewOpen ? 'Hide preview' : 'Preview draft'}
           </button>
-          <a className="btn" href={`/api/documents/${encodeURIComponent(d.doc_id)}/preview`} target="_blank" rel="noopener">
-            Open preview tab
-          </a>
+          <ProtectedFile path={`/api/documents/${encodeURIComponent(d.doc_id)}/preview`}>Open document preview</ProtectedFile>
           {d.status === 'released' ? (
-            <a className="btn btn-primary" href={`/api/documents/${encodeURIComponent(d.doc_id)}/download`}>
-              Download PDF
-            </a>
+            <ProtectedFile className="btn btn-primary" path={`/api/documents/${encodeURIComponent(d.doc_id)}/download`} download>Download PDF</ProtectedFile>
           ) : (
             <span className="status-line" title="Customer download unlocks when this exact artifact is approved and released.">
               Customer download blocked until release.
@@ -100,7 +98,7 @@ function PdfPreview({ docId }: { docId: string }) {
     let objectUrl: string | null = null;
     setFailed(false);
     setUrl(null);
-    fetch(`/api/documents/${encodeURIComponent(docId)}/preview`)
+    authenticatedFetch(`/api/documents/${encodeURIComponent(docId)}/preview`)
       .then((r) => {
         if (!r.ok) throw new Error(`preview ${r.status}`);
         return r.blob();
