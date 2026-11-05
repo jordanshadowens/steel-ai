@@ -31,7 +31,7 @@ node packages/connector/src/cli.js run
 
 Before health/run, set `STEEL_API_KEY` to a dedicated connector credential supplied by your server owner. Your local provider credential, if needed, goes in `STEEL_PROVIDER_KEY`. Configure the provider's actual OpenAI-compatible base URL; `/v1` is appropriate only if your provider serves it. See [connector setup](packages/connector/QUICKSTART.md) for pairing, scope, configuration and custom adapters. No npm registry publication is claimed; use the checked-out source or install the local package.
 
-Hosted keys from steelai.dev currently test the status API only. They do not authorize connector jobs or hosted workflow execution. Join the developer waitlist or contact us at the website for runtime access.
+Join the developer waitlist or contact us at the website for runtime access.
 
 ## Components
 
