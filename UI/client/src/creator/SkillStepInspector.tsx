@@ -56,6 +56,7 @@ export function SkillStepInspector({ def, step, bodyOf, edit, refs, skills }: {
   const [search, setSearch] = useState('');
   const [newParam, setNewParam] = useState('');
   const [showCode, setShowCode] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
 
   const grouped = new Map<string, SkillRow[]>();
   for (const s of skills) {
@@ -65,7 +66,7 @@ export function SkillStepInspector({ def, step, bodyOf, edit, refs, skills }: {
   }
   for (const list of grouped.values()) list.sort((a, b) => b.version - a.version);
   const q = search.trim().toLowerCase();
-  const names = [...grouped.keys()].filter((n) => !q || n.toLowerCase().includes(q)).sort();
+  const names = [...grouped.keys()].filter((n) => (showExamples || pinned?.name === n || grouped.get(n)?.some((s) => s.source !== 'seed')) && (!q || n.toLowerCase().includes(q))).sort();
 
   const banked = pinned ? grouped.get(pinned.name)?.find((s) => s.version === pinned.version) ?? grouped.get(pinned.name)?.[0] : undefined;
 
@@ -154,7 +155,9 @@ export function SkillStepInspector({ def, step, bodyOf, edit, refs, skills }: {
 
       {mode === 'saved' && (
         <section aria-label="Saved skill">
-          <h3>Saved skill</h3>
+          <h3>Workspace skills</h3>
+          <p className="status-line">Skills saved in the connected workspace. Starter examples are hidden unless you choose to show them; a pinned example stays visible.</p>
+          <label><input type="checkbox" checked={showExamples} onChange={(e) => setShowExamples(e.target.checked)} /> Show starter examples</label>
           {cfg.calculation_nl && cfg.calculation_nl.trim() !== '' && (
             <p className="status-line status-warn">
               Natural-language text is present but ignored while a skill is pinned.

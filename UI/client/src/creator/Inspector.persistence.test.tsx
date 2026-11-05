@@ -9,7 +9,10 @@ import { REASON_TOOLS, STEP_TYPES, defaultConfig } from './adapter';
 vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 
 vi.mock('../api/steelApi', () => ({
-  useListSkillsQuery: () => ({ data: { skills: [] } }),
+  useListSkillsQuery: () => ({ data: { skills: [
+    { name: 'starter_example', version: 1, status: 'verified', source: 'seed', input_params: [], description: 'Starter example' },
+    { name: 'my_calculation', version: 1, status: 'verified', source: 'learned', input_params: [], description: 'Workspace calculation' },
+  ] } }),
   useDraftSkillMutation: () => [vi.fn(), {}],
   useListTemplatesQuery: () => ({ data: { templates: [] } }),
   useGetTemplateVersionsQuery: () => ({ data: { versions: [] } }),
@@ -19,6 +22,24 @@ vi.mock('../api/steelApi', () => ({
 }));
 
 afterEach(cleanup);
+
+it('hides starter examples unless requested while preserving an existing pin', () => {
+  const store = configureStore({ reducer: { workflowEditor: workflowEditorReducer } });
+  store.dispatch(openDefinition({ workflowId: 'skills', version: null, definition: {
+    workflow_id: 'skills', inputs: [], steps: [{ step_id: 'calc', name: 'Calculation', type: 'skill_execution', config: {}, on_success: 'end' }],
+  } }));
+  store.dispatch(selectStep('calc'));
+  render(<Provider store={store}><Inspector bodySel={null} setBodySel={() => {}} /></Provider>);
+  fireEvent.click(screen.getByLabelText('Use a saved skill'));
+  expect(screen.queryByText('starter_example', { exact: true })).toBeNull();
+  expect(screen.getByText('my_calculation', { exact: true })).toBeTruthy();
+  fireEvent.click(screen.getByLabelText('Show starter examples'));
+  const row = screen.getByText('starter_example', { exact: true }).closest('li')!;
+  fireEvent.click(row.querySelector('button')!);
+  fireEvent.click(screen.getByLabelText('Show starter examples'));
+  expect(screen.getByText('starter_example', { exact: true })).toBeTruthy();
+  expect(screen.getByText('Pinned v1')).toBeTruthy();
+});
 
 it('uses the shared configuration layout and routing controls for every step type', () => {
   const store = configureStore({ reducer: { workflowEditor: workflowEditorReducer } });

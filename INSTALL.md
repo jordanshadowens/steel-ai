@@ -28,3 +28,7 @@ The public client and connector can be developed on supported Node platforms. Th
 ## Muse Wonder as your provider
 
 The connector runs locally and can call Muse Wonder through the Meta API. Follow [Muse provider setup](packages/connector/MUSE_PROVIDER.md) for the configuration and separate Meta/Steel credential references. This hosted-provider option sends draft prompts to Meta; it is not local model inference.
+
+## Workspaces and privacy
+
+See [account and workspace behavior](ACCOUNT_WORKSPACES.md) before connecting multiple developers. Ordinary local mode is one workspace; the website offers private draft storage, not hosted execution.
