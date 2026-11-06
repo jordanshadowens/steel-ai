@@ -33,6 +33,10 @@ Before health/run, set `STEEL_API_KEY` to a dedicated connector credential suppl
 
 Join the developer waitlist or contact us at the website for runtime access.
 
+## Executable language drafting
+
+The source connector supports `language.draft` when the private runtime owner explicitly grants that capability. It returns an untrusted `.lang` source draft; it does not execute code, read your repository, publish a workflow or authorize deployment. Existing credentials are not expanded by updating this checkout. See [connector setup](packages/connector/QUICKSTART.md) for configuration. The current public Creator UI is not claimed to include the latest private runtime authoring controls; use the operator-provided compatible Creator and runtime. Repository connection and autonomous project workflows are not a self-service feature of this public clone yet.
+
 ## Repository boundary
 
 This public repository is the local setup installed on the developer machine. The private AI system and hosted website source belong in steel-ai-core. See [repository layout](REPOSITORY_LAYOUT.md) for the boundary and operator checkout locations.

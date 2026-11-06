@@ -76,6 +76,10 @@ export function validateCandidate(job, text) {
   } catch {
     return { verdict: 'rejected', rejection: { code: 'malformed', message: 'candidate was not valid JSON' } };
   }
+  if (job.type === 'language.draft') {
+    const ok=parsed && Object.keys(parsed).length===1 && typeof parsed.program==='string' && parsed.program.length>0 && parsed.program.length<=4096;
+    return ok ? {verdict:'accepted'} : {verdict:'rejected',rejection:{code:'malformed',message:'bounded program required'}};
+  }
   if (job.type === 'assistant.propose') {
     const exp = job.test_expect ?? {};
     const p = parsed?.proposal;

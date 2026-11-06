@@ -98,6 +98,8 @@ imports them).
 | `template.revise` | `POST /api/templates/revise` | `REVISE_SYSTEM` + current spec + change (change <= 2000 chars, spec <= 256KB) | kind match + schema validation; structural summary; staleness via `base_hash`; nothing persisted |
 | `skill.draft` | `POST /api/skills/draft` via `acquireSkill` (`agent/tools/workflowGraph.js`) | `SKILL_DRAFT_SYSTEM` + Calculation/Params/Sample user prompt, max 1024 tokens | JSON object, `validateProposal`, behavioral tests, invariant checks before any persistence |
 
+`language.draft` is an additional opt-in job type for `POST /api/language/draft`: a bounded instruction and resource data produce exactly `{program: string}`. Server validation checks the draft envelope only; execution and published-definition verification are separate. Tests/verdicts are not generation inputs. Existing default server capabilities are unchanged; the operator must explicitly authorize this capability before using an updated connector.
+
 Explicitly unsupported in v1: `chat.tools` (agentic tool-calling rounds
 in the workflow/agent graphs). The connector has no tool authority; a
 provider answer containing `tool_calls` fails with

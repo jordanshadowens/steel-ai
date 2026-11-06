@@ -135,6 +135,14 @@ describe('authentication and scope', () => {
 });
 
 describe('happy paths (scripted text, not inference)', () => {
+  it('language draft is opt-in and transports an untrusted program',async()=>{
+    const job=makeJob('language.draft',{request:{messages:[{role:'user',content:'Return a bounded lang program'}]}});
+    const pair=startSyntheticPair({steel:{steelKey:STEEL_KEY,keyScope:['language.draft'],jobs:[job]},provider:{script:[{kind:'text',text:JSON.stringify({program:'print 42;'})}]}});
+    const denied=startSyntheticPair({steel:{steelKey:STEEL_KEY,jobs:[job]}});
+    const refused=await connector(denied).handleJob(job);assert.equal(refused.outcome,'scope-refused');assert.equal(denied.providerState.calls.length,0);
+    const outcomes=await connector(pair,STEEL_KEY,{capabilities:['language.draft']}).runOnce();
+    assert.equal(outcomes[0].outcome,'accepted');
+  });
   const cases = [
     ['assistant.propose', VALID_PROPOSAL],
     ['template.draft', VALID_DRAFT],
