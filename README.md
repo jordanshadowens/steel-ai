@@ -48,3 +48,19 @@ The public application is React/TypeScript with Redux Toolkit. `packages/sdk` pr
 ## License
 
 Application: AGPL-3.0-only. Standalone SDK and connector: Apache-2.0. See [LICENSING.md](LICENSING.md). Third-party licenses remain intact. Public clients do not grant access to or redistribution rights for the proprietary runtime.
+
+## Invoke workflows and export a verified candidate
+
+The dependency-free Python 3 client in [tools/steel-agent.py](tools/steel-agent.py) lists/invokes published workflows and retrieves exact verified candidates. It uses a dedicated workflow-scoped `STEEL_AGENT_KEY`, separate from the model connector's `STEEL_API_KEY`. Configure the existing authorized runtime origin as `STEEL_AGENT_URL`; HTTPS is required except on loopback. Do not paste keys into chat, commit them or include them in workflow inputs.
+
+```sh
+python tools/steel-agent.py list
+python tools/steel-agent.py candidate --run-id YOUR_RUN_ID --step verify --source-sha256 EXPECTED_SOURCE_SHA256 --definition-sha256 EXPECTED_DEFINITION_SHA256 --export-root /absolute/private/staging
+python -B -m unittest discover -s tools -p test_verified_candidate_client.py -v
+```
+
+Use the exact sealed run and successful published verification's hashes. Add `--repository-sha256` when repository-backed. On Windows use an existing absolute path such as `C:\SteelCandidateStaging`. The root must be private to you, outside a working checkout, with no untrusted writers. Permissions are not changed by this client.
+
+The runtime must support the candidate endpoint (private release `a3b72ae` or a compatible successor) and authorize your account/workflow. The client verifies expected identities and bytes, then exports only fixed filenames `candidate.txt` and `manifest.json` under the artifact hash. Repeat exports verify and reuse identical files; modified, incomplete or linked paths fail without overwrite. The returned checksum is not a signature. Candidate code is never run or applied to a repository, and no PR/deployment authority is granted. Recheck hashes before any later use. Interrupted hidden staging directories are not automatically adopted.
+
+This source client needs no private repository access, but runtime provisioning, model pairing and repository grants remain operator-assisted. No fresh-customer end-to-end onboarding, container test backend or autonomous seven-role completion is claimed. Tests use synthetic HTTP identity/evidence and real temporary filesystem writes, including Windows junction rejection.
