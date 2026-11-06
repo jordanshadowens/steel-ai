@@ -18,6 +18,7 @@ export const JOB_TYPES = Object.freeze([
   'template.draft',
   'template.revise',
   'skill.draft',
+  'language.draft',
 ]);
 
 // Transport bounds. The server declares per-job bounds at or under these
