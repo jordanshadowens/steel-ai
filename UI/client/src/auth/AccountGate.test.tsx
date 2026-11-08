@@ -78,6 +78,6 @@ it('waitlist website session cannot mount Creator',async()=>{
 it('signed-out hosted app points to website sign-in instead of presenting a second email form',async()=>{
  vi.stubGlobal('fetch',vi.fn(async(url:string|URL|Request)=>String(url)==='/api/runtime-config'?response({...config,authMethod:'session-cookie'}):response({},401)));
  render(<AccountGate><div>Private Creator</div></AccountGate>);
- expect((await screen.findByRole('link',{name:'Go to website sign-in'})).getAttribute('href')).toBe('/?signin=1');
+ expect((await screen.findByRole('link',{name:'Go to website sign-in'})).getAttribute('href')).toBe('/signin.html');
  expect(screen.queryByLabelText('Email address')).toBeNull();expect(screen.queryByText('Private Creator')).toBeNull();
 });

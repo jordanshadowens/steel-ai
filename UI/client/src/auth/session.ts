@@ -2,10 +2,21 @@
 // Hosted sessions use a server-issued HttpOnly cookie that JavaScript cannot read.
 export type FirebaseConfig = { apiKey: string; projectId: string; authDomain: string };
 export type RuntimeConfig = { mode: 'local' } | { mode: 'account'; firebase: FirebaseConfig; emailLinkContinueUrl?: string; authMethod?: 'session-cookie' };
+export type ShadowAuthSession = {
+  authenticated: boolean; firebase_uid: string | null; email: string | null; display_name: string | null;
+};
 export type SessionState = {
   mode: 'boot' | 'error' | 'local' | 'account'; epoch: number;
   config?: RuntimeConfig; uid?: string; email?: string; idToken?: string; cookieAuthenticated?: boolean; message?: string;
+  auth?: ShadowAuthSession;
 };
+export function shadowAuthSession(value: {uid?: string; firebase_uid?: string | null; email?: string | null; display_name?: string | null; authenticated?: boolean} | null | undefined): ShadowAuthSession {
+  const firebase_uid = typeof value?.firebase_uid === 'string' && value.firebase_uid ? value.firebase_uid : (typeof value?.uid === 'string' && value.uid ? value.uid : null);
+  const email = typeof value?.email === 'string' && value.email ? value.email : null;
+  const authenticated = value?.authenticated === true || Boolean(firebase_uid && email);
+  if (!authenticated || !firebase_uid || !email) return {authenticated: false, firebase_uid: null, email: null, display_name: null};
+  return {authenticated: true, firebase_uid, email, display_name: typeof value?.display_name === 'string' && value.display_name ? value.display_name : email};
+}
 let state: SessionState = { mode: 'boot', epoch: 0 };
 const listeners = new Set<() => void>();
 const boundaryListeners = new Set<() => void>();
@@ -26,14 +37,15 @@ export function acceptAccount(value: { idToken: string; localId: string; email: 
   if (state.mode !== 'account' || state.config?.mode !== 'account') throw new Error('Account sign-in is unavailable on this runtime.');
   if (!value.idToken || !value.localId || !value.email) throw new Error('Sign-in response was incomplete. Request a fresh link.');
   const config = state.config;
-  transition({ mode: 'account', config, idToken: value.idToken, uid: value.localId, email: value.email });
+  transition({ mode: 'account', config, idToken: value.idToken, uid: value.localId, email: value.email, auth: shadowAuthSession({authenticated: true, firebase_uid: value.localId, email: value.email, display_name: value.email}) });
   const seconds = Math.min(86400, Math.max(1, Number(value.expiresIn ?? '3600') || 3600));
   expiryTimer = setTimeout(() => endAccount('Your session expired. Sign in again to open your workspace.'), seconds * 1000);
 }
 export function acceptCookieAccount(value: {uid: string; email: string; expiresAt: number}) {
   if (state.config?.mode !== 'account' || state.config.authMethod !== 'session-cookie') throw new Error('Website session is unavailable on this runtime.');
   if (!value.uid || !value.email || !Number.isFinite(value.expiresAt) || value.expiresAt <= Date.now()) throw new Error('Your website session expired. Sign in again.');
-  transition({mode:'account', config:state.config, uid:value.uid, email:value.email, cookieAuthenticated:true});
+  const auth = shadowAuthSession(value);
+  transition({mode:'account', config:state.config, uid:value.uid, email:value.email, cookieAuthenticated:true, auth});
   expiryTimer = setTimeout(() => endAccount('Your website session expired. Sign in again.'), Math.min(value.expiresAt - Date.now(), 86400000));
 }
 export async function signOutAccount() {

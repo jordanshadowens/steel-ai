@@ -55,6 +55,7 @@ it('cookie mode sends no bearer credential and adds CSRF only for mutations', as
   expect(new Headers(f.mock.calls[0][1].headers).has('X-Steel-CSRF')).toBe(false);
   expect(new Headers(f.mock.calls[1][1].headers).get('X-Steel-CSRF')).toBe('1');
   expect(getSession().idToken).toBeUndefined();
+  expect(getSession().auth).toEqual({authenticated:true,firebase_uid:'owner',email:'owner@example.invalid',display_name:'owner@example.invalid'});
 });
 it('cookie logout drops local state even if server logout fails and gives a useful warning', async()=>{
  configureRuntime({...config,authMethod:'session-cookie'});

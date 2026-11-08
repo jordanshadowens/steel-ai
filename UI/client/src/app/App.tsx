@@ -34,8 +34,8 @@ function WorkspaceApp() {
   return (
     <div className="shell">
       <header className="shell-nav">
-        <span className="shell-brand">Steel AI</span>
-        <span className="shell-account">{session.mode === 'account' ? session.email : 'Local workspace'}</span>
+        <a className="shell-brand" href="/"><img className="shell-mark" src={`${import.meta.env.BASE_URL}steel-logo.png`} width={28} height={28} alt="" />Steel AI</a>
+        <span className="shell-account">{session.mode === 'account' && session.email ? <><img className="shell-profile" src={`${import.meta.env.BASE_URL}profile.jpg`} width={28} height={28} alt="" />{session.auth?.display_name || session.email}</> : 'Local workspace'}</span>
         {session.mode === 'account' && <button className="shell-link" type="button" onClick={() => {
           const state = store.getState();
           if ((isDirty(state.workflowEditor) || isSpecDirty(state.templateEditor)) && !window.confirm('Sign out and discard unsaved changes? Saved work remains in your account.')) return;

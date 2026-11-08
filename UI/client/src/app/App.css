@@ -23,10 +23,18 @@
 }
 
 .shell-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: inherit;
   font-weight: 700;
   font-size: 15px;
   margin-right: 12px;
+  text-decoration: none;
 }
+.shell-mark { border-radius: 6px; object-fit: contain; }
+.shell-account { display: inline-flex; align-items: center; gap: 8px; }
+.shell-profile { border-radius: 50%; object-fit: cover; }
 
 .shell-nav nav {
   display: flex;
