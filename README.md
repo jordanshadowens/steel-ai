@@ -4,6 +4,16 @@
 
 Visual workflow authoring, a developer SDK, and a locally installed connector for your own LLM. The server checks proposed calculations and preserves accepted versions for reuse.
 
+## Get an API key
+
+Sign-in is an email link. There is no password.
+
+1. Open [https://steelai.dev/signin.html](https://steelai.dev/signin.html) and enter the email on your account.
+2. Open the link Steel sends to that inbox, in the same browser. It expires soon and works once.
+3. On your profile, open **Admin**, then **API keys**.
+4. Choose **Generate key** and copy the key immediately. It is shown once. Generating another key revokes the previous one.
+5. Keep it in your environment as `STEEL_API_KEY`. Do not commit it. The key tests a connection. It does not run a hosted workflow.
+
 ## Install the developer tools
 
 Requires Node.js 24+ and npm. Clone this repository, then:
