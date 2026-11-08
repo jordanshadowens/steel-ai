@@ -1,6 +1,6 @@
 # Steel AI
 
-[Website](https://steelai.dev/) · [Developer access guide](https://steelai.dev/developer-guide.html) · [Installation guide](INSTALL.md)
+[Website](https://steelai.dev/) · [Developer access guide](https://steelai.dev/developer-guide.html) · [Learning Center](https://steelai.dev/learn/) · [Installation guide](INSTALL.md)
 
 Visual workflow authoring, a developer SDK, and a locally installed connector for your own LLM. The server checks proposed calculations and preserves accepted versions for reuse.
 
@@ -32,6 +32,10 @@ node packages/connector/src/cli.js run
 Before health/run, set `STEEL_API_KEY` to a dedicated connector credential supplied by your server owner. Your local provider credential, if needed, goes in `STEEL_PROVIDER_KEY`. Configure the provider's actual OpenAI-compatible base URL; `/v1` is appropriate only if your provider serves it. See [connector setup](packages/connector/QUICKSTART.md) for pairing, scope, configuration and custom adapters. No npm registry publication is claimed; use the checked-out source or install the local package.
 
 Join the developer waitlist or contact us at the website for runtime access.
+
+## Learning Center
+
+The [Learning Center](https://steelai.dev/learn/) is where the longer articles live. [Create an agent and connect it to a workflow](https://steelai.dev/learn/create-an-agent.html) covers the credential and one published version. [Run the deployment agent](https://steelai.dev/learn/deployment-agent.html) walks through verify, build, deploy, health, and recovery. The landing pages themselves stay in the private repository. This client does not include that runtime.
 
 ## Executable language drafting
 
