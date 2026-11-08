@@ -1,38 +1,82 @@
 # Developer installation
 
-Website: https://steelai.dev/
+Website: [https://steelai.dev/](https://steelai.dev/)
 
 ## Workflow client and SDK
 
-Install Node.js 24 or newer. From a clone of this repository run `npm run setup`, `npm run check`, `npm test`, and `npm run build`. Use `npm --prefix UI run dev` for the local workflow client. Its `/api` proxy targets `http://127.0.0.1:3100`; the proprietary server is supplied separately. The SDK is in `packages/sdk` and can be installed from that local folder.
+Install **Node.js 24 or newer**. From a clone of this repository, run:
 
-## Local model connector (Windows, macOS, Linux)
+```sh
+npm run setup
+npm run check
+npm test
+npm run build
+```
 
-The connector has no third-party npm dependencies. Run `node packages/connector/src/cli.js version`, or install the local package with `npm install --global ./packages/connector` if you want the `steel-connector` command on PATH. No registry release is required. It runs locally on the developer machine, not in the browser or inside the hosted engine.
+Start the local workflow client:
 
-1. Obtain a connector-scoped key from the owner of your authorized Steel runtime. A website status-test key is different.
-2. Set `STEEL_API_KEY` locally. PowerShell uses `$env:STEEL_API_KEY='your-key'`; POSIX shells use `export STEEL_API_KEY='your-key'`. Use your normal secret manager for persistent configuration; do not commit secrets.
-3. Run `node packages/connector/src/cli.js init --server http://127.0.0.1:3100 --provider http://127.0.0.1:11434/v1 --model YOUR_MODEL` (adjust the provider base and model).
-4. For a remote server, use HTTPS and explicitly set `allow_remote_server` in `~/.steel-connector/config.json`. Keep your model on loopback unless you explicitly opt into a remote provider. Model credentials remain local.
-5. Run `health`, `compat`, then `run`. Stop with Ctrl+C. The connector polls outbound; never open a developer-machine inbound model port for Steel.
-6. Request an explicit draft in Creator/Templates/Studio Assistant. Review the result. Drafted skills are checked by the server before saving; pin the verified version and bind inputs before workflow execution.
+```sh
+npm --prefix UI run dev
+```
 
-Connector v1 supports assistant proposals, template draft/revise and explicit skill drafts. Agentic tool-calling chat, streaming/tool-call responses and deferred runtime acquisition are unsupported. Errors do not silently switch models. A passing protocol fixture is not proof that a real LLM produces correct business logic. Qualify your chosen model with synthetic cases and held-out expected results.
+Open the printed `/app/` URL. Its `/api` proxy targets `http://127.0.0.1:3100`; the proprietary server is supplied separately. The SDK is in `packages/sdk` and can be installed from that local folder.
 
-## Server and Studio
+## Workflow Creator Setup
 
-Steel AI Server and Steel Studio have separate private distribution/build paths. They are not included in this public repository. Windows Studio NSIS/MSI development installers have been built; signing and clean-machine install acceptance remain open. A private Windows server folder is available to the owner but contains readable proprietary code and must not be redistributed as a protected binary. macOS/Linux server packages are not verified releases. Ask through https://steelai.dev/ for supported access rather than downloading third-party binaries.
+Run all commands below from the repository root.
 
-The public client and connector can be developed on supported Node platforms. That does not establish that every native server/editor platform is ready. The hosted website currently offers a waitlist and connection-test keys; a production per-account workflow sandbox is not yet enabled.
+### 1. Check the connector
 
-## Muse Wonder as your provider
+```sh
+node packages/connector/src/cli.js version
+```
 
-The connector runs locally and can call Muse Wonder through the Meta API. Follow [Muse provider setup](packages/connector/MUSE_PROVIDER.md) for the configuration and separate Meta/Steel credential references. This hosted-provider option sends draft prompts to Meta; it is not local model inference.
+Or install the local package if you want the `steel-connector` command on PATH:
 
-## Workspaces and privacy
+```sh
+npm install --global ./packages/connector
+```
 
-See [account and workspace behavior](ACCOUNT_WORKSPACES.md) before connecting multiple developers. Ordinary local mode is one workspace; the website offers private draft storage, not hosted execution.
+### 2. Set your key locally
 
-## Account-aware Creator and Runner
+In the terminal that will run the connector, use your connector-scoped key.
 
-Serve the built client from the account runtime at `/app/`. It discovers `/api/runtime-config`, asks for email-link sign-in, and opens the private workspace only after the runtime confirms access. Do not point it at the website preview API and expect workflow execution. Configure an authorized Firebase application domain before testing email links; production domain settings are not changed by this installer. See [workspace behavior](ACCOUNT_WORKSPACES.md) for session and unsaved-edit limits.
+PowerShell:
+
+```powershell
+$env:STEEL_API_KEY='your-key'
+```
+
+POSIX shells:
+
+```sh
+export STEEL_API_KEY='your-key'
+```
+
+### 3. Configure the connector
+
+Adjust the server URL, provider base URL, and model name for your setup:
+
+```sh
+node packages/connector/src/cli.js init --server http://127.0.0.1:3100 --provider http://127.0.0.1:11434/v1 --model YOUR_MODEL --capabilities assistant.propose,language.draft,skill.draft,template.draft,template.revise
+```
+
+Review [MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md) for instructions on setting up Muse Wonder, including the separate provider key and remote-provider configuration. If your provider needs authentication, set `STEEL_PROVIDER_KEY` locally and set `provider_key` to `{ "env": "STEEL_PROVIDER_KEY" }` in the config. Leave `provider_key` as `null` for a provider without authentication.
+
+### 4. Start the connector
+
+With the Steel runtime and your model provider running, use the same terminal where you set the keys:
+
+```sh
+node packages/connector/src/cli.js health
+node packages/connector/src/cli.js compat
+node packages/connector/src/cli.js run
+```
+
+Confirm `health` reports `ok: true` and `compat` lists your intended capabilities in `supported_here` before starting `run`. Leave the connector running while using Creator. Stop with **Ctrl+C**. The connector polls outbound; no inbound port needs to be opened on your machine.
+
+### 6. Start the UI
+open http://localhost:5173/app/ after running:
+```sh
+npm --prefix UI run dev
+```
