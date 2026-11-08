@@ -10,6 +10,8 @@ import { TYPE_LABELS, addWorkflowInput, defaultStartStaleFields, deleteStep, rem
 import { ApprovalConfig, BranchConfig, DatabaseConfig, InputCollectionConfig, LoopConfig, ReasoningConfig, RoutingSection, SkillRetrievalConfig, findStep } from './stepConfigs';
 import type { EditFn } from './stepConfigs';
 import { MappingEditor } from './stepConfigs';
+import { LanguageStepInspector } from './LanguageStepInspector';
+import { VerificationStepInspector } from './VerificationStepInspector';
 import { SkillStepInspector } from './SkillStepInspector';
 import { ArtifactStepInspector } from './ArtifactStepInspector';
 import { DocStepInspector } from './DocStepInspector';
@@ -171,6 +173,8 @@ function StepEditor({ def, step, bodyOf, edit, onEditBody, skillsVersion }: {
       {step.type === 'model_reasoning' && <ReasoningConfig step={step} bodyOf={bodyOf} edit={edit} />}
       {step.type === 'database_retrieval' && <DatabaseConfig step={step} bodyOf={bodyOf} edit={edit} />}
       {step.type === 'skill_retrieval' && <SkillRetrievalConfig step={step} bodyOf={bodyOf} edit={edit} />}
+      {(step.type === 'lang_execution' || step.type === 'lang_recall' || step.type === 'lang_verification') && <LanguageStepInspector contextId={def.workflow_id} step={step} bodyOf={bodyOf} edit={edit} refs={refs} />}
+      {step.type === 'skill_verification' && <VerificationStepInspector step={step} bodyOf={bodyOf} edit={edit} refs={refs} />}
       {step.type === 'skill_execution' && <SkillStepInspector def={def} step={step} bodyOf={bodyOf} edit={edit} refs={refs} skills={skills.data?.skills ?? []} />}
       {step.type === 'conditional_routing' && <BranchConfig def={def} step={step} bodyOf={bodyOf} edit={edit} refs={refs} />}
       {step.type === 'iteration' && !bodyOf && onEditBody && <LoopConfig def={def} step={step} edit={edit} onEditBody={onEditBody} />}

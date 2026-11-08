@@ -10,6 +10,10 @@ export const STEP_TYPES: Array<{ value: StepType; label: string; hint: string }>
   { value: 'model_reasoning', label: 'Reason', hint: 'Model analysis with tools' },
   { value: 'database_retrieval', label: 'Look up data', hint: 'Read a project table' },
   { value: 'skill_retrieval', label: 'Find skill', hint: 'Search verified calculations' },
+  { value: 'lang_verification', label: 'Verify observed source', hint: 'Test exact source against published customer examples' },
+  { value: 'lang_execution', label: 'Execute language', hint: 'Run your .lang program and record its evidence' },
+  { value: 'lang_recall', label: 'Recall executions', hint: 'Retrieve observed programs from your account' },
+  { value: 'skill_verification', label: 'Verify calculation', hint: 'Check customer-defined expected answers' },
   { value: 'skill_execution', label: 'Calculate', hint: 'Run a verified skill' },
   { value: 'conditional_routing', label: 'Branch', hint: 'Route on conditions' },
   { value: 'iteration', label: 'Loop', hint: 'Repeat over a list' },
@@ -65,6 +69,10 @@ export function defaultConfig(type: string): Record<string, unknown> {
     case 'model_reasoning': return { goal: '', tools_allowed: ['project_data'], max_rounds: 3 };
     case 'database_retrieval': return { table: PROJECT_TABLES[0], limit: 100 };
     case 'skill_retrieval': return { query_template: '', top_k: 3 };
+    case 'lang_verification': return { candidate: { from: '' }, output_index: 0, tests: [] };
+    case 'lang_execution': return { program: '', problem: '', resources: { inputs: [], replacements: [], expectations: [], tests: [] }, bindings: {} };
+    case 'lang_recall': return { query_template: '' };
+    case 'skill_verification': return { skill: { from: '' }, cases: [] };
     case 'skill_execution': return { calculation_nl: '', deferred: true, inputs_mapping: {}, on_miss: 'propose' };
     case 'conditional_routing': return { rules: [] };
     case 'iteration': return { over: '', max_iterations: 10, body: [] };

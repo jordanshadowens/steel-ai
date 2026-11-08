@@ -14,6 +14,7 @@ vi.mock('../api/steelApi', () => ({
     { name: 'my_calculation', version: 1, status: 'verified', source: 'learned', input_params: [], description: 'Workspace calculation' },
   ] } }),
   useDraftSkillMutation: () => [vi.fn(), {}],
+  useDraftLanguageMutation: () => [vi.fn(), { isLoading: false }],
   useListTemplatesQuery: () => ({ data: { templates: [] } }),
   useGetTemplateVersionsQuery: () => ({ data: { versions: [] } }),
   useGetTemplateVersionQuery: () => ({ data: { slots: [] } }),

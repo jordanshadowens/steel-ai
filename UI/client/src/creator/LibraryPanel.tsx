@@ -9,9 +9,11 @@ import {
   useListTrashedWorkflowsQuery,
   useListWorkflowsQuery,
   useRestoreWorkflowMutation,
+  useValidateWorkflowMutation,
 } from '../api/steelApi';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { isDirty, openDefinition } from '../store/workflowEditor';
+import type { WorkflowDefinition } from '../api/contracts';
 import { blankDefinition } from './adapter';
 import { useNotify } from './notices';
 import { useFloatingPanel } from './useFloatingPanel';
@@ -33,6 +35,28 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
   const [confirmSwitch, setConfirmSwitch] = useState<(() => void) | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [restore, restoreState] = useRestoreWorkflowMutation();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState('');
+  const [validateImport, importState] = useValidateWorkflowMutation();
+  const importDefinition = async () => {
+    setImportError('');
+    try {
+      if (new TextEncoder().encode(importText).length > 262144) throw new Error('Definition must be at most 256 KB.');
+      const parsed: unknown = JSON.parse(importText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Paste a workflow definition object.');
+      const definition = { ...parsed, version: 1, status: 'draft' } as WorkflowDefinition;
+      const result = await validateImport({ definition }).unwrap();
+      if (!result.ok) throw new Error(result.errors.join(' '));
+      guarded(() => {
+        dispatch(openDefinition({ workflowId: definition.workflow_id, version: null, status: 'new', definition }));
+        onClose();
+      });
+      setImportOpen(false);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Import validation failed. Check your sign-in and try again.');
+    }
+  };
 
   const source = trash ? trashed.data?.workflows : data?.workflows;
   const groups = new Map<string, Array<{ version: number; status: string; name?: string }>>();
@@ -121,6 +145,18 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
           New workflow
         </button>
       )}
+      {!trash && <button type="button" className="btn" onClick={() => setImportOpen(true)}>Import JSON</button>}
+      {importOpen && <ModalDialog label="Import workflow" wide onClose={() => { if (!importState.isLoading) setImportOpen(false); }}>
+        <h2>Import workflow JSON</h2>
+        <p>Import an editable draft. Save and publication approval are separate steps. An existing workflow ID creates a new version when saved.</p>
+        <label htmlFor="workflow-import">Workflow definition</label>
+        <textarea id="workflow-import" rows={12} style={{ width: '100%' }} value={importText} disabled={importState.isLoading} onChange={(e) => setImportText(e.target.value)} />
+        {importError && <p role="alert">{importError}</p>}
+        <div className="dialog-actions">
+          <button type="button" className="btn" disabled={importState.isLoading} onClick={() => setImportOpen(false)}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={importState.isLoading || !importText.trim()} onClick={() => void importDefinition()}>{importState.isLoading ? 'Validating...' : 'Validate and import'}</button>
+        </div>
+      </ModalDialog>}
       {(trash ? trashed.isLoading : isLoading) && <p className="status-line">Loading…</p>}
       {restoreState.isLoading && <p className="status-line">Restoring…</p>}
       {(trash ? trashed.isError : isError) && (

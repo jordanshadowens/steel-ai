@@ -45,6 +45,9 @@ export const steelApi = createApi({
   },
   tagTypes: ['Workflow', 'WorkflowVersion', 'Run', 'Approval', 'Skill', 'Template', 'TemplateVersion', 'Document', 'DesignerType', 'DesignerRecord'],
   endpoints: (build) => ({
+    draftLanguage: build.mutation<{ program: string; status: string; validated: boolean }, { instruction: string; inputs: string[]; replacements: unknown[] }>({
+      query: (body) => ({ url: '/language/draft', method: 'POST', body }),
+    }),
     health: build.query<{ ok: boolean }, void>({
       query: () => '/health',
     }),
@@ -343,6 +346,7 @@ export const steelApi = createApi({
 });
 
 export const {
+  useDraftLanguageMutation,
   useHealthQuery,
   useListWorkflowsQuery,
   useListTrashedWorkflowsQuery,

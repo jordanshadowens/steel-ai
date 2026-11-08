@@ -37,6 +37,12 @@ Join the developer waitlist or contact us at the website for runtime access.
 
 The [Learning Center](https://steelai.dev/learn/) is where the longer articles live. [Create an agent and connect it to a workflow](https://steelai.dev/learn/create-an-agent.html) covers the credential and one published version. [Run the deployment agent](https://steelai.dev/learn/deployment-agent.html) walks through verify, build, deploy, health, and recovery. The landing pages themselves stay in the private repository. This client does not include that runtime.
 
+## Workflow Creator
+
+The Creator in this repository can import a workflow JSON draft. Import opens an editable draft; saving and publication approval stay separate. The step list includes **Execute language**, **Recall executions**, **Verify observed source**, and **Verify calculation**.
+
+Draft a `.lang` program with the connector capability `language.draft`. Call a published workflow with [tools/steel-agent.py](tools/steel-agent.py). Both need an authorized runtime and their own credentials. This checkout does not include the runtime.
+
 ## Executable language drafting
 
 The source connector supports `language.draft` when the private runtime owner explicitly grants that capability. It returns an untrusted `.lang` source draft; it does not execute code, read your repository, publish a workflow or authorize deployment. Existing credentials are not expanded by updating this checkout. See [connector setup](packages/connector/QUICKSTART.md) for configuration. The current public Creator UI is not claimed to include the latest private runtime authoring controls; use the operator-provided compatible Creator and runtime. Repository connection and autonomous project workflows are not a self-service feature of this public clone yet.
