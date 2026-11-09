@@ -98,6 +98,9 @@ describe('protocol envelope', () => {
     const home = scratch('steel-conn-');
     writeSkeletonConfig(home, { serverBase: 'http://127.0.0.1:9', providerBase: 'https://models.example.com', providerModel: 'm', capabilities: ['assistant.propose'] });
     assert.throws(() => loadConfig(home), /not loopback/);
+    const allowed = scratch('steel-conn-remote-');
+    writeSkeletonConfig(allowed, { serverBase: 'http://127.0.0.1:9', providerBase: 'https://models.example.com', providerModel: 'm', capabilities: ['assistant.propose'], allowRemoteProvider: true });
+    assert.equal(loadConfig(allowed).allow_remote_provider, true);
   });
 });
 

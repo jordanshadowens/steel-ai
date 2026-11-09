@@ -2,46 +2,65 @@
 
 [Website](https://steelai.dev/) · [Developer access guide](https://steelai.dev/developer-guide.html) · [Learning Center](https://steelai.dev/learn/) · [Installation guide](INSTALL.md)
 
-Visual workflow authoring, a developer SDK, and a locally installed connector for your own LLM. The server checks proposed calculations and preserves accepted versions for reuse.
+Visual workflow authoring, a developer SDK, and a connector that runs on your computer and talks to a Steel runtime. The longer setup is in [INSTALL.md](INSTALL.md).
 
-## Get an API key
+## Choose a runtime
 
-Sign-in is an email link. There is no password.
+The client uses one runtime at a time.
 
-1. Open [https://steelai.dev/signin.html](https://steelai.dev/signin.html) and enter the email on your account.
-2. Open the link Steel sends to that inbox, in the same browser. It expires soon and works once.
-3. On your profile, open **API Key**. The key calls `https://steelai.dev/api/v1/status`.
-4. Choose **Generate Key** and copy the key immediately. It is shown once. Generating another key revokes the previous one.
-5. Keep it in your environment as `STEEL_API_KEY`. Do not commit it. The key tests a connection. It does not run a hosted workflow.
+| Name | Address |
+| --- | --- |
+| Staging | `https://steel-portal-staging-yl3vqnwyta-uc.a.run.app` |
+| Production | `https://steel-runtime-fkknoziyhq-uc.a.run.app` |
+| Local | `http://127.0.0.1:3100` |
 
-## Install the developer tools
+Staging is where you try the connection. Production is the live runtime. Local is a runtime already running on this computer.
 
-Requires Node.js 24+ and npm. Clone this repository, then:
+For the app, put one of those names in `UI/.env`:
+
+```
+STEEL_RUNTIME_URL=staging
+```
+
+`production` and `local` are the other two values. Then, from this repository:
 
 ```sh
-npm run setup
-npm run check
-npm test
-npm run build
 npm --prefix UI run dev
 ```
 
-Open the printed `/app/` URL. The UI proxy expects an authorized Steel runtime at `http://127.0.0.1:3100`. Without one, backend features are unavailable. This checkout is the client and integration surface; it does not include the proprietary runtime or native editors.
+Open the `/app/` address the command prints. This checkout is the client. The runtime stays at the address you chose.
 
-## Connect your local LLM
+## Two different keys
 
-The connector runs on YOUR developer machine. No inbound port is required:
+Sign-in on the website is an email link.
 
-```sh
-node packages/connector/src/cli.js init --server http://127.0.0.1:3100 --provider http://127.0.0.1:11434/v1 --model YOUR_MODEL
-node packages/connector/src/cli.js health
-node packages/connector/src/cli.js compat
-node packages/connector/src/cli.js run
+1. Open [https://steelai.dev/signin.html](https://steelai.dev/signin.html) and enter the email on your account.
+2. Open the link Steel sends to that inbox, in the same browser. It expires soon and works once.
+3. On your profile, open **API Key**. That website key calls `https://steelai.dev/api/v1/status`.
+4. Choose **Generate Key** and copy the key immediately. It is shown once. Generating another key revokes the previous one.
+
+The connector uses a separate runtime key. Your runtime owner gives you that key. In the same terminal you use for the connector, set it as `STEEL_API_KEY`. Leave a space out of the equals sign. In PowerShell:
+
+```powershell
+$env:STEEL_API_KEY = 'your-runtime-key'
 ```
 
-Before health/run, set `STEEL_API_KEY` to a dedicated connector credential supplied by your server owner. Your local provider credential, if needed, goes in `STEEL_PROVIDER_KEY`. Configure the provider's actual OpenAI-compatible base URL; `/v1` is appropriate only if your provider serves it. See [connector setup](packages/connector/QUICKSTART.md) for pairing, scope, configuration and custom adapters. No npm registry publication is claimed; use the checked-out source or install the local package.
+If your model is hosted, such as Muse Wonder, set `STEEL_PROVIDER_KEY` the same way. That is the model’s own key. Keep both keys out of git and out of chat.
 
-Join the developer waitlist or contact us at the website for runtime access.
+## Confirm the connection
+
+Point the connector at staging or production. This staging example uses Muse Wonder. For production, change only the `--server` address.
+
+```sh
+node packages/connector/src/cli.js init --server https://steel-portal-staging-yl3vqnwyta-uc.a.run.app --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
+node packages/connector/src/cli.js health
+```
+
+A good health report has `config` as `ok` and `steel` as `ok (steel-connector/1)`. `provider` is `ok` when the model answers. A missing `STEEL_API_KEY` fails `config`. A wrong runtime key fails `steel`.
+
+`compat` lists the job types that runtime currently offers. The cloud runtimes answer this health check. They do not yet hand the connector workflow jobs, so `supported_here` can be empty. The app still needs the runtime to serve `/api/runtime-config` before a workspace opens.
+
+A model on this computer can use `--provider http://127.0.0.1:11434/v1` and `--model YOUR_MODEL`, and it does not need `--allow-remote-provider`. Muse Wonder setup is in [packages/connector/MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md). Pairing and adapters are in [packages/connector/README.md](packages/connector/README.md).
 
 ## Learning Center
 
@@ -55,7 +74,7 @@ Draft a `.lang` program with the connector capability `language.draft`. Call a p
 
 ## Executable language drafting
 
-The source connector supports `language.draft` when the private runtime owner explicitly grants that capability. It returns an untrusted `.lang` source draft; it does not execute code, read your repository, publish a workflow or authorize deployment. Existing credentials are not expanded by updating this checkout. See [connector setup](packages/connector/QUICKSTART.md) for configuration. The current public Creator UI is not claimed to include the latest private runtime authoring controls; use the operator-provided compatible Creator and runtime. Repository connection and autonomous project workflows are not a self-service feature of this public clone yet.
+The source connector supports `language.draft` when the private runtime owner explicitly grants that capability. It returns an untrusted `.lang` source draft; it does not execute code, read your repository, publish a workflow or authorize deployment. Existing credentials are not expanded by updating this checkout. See [INSTALL.md](INSTALL.md) for configuration. The current public Creator UI is not claimed to include the latest private runtime authoring controls; use the operator-provided compatible Creator and runtime. Repository connection and autonomous project workflows are not a self-service feature of this public clone yet.
 
 ## Repository boundary
 

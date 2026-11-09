@@ -130,14 +130,15 @@ export function loadConfig(home = configHome()) {
 
 // Write a skeleton config. NEVER writes secret VALUES; key refs only.
 // mode 0600 best-effort (POSIX); on Windows the file inherits the profile ACL.
-export function writeSkeletonConfig(home, { serverBase, providerBase, providerModel, capabilities }) {
+export function writeSkeletonConfig(home, { serverBase, providerBase, providerModel, capabilities, allowRemoteProvider = false }) {
   mkdirSync(home, { recursive: true });
   const skeleton = {
     server_base: serverBase,
     provider_base: providerBase,
     provider_model: providerModel,
     steel_key: { env: 'STEEL_API_KEY' },
-    provider_key: null,
+    provider_key: allowRemoteProvider ? { env: 'STEEL_PROVIDER_KEY' } : null,
+    allow_remote_provider: allowRemoteProvider === true,
     capabilities: capabilities ?? ['assistant.propose'],
     provider_timeout_ms: LIMITS.PROVIDER_TIMEOUT_MS_DEFAULT,
     poll_interval_ms: LIMITS.POLL_INTERVAL_MS_DEFAULT,

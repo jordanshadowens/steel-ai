@@ -22,8 +22,9 @@ function usage(exit = 0) {
 
 Usage: steel-connector <command> [options]
 
-  init --server URL --provider URL --model NAME [--home DIR] [--capabilities a,b]
+  init --server URL --provider URL --model NAME [--home DIR] [--capabilities a,b] [--allow-remote-provider]
       Write a skeleton config. Writes NO secrets; pairing comes next.
+      --allow-remote-provider is required when the model URL is not loopback.
   pair --steel|--provider [--home DIR]
       Store ONE explicitly pasted key (read once from stdin) into a 0600 file,
       or print instructions when stdin is a TTY. Never fetches anything.
@@ -40,7 +41,7 @@ Usage: steel-connector <command> [options]
       Poll -> local model -> submit loop until Ctrl-C.
 
 Env overrides: STEEL_CONNECTOR_HOME, STEEL_API_KEY, STEEL_PROVIDER_KEY.
-Docs: README.md, QUICKSTART.md, PROTOCOL.md, SECURITY.md.
+Docs: README.md, PROTOCOL.md, SECURITY.md. Setup: the repository INSTALL.md.
 `;
   process.stdout.write(u);
   process.exit(exit);
@@ -88,7 +89,17 @@ async function cmdInit(o) {
   for (const c of capabilities) {
     if (!JOB_TYPES.includes(c)) fail(`unknown capability ${c}; one of ${JOB_TYPES.join(', ')}`);
   }
-  const path = writeSkeletonConfig(home, { serverBase: server, providerBase: provider, providerModel: model, capabilities });
+  const allowRemoteProvider = o['allow-remote-provider'] === true;
+  if (!allowRemoteProvider) {
+    try {
+      const providerUrl = new URL(provider);
+      const host = providerUrl.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+      if (!['localhost', '127.0.0.1', '::1'].includes(host)) {
+        fail('provider_base is not loopback; pass --allow-remote-provider to permit it');
+      }
+    } catch { /* loadConfig reports a malformed provider URL */ }
+  }
+  const path = writeSkeletonConfig(home, { serverBase: server, providerBase: provider, providerModel: model, capabilities, allowRemoteProvider });
   // Validate immediately so typos fail here, not at first run.
   loadConfig(home);
   process.stdout.write(`wrote ${path}\nnext: set STEEL_API_KEY in your shell, or run \`steel-connector pair --steel\` and paste your Steel API key.\n`);

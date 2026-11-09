@@ -14,10 +14,10 @@ The configuration below was tested with `https://api.meta.ai/v1` and `muse-wonde
 From the cloned steel-ai repository:
 
 ```sh
-node packages/connector/src/cli.js init --server http://127.0.0.1:3100 --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise
+node packages/connector/src/cli.js init --server https://steel-portal-staging-yl3vqnwyta-uc.a.run.app --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
 ```
 
-Replace the server URL with your authorized runtime. `init` writes `~/.steel-connector/config.json`; it does not store key values. Back up an existing config before running init again. Edit that file to include these fields, preserving the other generated settings:
+Production uses `--server https://steel-runtime-fkknoziyhq-uc.a.run.app`. `init` writes `~/.steel-connector/config.json`; it does not store key values. Back up an existing config before running init again. Edit that file to include these fields, preserving the other generated settings:
 
 ```json
 {

@@ -9,7 +9,7 @@ validates everything; the connector can promote nothing.
 - License: Apache-2.0 for this package (see LICENSE/NOTICE).
 - Protocol: [PROTOCOL.md](PROTOCOL.md) (`steel-connector/1`).
 - Security: [SECURITY.md](SECURITY.md).
-- 10-minute tour: [QUICKSTART.md](QUICKSTART.md).
+- Setup: [INSTALL.md](../../INSTALL.md).
 
 Website: [steelai.dev](https://steelai.dev/). Source installation is available here; no npm registry release is claimed.
 
@@ -29,7 +29,7 @@ Website: [steelai.dev](https://steelai.dev/). Source installation is available h
 # 2. Check it runs:
 node src\cli.js version
 # 3. Point it at your servers (writes config only — no secrets):
-node src\cli.js init --server https://steel.example.com --provider http://127.0.0.1:11434 --model dev-model
+node src\cli.js init --server https://steel-portal-staging-yl3vqnwyta-uc.a.run.app --provider http://127.0.0.1:11434 --model dev-model
 ```
 
 POSIX shells use `src/cli.js` with forward slashes. `STEEL_CONNECTOR_HOME`
