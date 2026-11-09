@@ -29,7 +29,7 @@ Website: [steelai.dev](https://steelai.dev/). Source installation is available h
 # 2. Check it runs:
 node src\cli.js version
 # 3. Point it at your servers (writes config only — no secrets):
-node src\cli.js init --server https://steel-portal-staging-yl3vqnwyta-uc.a.run.app --provider http://127.0.0.1:11434 --model dev-model
+node src\cli.js init --server https://api.steelai.dev --provider https://api.meta.ai/v1 --model muse-wonder-1.0
 ```
 
 POSIX shells use `src/cli.js` with forward slashes. `STEEL_CONNECTOR_HOME`

@@ -4,31 +4,27 @@
 
 Visual workflow authoring, a developer SDK, and a connector that runs on your computer and talks to a Steel runtime. The longer setup is in [INSTALL.md](INSTALL.md).
 
-## Choose a runtime
+## Start the client
 
-The client uses one runtime at a time.
+You need Node.js 24 or newer. In this repository, install the client, point it at the API, and start it:
 
-| Name | Address |
-| --- | --- |
-| Staging | `https://steel-portal-staging-yl3vqnwyta-uc.a.run.app` |
-| Production | `https://steel-runtime-fkknoziyhq-uc.a.run.app` |
-| Local | `http://127.0.0.1:3100` |
-
-Staging is where you try the connection. Production is the live runtime. Local is a runtime already running on this computer.
-
-For the app, put one of those names in `UI/.env`:
-
-```
-STEEL_RUNTIME_URL=staging
+```sh
+npm run setup
 ```
 
-`production` and `local` are the other two values. Then, from this repository:
+Create `UI/.env` with one line:
+
+```
+STEEL_RUNTIME_URL=https://api.steelai.dev
+```
+
+Start the client and leave that terminal open:
 
 ```sh
 npm --prefix UI run dev
 ```
 
-Open the `/app/` address the command prints. This checkout is the client. The runtime stays at the address you chose.
+Open the `/app/` address the command prints. The client calls `https://api.steelai.dev`. The longer version is in [INSTALL.md](INSTALL.md).
 
 ## Two different keys
 
@@ -49,18 +45,18 @@ If your model is hosted, such as Muse Wonder, set `STEEL_PROVIDER_KEY` the same 
 
 ## Confirm the connection
 
-Point the connector at staging or production. This staging example uses Muse Wonder. For production, change only the `--server` address.
+Point the connector at `https://api.steelai.dev`. This example uses Muse Wonder.
 
 ```sh
-node packages/connector/src/cli.js init --server https://steel-portal-staging-yl3vqnwyta-uc.a.run.app --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
+node packages/connector/src/cli.js init --server https://api.steelai.dev --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
 node packages/connector/src/cli.js health
 ```
 
 A good health report has `config` as `ok` and `steel` as `ok (steel-connector/1)`. `provider` is `ok` when the model answers. A missing `STEEL_API_KEY` fails `config`. A wrong runtime key fails `steel`.
 
-`compat` lists the job types that runtime currently offers. The cloud runtimes answer this health check. They do not yet hand the connector workflow jobs, so `supported_here` can be empty. The app still needs the runtime to serve `/api/runtime-config` before a workspace opens.
+`compat` lists the job types the API currently offers. The API answers this health check. It does not yet hand the connector workflow jobs, so `supported_here` can be empty. The app still needs the API to serve `/api/runtime-config` before a workspace opens.
 
-A model on this computer can use `--provider http://127.0.0.1:11434/v1` and `--model YOUR_MODEL`, and it does not need `--allow-remote-provider`. Muse Wonder setup is in [packages/connector/MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md). Pairing and adapters are in [packages/connector/README.md](packages/connector/README.md).
+Muse Wonder setup is in [packages/connector/MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md). Pairing and adapters are in [packages/connector/README.md](packages/connector/README.md).
 
 ## Learning Center
 
