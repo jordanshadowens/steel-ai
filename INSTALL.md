@@ -1,6 +1,6 @@
 # Install Steel AI
 
-The website is [https://steelai.dev/](https://steelai.dev/). Documentation is [https://steelai.dev/docs](https://steelai.dev/docs). This repository is the client you run on your computer. The credential API and the private workflow runtime are different services.
+The website is [https://steelai.dev/](https://steelai.dev/). Documentation is [https://steelai.dev/docs](https://steelai.dev/docs). This repository is the client you run on your computer. It connects to the cloud runtime with an API key. You do not install or start a runtime.
 
 You need Node.js 24 or newer for the npm scripts in this repository. The connector file itself runs on Node.js 20 or newer.
 
@@ -25,7 +25,7 @@ Invoke-RestMethod -Uri https://steelai.dev/api/v1/identity -Headers @{ Authoriza
 
 On macOS or Linux, `curl.exe` with `-H` and `-d` on one line is the same request.
 
-Those two names are placeholders. `GET https://steelai.dev/api/health` returns the credential service status. `https://api.steelai.dev` does not resolve. `GET /api/v1/status` and `GET /api/runtime-config` are not part of this API.
+Those two names are placeholders. `https://steelai.dev` issues the keys. `https://api.steelai.dev` is the cloud runtime those keys call.
 
 ## Start the client
 
@@ -49,7 +49,7 @@ npm --prefix UI run dev
 
 Open the `/app/` address the command prints. Stop the client with Ctrl+C. Start it again later with `npm --prefix UI run dev`. Run `npm run setup` again only when the client dependencies change.
 
-The dev server forwards `/api` to `https://api.steelai.dev`. That host is not published. The page requests `/api/runtime-config` before it opens a workspace, and the credential API does not serve that route, so the client reports “Unable to verify this runtime.” Signing in on steelai.dev does not make this local workspace open.
+The dev server forwards `/api` to `https://api.steelai.dev`. That is the cloud runtime. A saved workflow is stored there for the signed-in account. This computer keeps only the unsaved draft in the browser tab.
 
 Optional checks from the repository root:
 
@@ -61,7 +61,7 @@ npm run build
 
 ## Connector
 
-The connector is not the website session and it is not a `steel_api_` or `steel_dev_` credential. It calls `GET /api/connector/v1/health` on a runtime that implements `steel-connector/1`. The public credential API does not implement that protocol. Use the server address your operator gives you.
+The connector calls the same cloud runtime. It uses `STEEL_API_KEY` for `GET /api/connector/v1/health`. That is separate from the website session. Set the key in the terminal that will run the connector:
 
 PowerShell, in the terminal that will run the connector:
 
@@ -79,10 +79,10 @@ Type the equals sign with no spaces around it. A new terminal needs the key agai
 
 When the model is hosted, set `STEEL_PROVIDER_KEY` in that same terminal. That value belongs to the model provider.
 
-From the repository root, write the connector config. Replace the server and provider with the ones you were given:
+From the repository root, write the connector config. The server is the cloud runtime:
 
 ```sh
-node packages/connector/src/cli.js init --server https://your-runtime.example --provider https://your-model.example/v1 --model your-model --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
+node packages/connector/src/cli.js init --server https://api.steelai.dev --provider https://your-model.example/v1 --model your-model --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
 ```
 
 `init` saves `server_base` at `.steel-connector/config.json` in your home folder. It stores the name of the environment variable, not the key. Running `init` again replaces that file.
@@ -98,34 +98,25 @@ node packages/connector/src/cli.js compat
 
 Muse Wonder notes, for a runtime that actually offers that provider, are in [packages/connector/MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md).
 
-## Start an agent
+## Connect an agent to the cloud runtime
 
-Creating a key does not start an agent. `npm run setup` does not start one either. This public repository can call a private account runtime. It does not contain the deployment agent.
-
-The developer key from `POST /api/dev-keys` is the agent credential. Put that `steel_dev_` value in `STEEL_AGENT_KEY`. Put the private runtime origin in `STEEL_AGENT_URL`. Use `https://` for a remote runtime, or `http://127.0.0.1` or `http://localhost` for a runtime on this computer. Do not put the key in the URL, a prompt, or a file you commit. `https://steelai.dev` is the credential site. It does not serve `/api/agent/v1`, so this client cannot list or run workflows there.
+The developer key from `POST /api/dev-keys` is what an agent sends to the cloud runtime. The account key stays on your server and is only used to issue that developer key. Do not put either key in a URL, a prompt, or a file you commit.
 
 In PowerShell, for one terminal:
 
 ```powershell
-$env:STEEL_AGENT_URL = 'https://your-private-runtime.example'
+$env:STEEL_AGENT_URL = 'https://api.steelai.dev'
 $env:STEEL_AGENT_KEY = 'YOUR_DEVELOPER_KEY'
 python tools/steel-agent.py list
 ```
 
-`list` shows published workflows that key is allowed to call. To run one, save an `inputs.json` object that matches that workflow and keep the request id stable for retries:
+`list` shows the published workflows that key is allowed to call. Those workflows are the ones saved by Workflow Creator on the cloud runtime. To run one, save an `inputs.json` object that matches that workflow and keep the request id stable for retries:
 
 ```powershell
 python tools/steel-agent.py run --workflow order_review --version 1 --inputs inputs.json --request-id order42-review-attempt01
 python tools/steel-agent.py get --run-id RETURNED_RUN_ID
 ```
 
-Replace `order_review` and the inputs with a workflow that runtime has published. A run can stop at `pending_approval`. This key cannot approve it. A person approves in the private Creator. The agent then calls `get`.
+Replace `order_review` and the inputs with a workflow you published. A run can stop at `pending_approval`. This key cannot approve it. Approve it in Workflow Creator, then call `get`.
 
-The deployment agent is not this script. It lives in the private steel-ai-core checkout as `agents/deployment.js`. Copy `agents/deployment.assignment.example.json` to a private path, set the account id, workflow id, published version, definition digest, runtime `base_url`, and a data directory that is not Creator’s database. In that private checkout, with the same `STEEL_AGENT_KEY` in the terminal:
-
-```powershell
-node agents/deployment.js inspect assignment.json
-node agents/deployment.js readiness assignment.json
-```
-
-`inspect` reads the assigned workflow and does not call a model. `readiness` calls the configured model and writes a local readiness note. Neither command deploys, changes a repository, or calls a cloud API. Model access for `readiness` is a separate authorization. A published workflow does not grant it.
+For the deployment agent, use the same cloud origin and the same developer key. `STEEL_AGENT_URL` is `https://api.steelai.dev`. `STEEL_AGENT_KEY` is the `steel_dev_` key whose workflow list includes the deployment workflow. The agent reads and runs that cloud workflow. It does not create a local runtime or a local workflow database.

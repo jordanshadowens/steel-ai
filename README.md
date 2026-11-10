@@ -2,7 +2,7 @@
 
 [Website](https://steelai.dev/) · [Documentation](https://steelai.dev/docs) · [Sign in](https://steelai.dev/signin) · [Installation guide](INSTALL.md)
 
-This repository is the local client, SDK, and connector. The site at [steelai.dev](https://steelai.dev/) issues account and developer credentials. This checkout does not include the private runtime.
+This repository is the local client, SDK, and connector. The site at [steelai.dev](https://steelai.dev/) issues the API keys. The client and agents connect to the cloud runtime at `https://api.steelai.dev` with those keys. This checkout does not install a runtime.
 
 ## Website credentials
 
@@ -28,7 +28,7 @@ A machine calls the identity route with the `steel_dev_` key. Do not send a brow
 Invoke-RestMethod -Uri https://steelai.dev/api/v1/identity -Headers @{ Authorization = 'Bearer YOUR_DEVELOPER_KEY' }
 ```
 
-`YOUR_ACCOUNT_KEY` and `YOUR_DEVELOPER_KEY` are placeholders. The live API also serves `GET /api/health`, `GET /api/account/keys`, and `DELETE /api/account/keys/{id}`. It does not serve `GET /api/v1/status`, `GET /api/runtime-config`, or `https://api.steelai.dev`. There is no published usage, quota, billing, or rate-limit report. Request and response details are in the [documentation](https://steelai.dev/docs).
+`YOUR_ACCOUNT_KEY` and `YOUR_DEVELOPER_KEY` are placeholders. The website also serves `GET /api/health`, `GET /api/account/keys`, and `DELETE /api/account/keys/{id}`. Request and response details are in the [documentation](https://steelai.dev/docs).
 
 ## Start the client
 
@@ -50,7 +50,7 @@ Start the client and leave that terminal open:
 npm --prefix UI run dev
 ```
 
-Open the `/app/` address the command prints. Vite proxies `/api` to `https://api.steelai.dev`. That hostname is not published, and the client’s first request is `GET /api/runtime-config`. The credential API on steelai.dev does not serve that route, so the workspace stops on “Unable to verify this runtime.”
+Open the `/app/` address the command prints. Vite proxies `/api` to `https://api.steelai.dev`. Saving a workflow stores it on that cloud runtime for your account.
 
 Optional checks from the repository root:
 
@@ -64,7 +64,7 @@ npm run build
 
 `packages/connector` calls a runtime that speaks `steel-connector/1`, including `GET /api/connector/v1/health`. The public credential API does not implement that protocol. Set `STEEL_API_KEY` only for a runtime your operator provides, and keep it out of git and chat. Pairing is in [packages/connector/README.md](packages/connector/README.md).
 
-[tools/steel-agent.py](tools/steel-agent.py) lists and invokes published workflows when `STEEL_AGENT_URL` is a private account runtime and `STEEL_AGENT_KEY` is the `steel_dev_` key. The public credential API does not serve those routes. The deployment agent is `node agents/deployment.js inspect|readiness assignment.json` in the private steel-ai-core checkout. It reads readiness only. It does not deploy. See [INSTALL.md](INSTALL.md).
+[tools/steel-agent.py](tools/steel-agent.py) lists and invokes published workflows when `STEEL_AGENT_URL` is `https://api.steelai.dev` and `STEEL_AGENT_KEY` is the `steel_dev_` key. The deployment agent uses that same cloud origin and key. See [INSTALL.md](INSTALL.md).
 
 ## Repository boundary
 
