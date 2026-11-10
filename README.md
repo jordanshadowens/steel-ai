@@ -64,7 +64,7 @@ npm run build
 
 `packages/connector` calls a runtime that speaks `steel-connector/1`, including `GET /api/connector/v1/health`. The public credential API does not implement that protocol. Set `STEEL_API_KEY` only for a runtime your operator provides, and keep it out of git and chat. Pairing is in [packages/connector/README.md](packages/connector/README.md).
 
-[tools/steel-agent.py](tools/steel-agent.py) lists and invokes published workflows on an authorized runtime set with `STEEL_AGENT_URL` and `STEEL_AGENT_KEY`. The public credential API does not serve those workflow routes.
+[tools/steel-agent.py](tools/steel-agent.py) lists and invokes published workflows when `STEEL_AGENT_URL` is a private account runtime and `STEEL_AGENT_KEY` is the `steel_dev_` key. The public credential API does not serve those routes. The deployment agent is `node agents/deployment.js inspect|readiness assignment.json` in the private steel-ai-core checkout. It reads readiness only. It does not deploy. See [INSTALL.md](INSTALL.md).
 
 ## Repository boundary
 

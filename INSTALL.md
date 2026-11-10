@@ -97,3 +97,35 @@ node packages/connector/src/cli.js compat
 `config` is `ok` when the file and required keys are present. `steel` is `ok (steel-connector/1)` when that runtime accepts the key. `provider` is `ok` when the model accepts its own key. `supported_here` lists job types that runtime is offering. `run` waits for jobs from that runtime. Stop it with Ctrl+C. The connector calls out. You do not open a port on your computer.
 
 Muse Wonder notes, for a runtime that actually offers that provider, are in [packages/connector/MUSE_PROVIDER.md](packages/connector/MUSE_PROVIDER.md).
+
+## Start an agent
+
+Creating a key does not start an agent. `npm run setup` does not start one either. This public repository can call a private account runtime. It does not contain the deployment agent.
+
+The developer key from `POST /api/dev-keys` is the agent credential. Put that `steel_dev_` value in `STEEL_AGENT_KEY`. Put the private runtime origin in `STEEL_AGENT_URL`. Use `https://` for a remote runtime, or `http://127.0.0.1` or `http://localhost` for a runtime on this computer. Do not put the key in the URL, a prompt, or a file you commit. `https://steelai.dev` is the credential site. It does not serve `/api/agent/v1`, so this client cannot list or run workflows there.
+
+In PowerShell, for one terminal:
+
+```powershell
+$env:STEEL_AGENT_URL = 'https://your-private-runtime.example'
+$env:STEEL_AGENT_KEY = 'YOUR_DEVELOPER_KEY'
+python tools/steel-agent.py list
+```
+
+`list` shows published workflows that key is allowed to call. To run one, save an `inputs.json` object that matches that workflow and keep the request id stable for retries:
+
+```powershell
+python tools/steel-agent.py run --workflow order_review --version 1 --inputs inputs.json --request-id order42-review-attempt01
+python tools/steel-agent.py get --run-id RETURNED_RUN_ID
+```
+
+Replace `order_review` and the inputs with a workflow that runtime has published. A run can stop at `pending_approval`. This key cannot approve it. A person approves in the private Creator. The agent then calls `get`.
+
+The deployment agent is not this script. It lives in the private steel-ai-core checkout as `agents/deployment.js`. Copy `agents/deployment.assignment.example.json` to a private path, set the account id, workflow id, published version, definition digest, runtime `base_url`, and a data directory that is not Creator’s database. In that private checkout, with the same `STEEL_AGENT_KEY` in the terminal:
+
+```powershell
+node agents/deployment.js inspect assignment.json
+node agents/deployment.js readiness assignment.json
+```
+
+`inspect` reads the assigned workflow and does not call a model. `readiness` calls the configured model and writes a local readiness note. Neither command deploys, changes a repository, or calls a cloud API. Model access for `readiness` is a separate authorization. A published workflow does not grant it.
