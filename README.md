@@ -10,20 +10,22 @@ Sign in at [https://steelai.dev/signin](https://steelai.dev/signin). Open the ne
 
 On the dashboard, create a named account key. Copy the `steel_api_` value when it is shown. It is not shown again. The list then shows a masked identifier, the name, when it was created, when it was last used, when it expires, and revoke. Creating another key does not revoke the previous one.
 
-Use an account key from a server to issue a developer key:
+Use an account key from a server to issue a developer key. In PowerShell, paste this as one command. PowerShell does not continue a line with `\`, and `curl` there is not the curl program:
 
-```sh
-curl https://steelai.dev/api/dev-keys \
-  -H "Authorization: Bearer YOUR_ACCOUNT_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"workflowIds\":[\"workflow-id\"]}"
+```powershell
+Invoke-RestMethod -Method Post -Uri https://steelai.dev/api/dev-keys -Headers @{ Authorization = 'Bearer YOUR_ACCOUNT_KEY' } -ContentType 'application/json' -Body '{"workflowIds":["workflow-id"]}'
 ```
 
-A machine calls the identity route with the `steel_dev_` key. Do not send a browser cookie or `Origin` header:
+macOS, Linux, or `curl.exe`:
 
 ```sh
-curl https://steelai.dev/api/v1/identity \
-  -H "Authorization: Bearer YOUR_DEVELOPER_KEY"
+curl.exe https://steelai.dev/api/dev-keys -H "Authorization: Bearer YOUR_ACCOUNT_KEY" -H "Content-Type: application/json" -d "{\"workflowIds\":[\"workflow-id\"]}"
+```
+
+A machine calls the identity route with the `steel_dev_` key. Do not send a browser cookie or `Origin` header.
+
+```powershell
+Invoke-RestMethod -Uri https://steelai.dev/api/v1/identity -Headers @{ Authorization = 'Bearer YOUR_DEVELOPER_KEY' }
 ```
 
 `YOUR_ACCOUNT_KEY` and `YOUR_DEVELOPER_KEY` are placeholders. The live API also serves `GET /api/health`, `GET /api/account/keys`, and `DELETE /api/account/keys/{id}`. It does not serve `GET /api/v1/status`, `GET /api/runtime-config`, or `https://api.steelai.dev`. There is no published usage, quota, billing, or rate-limit report. Request and response details are in the [documentation](https://steelai.dev/docs).

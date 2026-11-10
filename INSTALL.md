@@ -11,21 +11,19 @@ You need Node.js 24 or newer for the npm scripts in this repository. The connect
 3. Create an account key, copy the `steel_api_` value, and store it on the server that will call the API. The website shows it once.
 4. Revoke a key from the dashboard when you no longer want it used. A new key does not replace an older one.
 
-The website session is an HttpOnly cookie. Do not send it to `GET /api/v1/identity`. From the server that holds the account key:
+The website session is an HttpOnly cookie. Do not send it to `GET /api/v1/identity`. From PowerShell, paste the next command as a single line. A trailing `\` does not continue a line there, and `curl` is an alias for `Invoke-WebRequest`, so `-H` and `-d` are not accepted:
 
-```sh
-curl https://steelai.dev/api/dev-keys \
-  -H "Authorization: Bearer YOUR_ACCOUNT_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"workflowIds\":[\"workflow-id\"]}"
+```powershell
+Invoke-RestMethod -Method Post -Uri https://steelai.dev/api/dev-keys -Headers @{ Authorization = 'Bearer YOUR_ACCOUNT_KEY' } -ContentType 'application/json' -Body '{"workflowIds":["workflow-id"]}'
 ```
 
 Call the identity route with the developer key that response returns:
 
-```sh
-curl https://steelai.dev/api/v1/identity \
-  -H "Authorization: Bearer YOUR_DEVELOPER_KEY"
+```powershell
+Invoke-RestMethod -Uri https://steelai.dev/api/v1/identity -Headers @{ Authorization = 'Bearer YOUR_DEVELOPER_KEY' }
 ```
+
+On macOS or Linux, `curl.exe` with `-H` and `-d` on one line is the same request.
 
 Those two names are placeholders. `GET https://steelai.dev/api/health` returns the credential service status. `https://api.steelai.dev` does not resolve. `GET /api/v1/status` and `GET /api/runtime-config` are not part of this API.
 
