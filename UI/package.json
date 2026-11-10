@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Steel AI workflow and template authoring client",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5173",
+    "dev": "vite --host localhost --port 5173",
     "build": "tsc -p tsconfig.client-react.json --noEmit && vite build",
     "check": "tsc -p tsconfig.client-react.json --noEmit",
     "test": "vitest run"
