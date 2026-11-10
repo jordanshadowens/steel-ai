@@ -1,5 +1,6 @@
 import { fileURLToPath, URL } from 'node:url';
-import { defineConfig, loadEnv } from 'vitest/config';
+import { loadEnv } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolveRuntimeTarget } from './runtime-target.mjs';
 
