@@ -15,24 +15,28 @@ Website: [steelai.dev](https://steelai.dev/). Source installation is available h
 
 ## Requirements
 
-- Node.js >= 20 (zero dependencies — no `npm install` needed).
+- Node.js 24.15 or newer (zero dependencies — no `npm install` needed).
 - A Steel API key with connector scope (issued by your Steel Server
   owner; entered explicitly at pairing — the connector never fetches it).
 - A local OpenAI-compatible model daemon (default `http://127.0.0.1:11434`),
   or any backend behind a custom adapter (see `examples/`).
 
-## Install (local, no admin)
+## Run from the repository
+
+Set the connector variables in the root `.env` as shown in [the install guide](../../INSTALL.md), then run `npm run connector -- health`.
+
+## Standalone install
 
 ```powershell
 # 1. Copy this folder anywhere you like, e.g. $HOME\steel-connector
 #    (no installer, no registry, no services).
 # 2. Check it runs:
-node src\cli.js version
+node src\cli.ts version
 # 3. Point it at your servers (writes config only — no secrets):
-node src\cli.js init --server https://api.steelai.dev --provider https://api.meta.ai/v1 --model muse-wonder-1.0
+node src\cli.ts init --server https://api.steelai.dev --provider http://127.0.0.1:11434/v1 --model your-model
 ```
 
-POSIX shells use `src/cli.js` with forward slashes. `STEEL_CONNECTOR_HOME`
+POSIX shells use `src/cli.ts` with forward slashes. `STEEL_CONNECTOR_HOME`
 overrides the config dir (default `~/.steel-connector`); all state stays
 there — nothing is installed into the Node installation or PATH unless
 you link it yourself (`npm link` is optional and unneeded).
@@ -42,9 +46,9 @@ you link it yourself (`npm link` is optional and unneeded).
 ```powershell
 # Steel key (typed/pasted by you; stored 0600; never logged):
 $env:STEEL_API_KEY = 'paste-steel-key-here'   # option A: shell env (per session)
-echo paste-steel-key-here | node src\cli.js pair --steel   # option B: key file
+echo paste-steel-key-here | node src\cli.ts pair --steel   # option B: key file
 # Local model credential (only when your daemon needs one; stays local):
-echo paste-model-key-here | node src\cli.js pair --provider
+echo paste-model-key-here | node src\cli.ts pair --provider
 ```
 
 Then tell the config which refs to use (`steel_key` / `provider_key` are
@@ -54,9 +58,9 @@ never automates authentication: no browser, no token fetch, no scraping.
 ## Start / stop
 
 ```powershell
-node src\cli.js health        # config + steel + provider reachability
-node src\cli.js compat        # protocol match + job-type intersection
-node src\cli.js run           # foreground loop; Ctrl-C stops cleanly
+node src\cli.ts health        # config + steel + provider reachability
+node src\cli.ts compat        # protocol match + job-type intersection
+node src\cli.ts run           # foreground loop; Ctrl-C stops cleanly
 ```
 
 Helper scripts (`scripts/`) daemonize with a pidfile:
@@ -72,10 +76,10 @@ yourself (`STEEL_CONNECTOR_HOME`) for a full removal.
 
 ## Files
 
-- `src/sdk.js` — reusable exports (protocol, config, provider, Connector).
-- `src/cli.js` — `steel-connector` command.
-- `src/protocol.js`, `src/config.js`, `src/provider.js`, `src/connector.js`.
-- `examples/custom-adapter.mjs` — non-OpenAI backend example.
+- `src/sdk.ts` — reusable exports (protocol, config, provider, Connector).
+- `src/cli.ts` — `steel-connector` command.
+- `src/protocol.ts`, `src/config.ts`, `src/provider.ts`, `src/connector.ts`.
+- `examples/custom-adapter.mts` — non-OpenAI backend example.
 - `test/` — synthetic Steel server + provider fixtures and the protocol
   suite. Fixtures prove transport/auth/validation/refusal only; they
   never claim model inference (`npm test`).
@@ -87,8 +91,8 @@ This package must import nothing outside itself and Node built-ins. Re-run:
 ```powershell
 # from the repository root (empty output = clean; ../src/ and ../examples/
 # are within-package and allowed):
-Select-String -Path public-connector\src\*.js, public-connector\examples\*.mjs -Pattern "from '\.\./(?!(src|examples)/)|require\('\.\./(?!(src|examples)/)"
-node --test public-connector\test\test_connector_protocol.mjs  # or npm test
+Select-String -Path packages\connector\src\*.ts, packages\connector\examples\*.mts -Pattern "from '\.\./(?!(src|examples)/)|require\('\.\./(?!(src|examples)/)"
+npm run test:connector
 ```
 
 An empty first result plus a green suite is the gate. (The suite itself

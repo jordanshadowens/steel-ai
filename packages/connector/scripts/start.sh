@@ -19,6 +19,6 @@ mkdir -p "$HOME_DIR"
 if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
   echo "already running (pid $(cat "$PIDFILE")); stop it first" >&2; exit 1
 fi
-STEEL_CONNECTOR_HOME="$HOME_DIR" nohup node "$ROOT/src/cli.js" run --home "$HOME_DIR" $EXTRA >>"$LOGFILE" 2>&1 &
+STEEL_CONNECTOR_HOME="$HOME_DIR" nohup node "$ROOT/src/cli.ts" run --home "$HOME_DIR" $EXTRA >>"$LOGFILE" 2>&1 &
 echo $! > "$PIDFILE"
 echo "started pid $(cat "$PIDFILE"); log $LOGFILE"

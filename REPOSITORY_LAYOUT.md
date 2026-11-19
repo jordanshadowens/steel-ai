@@ -4,10 +4,13 @@ This repository (`jordanshadowens/steel-ai`) contains the code customers install
 
 | Location | Purpose |
 | --- | --- |
-| `UI/` | Browser client for an authorized runtime |
-| `packages/sdk/` | Client SDK and external contracts |
+| `apps/web/` | Browser client for an authorized runtime |
+| `apps/developer-cli/` | Developer CLI for published workflows |
+| `packages/sdk/` | TypeScript SDK |
+| `packages/shared-types/` | Shared client and SDK contracts |
 | `packages/connector/` | Outbound local-model connector |
-| `INSTALL.md`, `ACCOUNT_WORKSPACES.md` | Customer installation and account connection instructions |
+| `docs/` | Quick start, authentication, and workflows |
+| `examples/` | Example workflow inputs |
 | `.github/workflows/` | Checks for this public client repository |
 
 The private `steel-ai-core` repository owns the AI system, execution, approval enforcement, storage, interpreter, operator agents, hosted portal and website publishing. Public clients use documented interfaces; they must not import or bundle private server implementation. A website status-test key, model connector key and workflow-agent key have different permissions and are not interchangeable.

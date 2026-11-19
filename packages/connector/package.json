@@ -5,16 +5,19 @@
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "bin": {
-    "steel-connector": "./src/cli.js"
+    "steel-connector": "./dist/cli.js"
   },
   "exports": {
-    ".": "./src/sdk.js"
+    ".": {
+      "types": "./dist/sdk.d.ts",
+      "import": "./dist/sdk.js"
+    }
   },
   "files": [
-    "src/",
+    "dist/",
     "examples/",
     "PROTOCOL.md",
     "SECURITY.md",
@@ -24,9 +27,12 @@
     "scripts/"
   ],
   "scripts": {
-    "test": "node --test test/test_connector_protocol.mjs",
-    "health": "node src/cli.js health",
-    "compat": "node src/cli.js compat"
+    "test": "node --test test/test_connector_protocol.mts",
+    "health": "node src/cli.ts health",
+    "compat": "node src/cli.ts compat",
+    "build": "tsc -p tsconfig.json",
+    "check:types": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
   },
   "dependencies": {},
   "homepage": "https://steelai.dev/",

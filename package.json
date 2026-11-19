@@ -4,14 +4,29 @@
   "type": "module",
   "license": "AGPL-3.0-only",
   "scripts": {
-    "setup": "npm --prefix UI ci --ignore-scripts",
-    "build": "npm --prefix UI run build",
-    "check": "npm --prefix UI run check",
-    "test": "npm --prefix UI test && node --test packages/sdk/index.test.js && npm --prefix packages/connector test",
-    "test:connector": "npm --prefix packages/connector test"
+    "setup": "npm ci --ignore-scripts",
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev -w apps/web",
+    "agent": "node --env-file-if-exists=.env apps/developer-cli/index.mjs",
+    "connector": "node --env-file-if-exists=.env packages/connector/src/cli.ts",
+    "check": "npm run check --workspaces --if-present && npm run check:types -w packages/connector",
+    "test": "node --test apps/web/runtime-target.test.mts packages/sdk/index.test.ts && npm test -w apps/web && npm test -w packages/connector",
+    "test:connector": "npm test -w packages/connector",
+    "check:types": "npm run check"
   },
   "engines": {
-    "node": ">=24"
+    "node": ">=24.15.0"
   },
-  "homepage": "https://steelai.dev/"
+  "homepage": "https://steelai.dev/",
+  "workspaces": [
+    "apps/web",
+    "apps/developer-cli",
+    "packages/sdk",
+    "packages/shared-types",
+    "packages/connector"
+  ],
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "@types/node": "26.6.6"
+  }
 }

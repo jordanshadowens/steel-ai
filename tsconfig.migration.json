@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "types": [
+      "node"
+    ],
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
+    "resolveJsonModule": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.mts",
+    "**/*.cts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/target/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/out/**",
+    "**/.tmp/**",
+    "apps/web/client/**",
+    "ARCHIVE/**",
+    "apps/web/public/**",
+    "**/fixtures/**"
+  ]
+}

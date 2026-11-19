@@ -14,7 +14,7 @@ The configuration below was tested with `https://api.meta.ai/v1` and `muse-wonde
 From the cloned steel-ai repository:
 
 ```sh
-node packages/connector/src/cli.js init --server https://api.steelai.dev --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
+node packages/connector/src/cli.ts init --server https://api.steelai.dev --provider https://api.meta.ai/v1 --model muse-wonder-1.0 --capabilities assistant.propose,skill.draft,template.draft,template.revise --allow-remote-provider
 ```
 
 `--server` is `https://api.steelai.dev`. `init` writes `~/.steel-connector/config.json`; it does not store key values. Back up an existing config before running init again. Edit that file to include these fields, preserving the other generated settings:
@@ -55,9 +55,9 @@ export STEEL_API_KEY STEEL_PROVIDER_KEY
 Then run:
 
 ```sh
-node packages/connector/src/cli.js health
-node packages/connector/src/cli.js compat
-node packages/connector/src/cli.js run
+node packages/connector/src/cli.ts health
+node packages/connector/src/cli.ts compat
+node packages/connector/src/cli.ts run
 ```
 
 Keep `run` open while choosing Draft with AI in Creator. `health` probes `/models`; `compat` checks Steel protocol/capabilities. Neither alone proves model inference or correct calculations. If a provider restricts `/models`, report that probe failure separately from a controlled real draft; do not treat an unverified health probe as success.

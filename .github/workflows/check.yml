@@ -11,8 +11,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: UI/package-lock.json
-      - run: npm run setup
+      - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm test
       - run: npm run build

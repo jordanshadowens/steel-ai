@@ -12,7 +12,7 @@ if (Test-Path $pidFile) {
   $old = Get-Content $pidFile -ErrorAction SilentlyContinue
   if ($old -and (Get-Process -Id $old -ErrorAction SilentlyContinue)) { Write-Error "already running (pid $old); stop it first"; exit 1 }
 }
-$cliArgs = @("$root\src\cli.js", 'run')
+$cliArgs = @("$root\src\cli.ts", 'run')
 if ($HomeDir -ne "") { $cliArgs += @('--home', $HomeDir) }
 if ($MaxIterations -gt 0) { $cliArgs += @('--max-iterations', "$MaxIterations") }
 $env:STEEL_CONNECTOR_HOME = $homeDir

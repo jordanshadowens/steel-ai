@@ -4,10 +4,24 @@
   "type": "module",
   "license": "Apache-2.0",
   "exports": {
-    "./contracts": "./contracts.ts",
+    "./contracts": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "prepack": "npm run build"
+  },
+  "files": [
+    "dist/"
+  ],
+  "dependencies": {
+    "@steel-ai/shared-types": "0.1.0"
   }
 }

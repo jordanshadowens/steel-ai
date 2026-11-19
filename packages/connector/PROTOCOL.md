@@ -80,7 +80,7 @@ at most 12 messages, 65536 chars per message, 262144 chars total prompt,
   `(job_id, idempotency_key)`: repeats return the first verdict.
 - No silent fallback: provider timeouts, tool-call answers, oversize
   output, and server rejections all surface as explicit failed outcomes
-  with codes (see `src/protocol.js` ERROR_CODES). Nothing retries
+  with codes (see `src/protocol.ts` ERROR_CODES). Nothing retries
   against a different model behind the developer's back.
 
 ## Job types and real server contracts
@@ -93,10 +93,10 @@ imports them).
 
 | type | server route (private) | model input | server validation of the candidate |
 |---|---|---|---|
-| `assistant.propose` | `POST /api/assistant/propose` (`UI/src/server/server.ts`, via `agent/tools/assistantBridge.js` `handleProposalRequest`) | `{system, user}` from `buildProposalMessages`, max 2048 tokens | `parseProposalText`: JSON object, `proposal.request_id`/`base_rev` echo, `kind`, 1..maxOps commands, every id in the request capabilities, args objects. Codes: truncated, malformed, stale-answer, stale-proposal, limit, unsupported-capability |
+| `assistant.propose` | `POST /api/assistant/propose` (`UI/src/server/server.ts`, via `agent/tools/assistantBridge.ts` `handleProposalRequest`) | `{system, user}` from `buildProposalMessages`, max 2048 tokens | `parseProposalText`: JSON object, `proposal.request_id`/`base_rev` echo, `kind`, 1..maxOps commands, every id in the request capabilities, args objects. Codes: truncated, malformed, stale-answer, stale-proposal, limit, unsupported-capability |
 | `template.draft` | `POST /api/templates/draft` | draft system prompt for the kind + `"<Noun> request: ..."` user prompt, max 4096 tokens | `extractJson`, transport-envelope refusal (`choices` array = backend failure, 502), `validateTemplateSpec(kind)` |
 | `template.revise` | `POST /api/templates/revise` | `REVISE_SYSTEM` + current spec + change (change <= 2000 chars, spec <= 256KB) | kind match + schema validation; structural summary; staleness via `base_hash`; nothing persisted |
-| `skill.draft` | `POST /api/skills/draft` via `acquireSkill` (`agent/tools/workflowGraph.js`) | `SKILL_DRAFT_SYSTEM` + Calculation/Params/Sample user prompt, max 1024 tokens | JSON object, `validateProposal`, behavioral tests, invariant checks before any persistence |
+| `skill.draft` | `POST /api/skills/draft` via `acquireSkill` (`agent/tools/workflowGraph.ts`) | `SKILL_DRAFT_SYSTEM` + Calculation/Params/Sample user prompt, max 1024 tokens | JSON object, `validateProposal`, behavioral tests, invariant checks before any persistence |
 
 `language.draft` is an additional opt-in job type for `POST /api/language/draft`: a bounded instruction and resource data produce exactly `{program: string}`. Server validation checks the draft envelope only; execution and published-definition verification are separate. Tests/verdicts are not generation inputs. Existing default server capabilities are unchanged; the operator must explicitly authorize this capability before using an updated connector.
 
