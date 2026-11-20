@@ -150,6 +150,35 @@ it('cookie mode sends no bearer credential and adds CSRF only for mutations', as
     display_name: 'owner@example.invalid',
   });
 });
+it('keeps a valid website login after an action is rejected, then clears an expired login', async () => {
+  configureRuntime({ ...config, authMethod: 'session-cookie' });
+  const account = {
+    uid: 'owner',
+    email: 'owner@example.invalid',
+    expiresAt: Date.now() + 60000,
+  };
+  acceptCookieAccount(account);
+  const epoch = getSession().epoch;
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(new Response('{"error":"Action denied"}', { status: 401 }))
+    .mockResolvedValueOnce(Response.json(account))
+    .mockResolvedValueOnce(new Response(null, { status: 401 }))
+    .mockResolvedValueOnce(new Response(null, { status: 401 }));
+  vi.stubGlobal('fetch', fetchMock);
+
+  const response = await authenticatedFetch('/api/workflows', { method: 'POST' });
+  expect(response.status).toBe(401);
+  await expect(response.json()).resolves.toEqual({ error: 'Action denied' });
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/session', expect.objectContaining({
+    credentials: 'same-origin',
+  }));
+  expect(getSession().epoch).toBe(epoch);
+
+  await expect(authenticatedFetch('/api/workflows')).rejects.toThrow('discarded');
+  expect(getSession().cookieAuthenticated).toBeUndefined();
+});
+
 it('cookie logout drops local state even if server logout fails and gives a useful warning', async () => {
   configureRuntime({ ...config, authMethod: 'session-cookie' });
   acceptCookieAccount({

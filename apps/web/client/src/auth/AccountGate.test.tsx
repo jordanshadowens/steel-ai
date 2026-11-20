@@ -18,6 +18,7 @@ const config = {
   },
 };
 beforeEach(() => {
+  localStorage.clear();
   sessionStorage.clear();
   window.history.replaceState(null, '', '/app/');
   configureRuntime(config);
@@ -92,7 +93,14 @@ it('does not accept a valid-looking Firebase response before the runtime authori
   expect(JSON.stringify(sessionStorage)).not.toContain('synthetic-token');
 });
 
-it('mounts only an authorized private workspace and removes it synchronously on signout', async () => {
+it('automatically opens the authorized workspace from an email link in another tab', async () => {
+  const emailKey = 'steel.account.pending-email.v1';
+  localStorage.setItem(emailKey, 'alice@example.invalid');
+  localStorage.setItem('steel.account.pending-handoff.v1', 'test-handoff');
+  const postMessage = vi.fn();
+  vi.stubGlobal('BroadcastChannel', vi.fn(function () {
+    return { postMessage, close: vi.fn() };
+  }));
   window.history.replaceState(
     null,
     '',
@@ -105,11 +113,16 @@ it('mounts only an authorized private workspace and removes it synchronously on 
         return response(config);
       }
       if (String(url).startsWith('https://identitytoolkit.googleapis.com/')) {
+        expect(JSON.parse(String(init?.body))).toMatchObject({
+          email: 'alice@example.invalid',
+          oobCode: 'synthetic-code',
+        });
         return response({
           idToken: 'synthetic-token',
           localId: 'alice',
           email: 'alice@example.invalid',
           expiresIn: '3600',
+          refreshToken: 'synthetic-refresh-token',
         });
       }
       if (String(url) === '/api/workspace') {
@@ -126,20 +139,48 @@ it('mounts only an authorized private workspace and removes it synchronously on 
       <div>Private Creator</div>
     </AccountGate>,
   );
-  await screen.findByRole('button', { name: 'Confirm email and sign in' });
-  fireEvent.change(screen.getByLabelText('Email address'), {
-    target: { value: 'alice@example.invalid' },
-  });
-  fireEvent.click(
-    screen.getByRole('button', { name: 'Confirm email and sign in' }),
-  );
   expect(await screen.findByText('Private Creator')).toBeTruthy();
+  expect(localStorage.getItem(emailKey)).toBeNull();
+  expect(postMessage).toHaveBeenCalledExactlyOnceWith({
+    idToken: 'synthetic-token',
+    localId: 'alice',
+    email: 'alice@example.invalid',
+    expiresIn: '3600',
+  });
   expect(getSession().uid).toBe('alice');
   act(() => endAccount());
   expect(screen.queryByText('Private Creator')).toBeNull();
   expect(
     screen.getByRole('button', { name: 'Send sign-in link' }),
   ).toBeTruthy();
+});
+
+it('opens the workspace in the original tab after a cross-tab sign-in', async () => {
+  const channel = { onmessage: undefined as ((event: MessageEvent) => void) | undefined, close: vi.fn() };
+  vi.stubGlobal('BroadcastChannel', vi.fn(function () { return channel; }));
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/api/runtime-config') {
+      return response(config);
+    }
+    if (url.startsWith('https://identitytoolkit.googleapis.com/')) {
+      return response({});
+    }
+    expect(url).toBe('/api/workspace');
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer synthetic-token');
+    return response({ mode: 'account', skillsScope: 'account' });
+  }));
+  render(<AccountGate><div>Private Creator</div></AccountGate>);
+  const send = await screen.findByRole('button', { name: 'Send sign-in link' });
+  fireEvent.change(screen.getByLabelText('Email address'), {
+    target: { value: 'alice@example.invalid' },
+  });
+  fireEvent.click(send);
+  await screen.findByText(/Check your email/);
+  expect(channel.onmessage).toBeTypeOf('function');
+  act(() => channel.onmessage?.(new MessageEvent('message', {
+    data: { email: 'alice@example.invalid', localId: 'alice', idToken: 'synthetic-token' },
+  })));
+  expect(await screen.findByText('Private Creator')).toBeTruthy();
 });
 
 it('restores an owner website session only after runtime workspace confirmation, without another login', async () => {

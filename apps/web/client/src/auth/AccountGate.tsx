@@ -1,4 +1,10 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { ReactNode } from 'react';
 import {
   acceptAccount,
@@ -11,6 +17,28 @@ import {
   subscribeSession,
 } from './session';
 const EMAIL_KEY = 'steel.account.pending-email.v1';
+const HANDOFF_KEY = 'steel.account.pending-handoff.v1';
+function handoffChannel(id: string) {
+  try {
+    return new BroadcastChannel(`steel.account.sign-in.${id}`);
+  } catch {
+    return null;
+  }
+}
+function pendingHandoff(id?: string | null) {
+  try {
+    if (id === null) {
+      window.localStorage.removeItem(HANDOFF_KEY);
+    } else if (id) {
+      window.localStorage.setItem(HANDOFF_KEY, id);
+    } else {
+      return window.localStorage.getItem(HANDOFF_KEY);
+    }
+  } catch {
+    /* Cross-tab sign-in is optional when browser storage is blocked. */
+  }
+  return null;
+}
 const MESSAGES: Record<string, string> = {
   INVALID_EMAIL: 'Enter a valid email address.',
   INVALID_OOB_CODE:
@@ -42,21 +70,29 @@ export function removeSignInReturn() {
   window.history.replaceState(null, '', url.pathname + url.search + url.hash);
 }
 function pendingEmail() {
-  try {
-    return window.sessionStorage.getItem(EMAIL_KEY) ?? '';
-  } catch {
-    return '';
+  for (const storage of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      const email = window[storage].getItem(EMAIL_KEY);
+      if (email) {
+        return email;
+      }
+    } catch {
+      /* Storage can be blocked by browser settings. */
+    }
   }
+  return '';
 }
 function rememberEmail(email: string | null) {
-  try {
-    if (email) {
-      window.sessionStorage.setItem(EMAIL_KEY, email);
-    } else {
-      window.sessionStorage.removeItem(EMAIL_KEY);
+  for (const storage of ['localStorage', 'sessionStorage'] as const) {
+    try {
+      if (email) {
+        window[storage].setItem(EMAIL_KEY, email);
+      } else {
+        window[storage].removeItem(EMAIL_KEY);
+      }
+    } catch {
+      /* optional convenience only */
     }
-  } catch {
-    /* optional convenience only */
   }
 }
 export async function accountIdentity(
@@ -126,17 +162,56 @@ export async function authorizeAccount(value: {
 }
 function SignIn() {
   const session = useSyncExternalStore(subscribeSession, getSession);
-  const [email, setEmail] = useState(pendingEmail);
   const [code, setCode] = useState(() => readSignInReturn(window.location));
+  const [savedEmail] = useState(() => (code ? pendingEmail() : ''));
+  const [handoffId] = useState(() => (savedEmail ? pendingHandoff() : null));
+  const [email, setEmail] = useState(savedEmail);
   const [busy, setBusy] = useState(false);
+  const autoAttempted = useRef(false);
+  const handoff = useRef<BroadcastChannel | null>(null);
+  useEffect(() => () => handoff.current?.close(), []);
   const [message, setMessage] = useState(
     session.message ?? 'Sign in to open your private workspace.',
   );
+  const finishSignIn = useCallback(async (email: string, oobCode: string) => {
+    setBusy(true);
+    setMessage('Signing in…');
+    try {
+      const result = await accountIdentity('signInWithEmailLink', {
+        email,
+        oobCode,
+        returnSecureToken: true,
+      });
+      await authorizeAccount(result);
+      if (handoffId && result.email.toLowerCase() === savedEmail) {
+        const channel = handoffChannel(handoffId);
+        try {
+          const { idToken, localId, email, expiresIn } = result;
+          channel?.postMessage({ idToken, localId, email, expiresIn });
+        } finally {
+          channel?.close();
+        }
+      }
+      if (pendingHandoff() === handoffId) {
+        pendingHandoff(null);
+        rememberEmail(null);
+      }
+      setCode(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to sign in.');
+    } finally {
+      setBusy(false);
+    }
+  }, [handoffId, savedEmail]);
   useEffect(() => {
     if (code) {
       removeSignInReturn();
+      if (savedEmail && !autoAttempted.current) {
+        autoAttempted.current = true;
+        void finishSignIn(savedEmail, code);
+      }
     }
-  }, [code]);
+  }, [code, finishSignIn, savedEmail]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     const normalized = email.trim().toLowerCase();
@@ -144,39 +219,59 @@ function SignIn() {
       setMessage('Enter a valid email address.');
       return;
     }
+    if (code) {
+      await finishSignIn(normalized, code);
+      return;
+    }
     setBusy(true);
     try {
-      if (code) {
-        const result = await accountIdentity('signInWithEmailLink', {
-          email: normalized,
-          oobCode: code,
-          returnSecureToken: true,
-        });
-        await authorizeAccount(result);
-        rememberEmail(null);
-        setCode(null);
-      } else {
-        const configured =
-          session.config?.mode === 'account'
-            ? session.config.emailLinkContinueUrl
-            : undefined;
-        const url = new URL(configured ?? '/app/', window.location.origin);
-        if (url.origin !== window.location.origin || url.pathname !== '/app/') {
-          throw new Error(
-            'The runtime sign-in return URL is invalid. Contact the server owner.',
-          );
-        }
-        await accountIdentity('sendOobCode', {
-          requestType: 'EMAIL_SIGNIN',
-          email: normalized,
-          continueUrl: url.toString(),
-          canHandleCodeInApp: true,
-        });
-        rememberEmail(normalized);
-        setMessage(
-          'Check your email for the one-time sign-in link. Open it in this browser.',
+      const configured =
+        session.config?.mode === 'account'
+          ? session.config.emailLinkContinueUrl
+          : undefined;
+      const url = new URL(configured ?? '/app/', window.location.origin);
+      if (url.origin !== window.location.origin || url.pathname !== '/app/') {
+        throw new Error(
+          'The runtime sign-in return URL is invalid. Contact the server owner.',
         );
       }
+      await accountIdentity('sendOobCode', {
+        requestType: 'EMAIL_SIGNIN',
+        email: normalized,
+        continueUrl: url.toString(),
+        canHandleCodeInApp: true,
+      });
+      handoff.current?.close();
+      const id = crypto.randomUUID?.();
+      const channel = id ? handoffChannel(id) : null;
+      handoff.current = channel;
+      if (channel && id) {
+        const epoch = getSession().epoch;
+        channel.onmessage = ({ data }) => {
+          if (
+            !sessionIsCurrent(epoch) ||
+            typeof data?.email !== 'string' ||
+            data.email.toLowerCase() !== normalized
+          ) {
+            return;
+          }
+          channel.close();
+          setBusy(true);
+          setMessage('Signing in…');
+          void authorizeAccount(data)
+            .catch((error) => {
+              setMessage(error instanceof Error ? error.message : 'Unable to sign in.');
+            })
+            .finally(() => setBusy(false));
+        };
+        pendingHandoff(id);
+      } else {
+        pendingHandoff(null);
+      }
+      rememberEmail(normalized);
+      setMessage(
+        'Check your email for the one-time sign-in link. Open it in this browser.',
+      );
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to sign in.');
     } finally {
@@ -202,7 +297,7 @@ function SignIn() {
         This runtime keeps each provisioned account’s skills, workflows and run
         history separate.
       </p>
-      <form onSubmit={(event) => void submit(event)}>
+      <form hidden={Boolean(code && busy)} onSubmit={(event) => void submit(event)}>
         <label htmlFor="account-email">Email address</label>
         <input
           id="account-email"
@@ -222,7 +317,7 @@ function SignIn() {
         </button>
       </form>
       <p role="status">{message}</p>
-      {code && (
+      {code && !busy && (
         <button
           className="btn"
           disabled={busy}

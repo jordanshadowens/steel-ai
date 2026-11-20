@@ -337,10 +337,35 @@ export async function authenticatedFetch(
     throw new SessionChangedError();
   }
   if (snapshot.mode === 'account' && response.status === 401) {
-    endAccount(
-      'Your session expired or this account is not authorized. Sign in again or contact the server owner.',
-    );
-    throw new SessionChangedError();
+    // A workspace endpoint can reject a request while the website login is valid.
+    const invalid =
+      !cookie ||
+      (await fetch('/api/session', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+        redirect: 'error',
+        signal: init?.signal ?? (input instanceof Request ? input.signal : undefined),
+      })
+        .then(async (sessionResponse) => {
+          if (sessionResponse.status === 401) {
+            return true;
+          }
+          if (!sessionResponse.ok) {
+            return false;
+          }
+          const account = await sessionResponse.json();
+          return account.uid !== snapshot.uid || account.email !== snapshot.email;
+        })
+        .catch(() => false));
+    if (!sessionIsCurrent(snapshot.epoch)) {
+      throw new SessionChangedError();
+    }
+    if (invalid) {
+      endAccount(
+        'Your session expired or this account is not authorized. Sign in again or contact the server owner.',
+      );
+      throw new SessionChangedError();
+    }
   }
   // A logout can happen during body parsing too, not just during fetch().
   const guard =
