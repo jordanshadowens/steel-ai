@@ -34,11 +34,28 @@ function WorkspaceApp() {
   const route = useRoute();
   const reduceMotion = useReducedMotion();
   const health = useHealthQuery(undefined, { pollingInterval: 30000 });
+  async function signOut() {
+    const state = store.getState();
+    if (
+      (isDirty(state.workflowEditor) || isSpecDirty(state.templateEditor)) &&
+      !window.confirm(
+        'Sign out and discard unsaved changes? Saved work remains in your account.',
+      )
+    ) {
+      return;
+    }
+    await signOutAccount();
+  }
 
   return (
     <div className="shell">
       <header className="shell-nav">
-        <a className="shell-brand" href="/">
+        <a className="shell-brand" href="/" onClick={(event) => {
+          if (session.mode === 'account') {
+            event.preventDefault();
+            void signOut();
+          }
+        }}>
           <img
             className="shell-mark"
             src={`${import.meta.env.BASE_URL}steel-logo.png`}
@@ -64,33 +81,14 @@ function WorkspaceApp() {
               {session.auth?.display_name || session.email}
             </>
           ) : (
-            'Local workspace'
+            session.mode === 'account' ? 'Private workspace' : 'Local workspace'
           )}
         </span>
         {session.mode === 'account' && (
           <button
             className="shell-link"
             type="button"
-            onClick={() => {
-              const state = store.getState();
-              if (
-                (isDirty(state.workflowEditor) ||
-                  isSpecDirty(state.templateEditor)) &&
-                !window.confirm(
-                  'Sign out and discard unsaved changes? Saved work remains in your account.',
-                )
-              ) {
-                return;
-              }
-              try {
-                window.sessionStorage.removeItem(
-                  'steel.account.pending-email.v1',
-                );
-              } catch {
-                /* optional */
-              }
-              void signOutAccount();
-            }}
+            onClick={() => void signOut()}
           >
             Sign out
           </button>

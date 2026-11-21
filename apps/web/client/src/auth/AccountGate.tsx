@@ -341,6 +341,45 @@ export function AccountGate({ children }: { children: ReactNode }) {
   const session = useSyncExternalStore(subscribeSession, getSession);
   const [attempt, setAttempt] = useState(0);
   const [verified, setVerified] = useState(false);
+  const [email, setEmail] = useState('');
+  const [emailStatus, setEmailStatus] = useState('');
+  const [sendingLink, setSendingLink] = useState(false);
+  const [returnCode] = useState(() => readSignInReturn(window.location));
+  const startup = useRef<Promise<Response> | null>(null);
+  const [reload] = useState(() => !returnCode && performance.getEntriesByType('navigation')
+    .some((entry) => (entry as PerformanceNavigationTiming).type === 'reload'));
+  const reloadCleared = useRef(false);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  const waiting = verified && session.config?.mode === 'account' &&
+    session.config.authMethod === 'session-cookie' && !session.cookieAuthenticated;
+  useEffect(() => {
+    if (!waiting || typeof BroadcastChannel !== 'function') return;
+    const channel = handoffChannel('cookie-ready');
+    if (!channel) return;
+    channel.onmessage = retry;
+    return () => channel.close();
+  }, [retry, waiting]);
+  async function requestLink(event: React.FormEvent) {
+    event.preventDefault();
+    setSendingLink(true);
+    try {
+      const response = await fetch('/api/session/email/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Steel-CSRF': '1' },
+        body: JSON.stringify({ email }),
+        credentials: 'same-origin',
+        redirect: 'error',
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error('Unable to send the link. Try again or use website sign-in.');
+      setEmail('');
+      setEmailStatus('Check your email. Open the link in this browser.');
+    } catch (error) {
+      setEmailStatus(error instanceof Error ? error.message : 'Unable to send the link.');
+    } finally {
+      setSendingLink(false);
+    }
+  }
   useEffect(() => {
     setVerified(false);
     let cancelled = false;
@@ -356,7 +395,44 @@ export function AccountGate({ children }: { children: ReactNode }) {
           config.authMethod === 'session-cookie'
         ) {
           const epoch = getSession().epoch;
+          if (attempt === 0 && returnCode) {
+            removeSignInReturn();
+            startup.current ??= fetch('/api/session/email/complete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Steel-CSRF': '1' },
+              body: JSON.stringify({ code: returnCode }),
+              credentials: 'same-origin',
+              redirect: 'error',
+              cache: 'no-store',
+            });
+            const completed = await startup.current;
+            if (cancelled) return;
+            if (!completed.ok) {
+              setEmailStatus('Unable to finish sign-in. Request a new link from this browser.');
+              setVerified(true);
+              return;
+            }
+            const channel = handoffChannel('cookie-ready');
+            channel?.postMessage(null);
+            channel?.close();
+          } else if (reload && !reloadCleared.current) {
+            startup.current ??= fetch('/api/session', {
+              method: 'DELETE',
+              credentials: 'same-origin',
+              headers: { 'X-Steel-CSRF': '1' },
+              redirect: 'error',
+              cache: 'no-store',
+            });
+            const cleared = await startup.current.catch(() => null);
+            if (cancelled) return;
+            startup.current = null;
+            if (!cleared?.ok) throw new Error('Unable to clear the workspace session.');
+            reloadCleared.current = true;
+            setVerified(true);
+            return;
+          }
           const response = await fetch('/api/session', {
+            headers: { 'X-Steel-Session-View': 'workspace' },
             credentials: 'same-origin',
             cache: 'no-store',
             redirect: 'error',
@@ -413,7 +489,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
       cancelled = true;
       controller.abort();
     };
-  }, [attempt]);
+  }, [attempt, reload, returnCode]);
   if (!verified || session.mode === 'boot') {
     return (
       <main className="account-gate">
@@ -443,9 +519,15 @@ export function AccountGate({ children }: { children: ReactNode }) {
     return (
       <main className="account-gate">
         <h1>Steel AI</h1>
-        <h2>Sign in on the website</h2>
+        <h2>Open your workspace</h2>
+        <form onSubmit={(event) => void requestLink(event)}>
+          <label htmlFor="workspace-email">Email address</label>
+          <input id="workspace-email" type="email" autoComplete="email"
+            required value={email} onChange={(event) => setEmail(event.target.value)} />
+          <button className="btn btn-primary" disabled={sendingLink}>Send sign-in link</button>
+        </form>
         <p role="status">
-          {session.message ??
+          {emailStatus || session.message ||
             'Use your Steel AI website account to open this workspace.'}
         </p>
         <a className="btn btn-primary" href="/signin.html">

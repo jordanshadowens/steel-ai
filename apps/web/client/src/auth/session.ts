@@ -27,6 +27,7 @@ export type SessionState = {
   email?: string;
   idToken?: string;
   cookieAuthenticated?: boolean;
+  sessionRef?: string;
   message?: string;
   auth?: ShadowAuthSession;
 };
@@ -145,8 +146,9 @@ export function acceptAccount(value: {
   );
 }
 export function acceptCookieAccount(value: {
-  uid: string;
-  email: string;
+  uid?: string;
+  email?: string;
+  sessionRef?: string;
   expiresAt: number;
 }) {
   if (
@@ -156,8 +158,7 @@ export function acceptCookieAccount(value: {
     throw new Error('Website session is unavailable on this runtime.');
   }
   if (
-    !value.uid ||
-    !value.email ||
+    (!value.sessionRef && (!value.uid || !value.email)) ||
     !Number.isFinite(value.expiresAt) ||
     value.expiresAt <= Date.now()
   ) {
@@ -170,6 +171,7 @@ export function acceptCookieAccount(value: {
     uid: value.uid,
     email: value.email,
     cookieAuthenticated: true,
+    sessionRef: value.sessionRef,
     auth,
   });
   expiryTimer = setTimeout(
@@ -341,6 +343,7 @@ export async function authenticatedFetch(
     const invalid =
       !cookie ||
       (await fetch('/api/session', {
+        headers: { 'X-Steel-Session-View': 'workspace' },
         credentials: 'same-origin',
         cache: 'no-store',
         redirect: 'error',
@@ -354,7 +357,9 @@ export async function authenticatedFetch(
             return false;
           }
           const account = await sessionResponse.json();
-          return account.uid !== snapshot.uid || account.email !== snapshot.email;
+          return snapshot.sessionRef
+            ? account.sessionRef !== snapshot.sessionRef
+            : account.uid !== snapshot.uid || account.email !== snapshot.email;
         })
         .catch(() => false));
     if (!sessionIsCurrent(snapshot.epoch)) {

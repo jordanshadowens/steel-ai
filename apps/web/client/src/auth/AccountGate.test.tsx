@@ -24,10 +24,31 @@ beforeEach(() => {
   configureRuntime(config);
 });
 afterEach(() => {
+  vi.restoreAllMocks();
   cleanup();
   endAccount();
   vi.unstubAllGlobals();
   window.history.replaceState(null, '', '/');
+});
+
+it('clears the hosted session before opening a workspace on browser reload', async () => {
+  vi.spyOn(performance, 'getEntriesByType').mockReturnValue([
+    { type: 'reload' } as PerformanceNavigationTiming,
+  ]);
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/api/runtime-config') {
+      return response({ ...config, authMethod: 'session-cookie' });
+    }
+    expect(url).toBe('/api/session');
+    expect(init?.method).toBe('DELETE');
+    expect(new Headers(init?.headers).get('X-Steel-CSRF')).toBe('1');
+    return response({ signedOut: true });
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(<AccountGate><div>Private Creator</div></AccountGate>);
+  await screen.findByRole('button', { name: 'Send sign-in link' });
+  expect(screen.queryByText('Private Creator')).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -235,7 +256,7 @@ it('waitlist website session cannot mount Creator', async () => {
   await screen.findByRole('alert');
   expect(screen.queryByText('Private Creator')).toBeNull();
 });
-it('signed-out hosted app points to website sign-in instead of presenting a second email form', async () => {
+it('offers server-side email sign-in and a website sign-in fallback', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string | URL | Request) =>
@@ -254,6 +275,6 @@ it('signed-out hosted app points to website sign-in instead of presenting a seco
       await screen.findByRole('link', { name: 'Go to website sign-in' })
     ).getAttribute('href'),
   ).toBe('/signin.html');
-  expect(screen.queryByLabelText('Email address')).toBeNull();
+  expect(screen.getByLabelText('Email address')).toBeTruthy();
   expect(screen.queryByText('Private Creator')).toBeNull();
 });
