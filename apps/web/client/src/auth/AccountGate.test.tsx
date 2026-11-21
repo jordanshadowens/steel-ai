@@ -31,7 +31,7 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-it('clears the hosted session before opening a workspace on browser reload', async () => {
+it('restores a valid hosted session on browser reload', async () => {
   vi.spyOn(performance, 'getEntriesByType').mockReturnValue([
     { type: 'reload' } as PerformanceNavigationTiming,
   ]);
@@ -39,16 +39,21 @@ it('clears the hosted session before opening a workspace on browser reload', asy
     if (url === '/api/runtime-config') {
       return response({ ...config, authMethod: 'session-cookie' });
     }
-    expect(url).toBe('/api/session');
-    expect(init?.method).toBe('DELETE');
-    expect(new Headers(init?.headers).get('X-Steel-CSRF')).toBe('1');
-    return response({ signedOut: true });
+    expect(init?.method ?? 'GET').toBe('GET');
+    if (url === '/api/session') {
+      return response({
+        sessionRef: 'synthetic-session',
+        expiresAt: Date.now() + 60000,
+        access: { runtimePreviewEligible: true },
+      });
+    }
+    expect(url).toBe('/api/workspace');
+    return response({ mode: 'account', skillsScope: 'account' });
   });
   vi.stubGlobal('fetch', fetcher);
   render(<AccountGate><div>Private Creator</div></AccountGate>);
-  await screen.findByRole('button', { name: 'Send sign-in link' });
-  expect(screen.queryByText('Private Creator')).toBeNull();
-  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(await screen.findByText('Private Creator')).toBeTruthy();
+  expect(fetcher).toHaveBeenCalledTimes(3);
 });
 const response = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {

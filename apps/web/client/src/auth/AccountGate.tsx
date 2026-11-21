@@ -346,9 +346,6 @@ export function AccountGate({ children }: { children: ReactNode }) {
   const [sendingLink, setSendingLink] = useState(false);
   const [returnCode] = useState(() => readSignInReturn(window.location));
   const startup = useRef<Promise<Response> | null>(null);
-  const [reload] = useState(() => !returnCode && performance.getEntriesByType('navigation')
-    .some((entry) => (entry as PerformanceNavigationTiming).type === 'reload'));
-  const reloadCleared = useRef(false);
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
   const waiting = verified && session.config?.mode === 'account' &&
     session.config.authMethod === 'session-cookie' && !session.cookieAuthenticated;
@@ -415,21 +412,6 @@ export function AccountGate({ children }: { children: ReactNode }) {
             const channel = handoffChannel('cookie-ready');
             channel?.postMessage(null);
             channel?.close();
-          } else if (reload && !reloadCleared.current) {
-            startup.current ??= fetch('/api/session', {
-              method: 'DELETE',
-              credentials: 'same-origin',
-              headers: { 'X-Steel-CSRF': '1' },
-              redirect: 'error',
-              cache: 'no-store',
-            });
-            const cleared = await startup.current.catch(() => null);
-            if (cancelled) return;
-            startup.current = null;
-            if (!cleared?.ok) throw new Error('Unable to clear the workspace session.');
-            reloadCleared.current = true;
-            setVerified(true);
-            return;
           }
           const response = await fetch('/api/session', {
             headers: { 'X-Steel-Session-View': 'workspace' },
@@ -489,7 +471,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
       cancelled = true;
       controller.abort();
     };
-  }, [attempt, reload, returnCode]);
+  }, [attempt, returnCode]);
   if (!verified || session.mode === 'boot') {
     return (
       <main className="account-gate">
