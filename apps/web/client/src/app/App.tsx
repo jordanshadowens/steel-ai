@@ -50,12 +50,11 @@ function WorkspaceApp() {
   return (
     <div className="shell">
       <header className="shell-nav">
-        <a className="shell-brand" href="/" onClick={(event) => {
-          if (session.mode === 'account') {
-            event.preventDefault();
-            void signOut();
-          }
-        }}>
+        <button
+          className="shell-brand"
+          type="button"
+          onClick={() => navigate('creator')}
+        >
           <img
             className="shell-mark"
             src={`${import.meta.env.BASE_URL}steel-logo.png`}
@@ -67,7 +66,7 @@ function WorkspaceApp() {
           {import.meta.env.VITE_STEEL_ENVIRONMENT === 'staging'
             ? ' · STAGING (temporary test data)'
             : ''}
-        </a>
+        </button>
         <span className="shell-account">
           {session.mode === 'account' && session.email ? (
             <>

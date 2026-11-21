@@ -4,6 +4,7 @@ import { parseEnv } from 'node:util';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolveRuntimeTarget } from './runtime-target.mts';
+import { localAccountSession } from './local-session.mts';
 
 function readFileSyncIfPresent(path: URL) {
   try {
@@ -34,7 +35,7 @@ export default defineConfig(() => {
       ),
     },
     base: '/app/',
-    plugins: [react()],
+    plugins: [react(), localAccountSession(runtime)],
     server: {
       port: 5173,
       proxy: {

@@ -26,11 +26,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  background: transparent;
+  border: 0;
   color: inherit;
+  cursor: pointer;
   font-weight: 700;
   font-size: 15px;
   margin-right: 12px;
-  text-decoration: none;
+  padding: 0;
 }
 .shell-mark { border-radius: 6px; object-fit: contain; }
 .shell-account { display: inline-flex; align-items: center; gap: 8px; }
