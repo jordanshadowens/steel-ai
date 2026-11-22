@@ -158,12 +158,14 @@ export function DataRefPicker({
   value,
   options,
   onCommit,
+  onEdit,
   placeholder,
 }: {
   label: string;
   value: string;
   options: RefOption[];
   onCommit: (v: string) => void;
+  onEdit?: (v: string) => void;
   placeholder?: string;
 }) {
   const id = useId();
@@ -181,7 +183,10 @@ export function DataRefPicker({
         list={`${id}-opts`}
         value={text}
         placeholder={placeholder ?? 'step.field or input name'}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          onEdit?.(e.target.value);
+        }}
         onBlur={() => {
           if (text !== value) {
             onCommit(text);

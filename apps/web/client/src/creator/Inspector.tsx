@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { useStore } from 'react-redux';
 import type { WorkflowDefinition, WorkflowStep } from '../api/contracts';
-import { useListSkillsQuery } from '../api/steelApi';
+import {
+  useGetDesignerVersionQuery,
+  useGetDesignerWorkspaceQuery,
+  useListSkillsQuery,
+} from '../api/steelApi';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { RootState } from '../store/store';
 import { selectStep, setPanel, updateDraft } from '../store/workflowEditor';
@@ -422,6 +426,72 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
   const [newKey, setNewKey] = useState('');
   const [newFrom, setNewFrom] = useState('');
   const [addingBinding, setAddingBinding] = useState(false);
+  const [source, setSource] = useState<'step' | 'model'>('step');
+  const [modelId, setModelId] = useState('');
+  const [fieldName, setFieldName] = useState('');
+  const workspace = useGetDesignerWorkspaceQuery(undefined, {
+    skip: !addingBinding || source !== 'model',
+  });
+  const models = (workspace.data?.types ?? []).filter(
+    (model) => model.status === 'active' && model.version > 0,
+  );
+  const model = models.find((candidate) => candidate.type_id === modelId);
+  const version = useGetDesignerVersionQuery(
+    { id: modelId, version: model?.version ?? 0 },
+    { skip: !model },
+  );
+  const modelFields = (version.currentData?.spec.fields ?? []).filter(
+    (field) => field.status === 'active',
+  );
+  const modelField = modelFields.find((field) => field.name === fieldName);
+
+  function closeOutputForm() {
+    setNewKey('');
+    setNewFrom('');
+    setSource('step');
+    setModelId('');
+    setFieldName('');
+    setAddingBinding(false);
+  }
+
+  function addOutput() {
+    const key = newKey.trim();
+    if (!key || (source === 'model' ? !model || !modelField : !newFrom.trim())) {
+      return;
+    }
+    edit((draft) => {
+      let from = newFrom.trim();
+      if (source === 'model' && model && modelField) {
+        const inputType = modelField.repeated
+          ? 'array'
+          : modelField.ftype === 'integer'
+            ? 'number'
+            : modelField.ftype === 'boolean'
+              ? 'boolean'
+              : 'string';
+        const baseName = `model_${key.replace(/[^A-Za-z0-9_]/g, '_')}`;
+        const takenNames = new Set([
+          ...(draft.inputs ?? []).map((input) => input.name),
+          ...(draft.steps ?? []).map((step) => step.step_id),
+        ]);
+        from = baseName;
+        for (let suffix = 2; takenNames.has(from); suffix++) {
+          from = `${baseName}_${suffix}`;
+        }
+        draft.inputs = [
+          ...(draft.inputs ?? []),
+          {
+            name: from,
+            type: inputType,
+            required: true,
+            designer: { type: model.type_id, mode: 'value', field: modelField.name },
+          },
+        ];
+      }
+      draft.outputs = { ...(draft.outputs ?? {}), [key]: { from } };
+    });
+    closeOutputForm();
+  }
 
   return (
     <section
@@ -470,49 +540,78 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
           </div>
         ))}
         {addingBinding && (
-          <div className="map-row new-output-row">
-            <input
-              type="text"
-              aria-label="New output key"
-              placeholder="key"
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
+          <div className="finish-output-form">
+            <label className="field">
+              <span>Output name</span>
+              <input value={newKey} onChange={(event) => setNewKey(event.target.value)} />
+            </label>
+            <SelectField
+              label="Source type"
+              value={source}
+              options={[
+                { value: 'step', label: 'Step' },
+                { value: 'model', label: 'Data model' },
+              ]}
+              onChange={(value) => setSource(value === 'model' ? 'model' : 'step')}
             />
-            <input
-              type="text"
-              aria-label="New output source"
-              placeholder="step.field"
-              value={newFrom}
-              onChange={(e) => setNewFrom(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn"
-              disabled={newKey.trim() === '' || newFrom.trim() === ''}
-              onClick={() => {
-                const k = newKey.trim();
-                const f = newFrom.trim();
-                setNewKey('');
-                setNewFrom('');
-                setAddingBinding(false);
-                edit((d) => {
-                  d.outputs = { ...(d.outputs ?? {}), [k]: { from: f } };
-                });
-              }}
-            >
-              Add
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setNewKey('');
-                setNewFrom('');
-                setAddingBinding(false);
-              }}
-            >
-              Cancel
-            </button>
+            {source === 'step' ? (
+              <DataRefPicker
+                label="Step output"
+                value={newFrom}
+                options={refs}
+                onCommit={setNewFrom}
+                onEdit={setNewFrom}
+                placeholder="step.field"
+              />
+            ) : (
+              <>
+                <SelectField
+                  label="Data model"
+                  value={modelId}
+                  options={[
+                    { value: '', label: 'Select a published model' },
+                    ...models.map((item) => ({ value: item.type_id, label: item.name })),
+                  ]}
+                  onChange={(value) => {
+                    setModelId(value);
+                    setFieldName('');
+                  }}
+                />
+                {model && (
+                  <SelectField
+                    label="Model field"
+                    value={fieldName}
+                    options={[
+                      { value: '', label: 'Select a field' },
+                      ...modelFields.map((field) => ({ value: field.name, label: field.name })),
+                    ]}
+                    onChange={setFieldName}
+                  />
+                )}
+                {workspace.isFetching || version.isFetching ? (
+                  <p role="status">Loading model data…</p>
+                ) : workspace.error || version.error ? (
+                  <p role="alert">Could not load model data.</p>
+                ) : models.length === 0 ? (
+                  <p>Publish a model in Data Designer to use its fields here.</p>
+                ) : (
+                  <p>The Runner asks which record to use when the workflow starts.</p>
+                )}
+              </>
+            )}
+            <div className="finish-output-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!newKey.trim() || (source === 'step' ? !newFrom.trim() : !model || !modelField)}
+                onClick={addOutput}
+              >
+                Add
+              </button>
+              <button type="button" className="btn" onClick={closeOutputForm}>
+                Cancel
+              </button>
+            </div>
           </div>
         )}
         {!addingBinding && (
@@ -521,12 +620,12 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
             className="btn add-binding-button"
             onClick={() => setAddingBinding(true)}
           >
-            + Add binding
+            + Add output
           </button>
         )}
       </div>
-      <div className="finish-inputs" role="group" aria-label="Data Designer inputs">
-        <h4>Data Designer inputs</h4>
+      <details className="finish-inputs">
+        <summary>Workflow input bindings</summary>
         {(def.inputs ?? []).length === 0 && <p>No workflow inputs to bind.</p>}
         {(def.inputs ?? []).map((input) => (
           <fieldset key={input.name}>
@@ -549,7 +648,7 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
             />
           </fieldset>
         ))}
-      </div>
+      </details>
     </section>
   );
 }

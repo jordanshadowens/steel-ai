@@ -48,9 +48,12 @@ vi.mock('../api/steelApi', () => ({
   useGetTemplateVersionsQuery: () => ({ data: { versions: [] } }),
   useGetTemplateVersionQuery: () => ({ data: { slots: [] } }),
   useGetDesignerWorkspaceQuery: () => ({
-    data: { types: [{ name: 'project', type_id: 'project', version: 1, fields: [] }] },
+    data: { types: [{ name: 'project', type_id: 'project', version: 1, status: 'active', fields: [] }] },
     isLoading: false,
     error: undefined,
+  }),
+  useGetDesignerVersionQuery: () => ({
+    currentData: { spec: { fields: [{ name: 'Team', status: 'active', ftype: 'text' }] } },
   }),
   useListDesignerRecordsQuery: () => ({
     data: { records: [] },
@@ -252,7 +255,7 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   expect(screen.getByRole('complementary', { name: 'Finish' })).toBeTruthy();
   const bindings = screen.getByRole('region', { name: 'Bindings' });
   expect(bindings.contains(screen.getByRole('group', { name: 'Workflow outputs' }))).toBe(true);
-  expect(bindings.contains(screen.getByRole('group', { name: 'Data Designer inputs' }))).toBe(true);
+  fireEvent.click(screen.getByText('Workflow input bindings'));
   fireEvent.change(screen.getByLabelText('Bound designer type'), {
     target: { value: 'project' },
   });
@@ -266,11 +269,11 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   settings();
   expect(screen.queryByRole('region', { name: 'Bindings' })).toBeNull();
   step(END_NODE_ID);
-  fireEvent.click(screen.getByText('+ Add binding'));
-  fireEvent.change(screen.getByLabelText('New output key'), {
+  fireEvent.click(screen.getByText('+ Add output'));
+  fireEvent.change(screen.getByLabelText('Output name'), {
     target: { value: 'total' },
   });
-  fireEvent.change(screen.getByLabelText('New output source'), {
+  fireEvent.change(screen.getByLabelText('Step output'), {
     target: { value: 'amount' },
   });
   fireEvent.click(screen.getByText('Add', { selector: 'button' }));
@@ -284,4 +287,19 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   expect(store.getState().workflowEditor.draft?.outputs?.total).toEqual({ from: 'amount' });
   fireEvent.click(screen.getByRole('button', { name: 'Remove output total' }));
   expect(screen.getByText('0 mapped')).toBeTruthy();
+
+  fireEvent.click(screen.getByText('+ Add output'));
+  fireEvent.change(screen.getByLabelText('Output name'), { target: { value: 'team' } });
+  fireEvent.change(screen.getByLabelText('Source type'), { target: { value: 'model' } });
+  fireEvent.change(screen.getByLabelText('Data model'), { target: { value: 'project' } });
+  fireEvent.change(screen.getByLabelText('Model field'), { target: { value: 'Team' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  const draft = store.getState().workflowEditor.draft;
+  expect(draft?.outputs?.team).toEqual({ from: 'model_team' });
+  expect(draft?.inputs).toContainEqual({
+    name: 'model_team',
+    type: 'string',
+    required: true,
+    designer: { type: 'project', mode: 'value', field: 'Team' },
+  });
 });

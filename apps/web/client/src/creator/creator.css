@@ -198,6 +198,9 @@
 .workflow-settings > .field { order: -3; }
 .workflow-settings .settings-inputs { order: -2; }
 .finish-settings h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.finish-output-form { padding: 4px 0 8px; }
+.finish-output-form p { font-size: 12px; }
+.finish-output-actions { display: flex; gap: 8px; justify-content: flex-end; }
 .finish-settings .finish-inputs { margin-top: 16px; }
 .finish-settings .finish-inputs fieldset { min-width: 0; margin: 8px 0 0; }
 .workflow-settings > section { border-top: 1px solid #ebebee; padding-top: 10px; }
@@ -220,7 +223,6 @@
 .settings-input-row > button { padding: 0; min-width: 26px; min-height: 28px; color: #777780; }
 .settings-inputs > button { width: 100%; border-radius: 24px; background: transparent; margin-top: 8px; }
 .settings-outputs > .output-binding-row { display: grid; grid-template-columns: minmax(80px, 1fr) 20px minmax(100px, 1.3fr) 28px; gap: 10px; align-items: center; padding: 8px 0; }
-.settings-outputs > .new-output-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto auto; gap: 8px; padding: 8px 0; }
 .binding-arrow { color: #929299; }
 .add-binding-button { width: 100%; border-radius: 24px; margin-top: 12px; background: transparent; }
 .settings-outputs .field, .settings-outputs input { min-width: 0; width: 100%; }
@@ -574,7 +576,6 @@ button.issue-clickable:hover {
   .workflow-settings .settings-input-row, .input-column-head { grid-template-columns: minmax(75px, 1fr) 85px 24px 24px; gap: 4px; }
   .settings-outputs > .output-binding-row { grid-template-columns: 18px minmax(0, 1fr) 28px; }
   .settings-outputs > .map-row > code { grid-column: 1 / -1; }
-  .settings-outputs > .new-output-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .configuration-card .field { grid-template-columns: minmax(0, 1fr); gap: 5px; }
   .configuration-card .binding-row { grid-template-columns: 18px minmax(0, 1fr) 28px; }
   .configuration-card .binding-row > code { grid-column: 1 / -1; }
