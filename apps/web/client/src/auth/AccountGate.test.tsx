@@ -277,9 +277,9 @@ it('offers server-side email sign-in and a website sign-in fallback', async () =
   );
   expect(
     (
-      await screen.findByRole('link', { name: 'Go to website sign-in' })
+      await screen.findByRole('link', { name: 'Sign in to Steel AI Cloud' })
     ).getAttribute('href'),
-  ).toBe('/signin.html');
+  ).toBe('https://steelai.dev/signin');
   expect(screen.getByLabelText('Email address')).toBeTruthy();
   expect(screen.queryByText('Private Creator')).toBeNull();
 });

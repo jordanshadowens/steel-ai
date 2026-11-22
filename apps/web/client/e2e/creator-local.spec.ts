@@ -197,6 +197,13 @@ test('a long account name leaves Sign out accessible on a phone', async ({ page 
   expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await header.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible();
+  const gate = page.getByRole('main');
+  await expect(gate.getByRole('link', { name: 'Sign in to Steel AI Cloud' }))
+    .toHaveAttribute('href', 'https://steelai.dev/signin');
+  await expect(gate.getByRole('textbox', { name: 'Email address' })).toBeHidden();
+  await gate.getByText('Sign in to this workspace directly', { exact: true }).click();
+  await expect(gate.getByRole('textbox', { name: 'Email address' })).toBeVisible();
+  expect(await gate.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
 });
 
 test('edit a workflow in landscape without the inspector covering canvas controls', async ({ page }) => {

@@ -17,6 +17,22 @@ import {
   subscribeSession,
 } from './session';
 const EMAIL_KEY = 'steel.account.pending-email.v1';
+const CLOUD_SIGN_IN = 'https://steelai.dev/signin';
+
+function AccountFrame({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <main className="account-gate">
+      <div className="account-card">
+        <div className="account-brand">
+          <span className="shell-mark" aria-hidden="true"><span /></span>
+          Steel AI
+        </div>
+        <h1>{title}</h1>
+        {children}
+      </div>
+    </main>
+  );
+}
 const HANDOFF_KEY = 'steel.account.pending-handoff.v1';
 function handoffChannel(id: string) {
   try {
@@ -279,24 +295,13 @@ function SignIn() {
     }
   };
   return (
-    <main className="account-gate">
-      <h1>
-        Steel AI
-        {import.meta.env.VITE_STEEL_ENVIRONMENT === 'staging'
-          ? ' · STAGING'
-          : ''}
-      </h1>
+    <AccountFrame title={code ? 'Finish signing in' : 'Open your workspace'}>
       {import.meta.env.VITE_STEEL_ENVIRONMENT === 'staging' && (
         <p>
           Test environment. Workspaces are temporary and may reset when the
           server restarts.
         </p>
       )}
-      <h2>{code ? 'Finish signing in' : 'Open your workspace'}</h2>
-      <p>
-        This runtime keeps each provisioned account’s skills, workflows and run
-        history separate.
-      </p>
       <form hidden={Boolean(code && busy)} onSubmit={(event) => void submit(event)}>
         <label htmlFor="account-email">Email address</label>
         <input
@@ -330,10 +335,9 @@ function SignIn() {
         </button>
       )}
       <p>
-        Use the email authorized by your server owner. A website connection-test
-        key cannot sign in to this runtime.
+        Use the email your server owner approved.
       </p>
-    </main>
+    </AccountFrame>
   );
 }
 
@@ -474,21 +478,20 @@ export function AccountGate({ children }: { children: ReactNode }) {
   }, [attempt, returnCode]);
   if (!verified || session.mode === 'boot') {
     return (
-      <main className="account-gate">
-        <h1>Steel AI</h1>
-        <p role="status">Checking this runtime…</p>
-      </main>
+      <AccountFrame title="Opening your workspace">
+        <p role="status">Checking your connection…</p>
+      </AccountFrame>
     );
   }
   if (session.mode === 'error') {
     return (
-      <main className="account-gate">
-        <h1>Steel AI</h1>
+      <AccountFrame title="Workspace unavailable">
         <p role="alert">{session.message}</p>
         <button className="btn" onClick={() => setAttempt((a) => a + 1)}>
-          Retry runtime connection
+          Try again
         </button>
-      </main>
+        <a className="account-link" href={CLOUD_SIGN_IN}>Sign in to Steel AI Cloud</a>
+      </AccountFrame>
     );
   }
   if (
@@ -499,27 +502,26 @@ export function AccountGate({ children }: { children: ReactNode }) {
     session.config.authMethod === 'session-cookie'
   ) {
     return (
-      <main className="account-gate">
-        <h1>Steel AI</h1>
-        <h2>Open your workspace</h2>
-        <form onSubmit={(event) => void requestLink(event)}>
-          <label htmlFor="workspace-email">Email address</label>
-          <input id="workspace-email" type="email" autoComplete="email"
-            required value={email} onChange={(event) => setEmail(event.target.value)} />
-          <button className="btn btn-primary" disabled={sendingLink}>Send sign-in link</button>
-        </form>
-        <p role="status">
-          {emailStatus || session.message ||
-            'Use your Steel AI website account to open this workspace.'}
-        </p>
-        <a className="btn btn-primary" href="/signin.html">
-          Go to website sign-in
+      <AccountFrame title="Open your workspace">
+        <p>Sign in with your email. You’ll get a link to open in this browser.</p>
+        {session.message && <p className="account-message" role="status">{session.message}</p>}
+        <a className="btn btn-primary account-primary" href={CLOUD_SIGN_IN}>
+          Sign in to Steel AI Cloud
         </a>
-        <p>
-          Your account must be enabled for the runtime preview. Waitlist
-          accounts retain private draft storage and connection testing.
-        </p>
-      </main>
+        {emailStatus && <p className="account-message" role="status">{emailStatus}</p>}
+        <details className="account-options">
+          <summary>Sign in to this workspace directly</summary>
+          <form onSubmit={(event) => void requestLink(event)}>
+            <label htmlFor="workspace-email">Email address</label>
+            <input id="workspace-email" type="email" autoComplete="email"
+              required value={email} onChange={(event) => setEmail(event.target.value)} />
+            <button className="btn" type="submit" disabled={sendingLink}>
+              {sendingLink ? 'Sending…' : 'Send sign-in link'}
+            </button>
+          </form>
+        </details>
+        <p className="account-note">Workflow Creator preview requires account approval.</p>
+      </AccountFrame>
     );
   }
   if (
