@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Connector } from '../src/connector.ts';
+import { chatCompletions } from '../src/provider.ts';
 import {
   loadConfig,
   writeSkeletonConfig,
@@ -341,6 +342,41 @@ describe('provider failures surface actionably', () => {
     assert.equal(outcomes[0].outcome, 'provider-failed');
     assert.equal(outcomes[0].code, 'provider-timeout');
     assert.equal(sub.status, 'failed');
+  });
+
+  it('keeps the timeout active after response headers arrive', async () => {
+    await assert.rejects(chatCompletions({
+      base: 'http://localhost',
+      model: 'synthetic',
+      messages: [],
+      maxTokens: 16,
+      timeoutMs: 25,
+      fetchImpl: async (_url, options) => new Response(new ReadableStream({
+        start(controller) {
+          options?.signal?.addEventListener('abort', () => controller.error(options.signal?.reason), { once: true });
+        },
+      })),
+    }), { code: 'provider-timeout' });
+  });
+
+  it('rejects an oversized chunked provider envelope before parsing it', async () => {
+    let stopped = false;
+    await assert.rejects(chatCompletions({
+      base: 'http://localhost',
+      model: 'synthetic',
+      messages: [],
+      maxTokens: 16,
+      maxResponseChars: 32,
+      fetchImpl: async () => new Response(new ReadableStream({
+        pull(controller) {
+          controller.enqueue(new Uint8Array(65536));
+        },
+        cancel() {
+          stopped = true;
+        },
+      })),
+    }), { code: 'payload-too-large' });
+    assert.equal(stopped, true);
   });
 
   it('unknown provider base -> provider-unavailable', async () => {

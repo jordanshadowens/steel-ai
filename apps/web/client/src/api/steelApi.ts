@@ -72,7 +72,10 @@ export const steelApi = createApi({
     'DesignerRecord',
   ],
   endpoints: (build) => ({
-    draftWorkflow: build.mutation<{ definition: WorkflowDefinition }, { prompt: string }>({
+    draftWorkflow: build.mutation<
+      { definition: WorkflowDefinition } | { message: string },
+      { prompt: string; previous?: WorkflowDefinition; clarifications?: { prompt: string; reply: string }[] }
+    >({
       query: (body) => ({
         url: '/workflows/assist',
         method: 'POST',

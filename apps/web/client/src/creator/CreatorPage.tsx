@@ -82,6 +82,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
   const needsSetup = !!draft && openVersion === null;
   const wasSettingUp = useRef(false);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [assistDock, setAssistDock] = useState<HTMLDivElement | null>(null);
   const libraryTrigger = useRef<HTMLButtonElement>(null);
   const closeLibrary = useCallback(() => {
     setLibraryOpen(false);
@@ -332,6 +333,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
       {draft && (
         <CommandBar
           key={openSequence}
+          assistDockRef={setAssistDock}
           onOpenLibrary={openLibrary}
           onOpenSettings={(focusWorkflowId) => openSettings(undefined, undefined, focusWorkflowId)}
           onGoToInput={openSettings}
@@ -356,6 +358,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
           ) : (
             <GraphCanvas
               key={openSequence}
+              assistPadding={canvas.current?.querySelector('.assist-chat') ? graphViewPadding(canvas.current) : undefined}
               stepIssues={stepIssues}
               onGoToStep={goToStep}
             />
@@ -387,7 +390,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
           </div>
         )}
         {draft && !needsSetup && <Palette onInserted={goToStep} drag={paletteDrag} />}
-        <WorkflowAssist />
+        <WorkflowAssist dock={assistDock} />
         <AnimatePresence>
           {libraryOpen && (
             <Suspense key="lib" fallback={

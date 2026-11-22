@@ -54,6 +54,7 @@ export function CommandBar({
   onValidated,
   onGoToStep,
   validationStatus,
+  assistDockRef,
 }: {
   onOpenLibrary: (trigger: HTMLButtonElement) => void;
   onOpenSettings: (focusWorkflowId?: boolean) => void;
@@ -61,6 +62,7 @@ export function CommandBar({
   onValidated: (report: ValidationReport, reveal?: boolean) => void;
   onGoToStep?: (id: string, bodyStep?: string, outputName?: string, routeField?: PreflightIssue['routeField']) => void;
   validationStatus: 'valid' | 'invalid' | null;
+  assistDockRef?: (element: HTMLDivElement | null) => void;
 }) {
   const dispatch = useAppDispatch();
   const notify = useNotify();
@@ -422,9 +424,15 @@ export function CommandBar({
         <button type="button" className="btn" onClick={(event) => onOpenLibrary(event.currentTarget)}>
           Workflows
         </button>
-        <button type="button" className="btn" onClick={() => onOpenSettings()}>
-          Settings
+        <button type="button" className="btn command-settings" aria-label="Settings"
+          title="Settings" onClick={() => onOpenSettings()}>
+          <span className="command-settings-label">Settings</span>
+          <svg className="command-settings-icon" width="16" height="16" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+            <path d="M4 7h7m4 0h5M4 17h5m4 0h7M11 4v6m-2 4v6" />
+          </svg>
         </button>
+        {assistDockRef && <div className="assist-command-dock" ref={assistDockRef} />}
       </div>
       <div className="command-identity">
         <div className="command-title">

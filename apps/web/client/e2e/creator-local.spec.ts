@@ -44,6 +44,12 @@ async function mockCreator(
     beforePreview?: () => Promise<void>;
     publish?: (version: number) => Promise<void>;
     saved?: WorkflowVersionRow[];
+    loseSaveAcknowledgement?: (row: WorkflowVersionRow) => boolean;
+    assist?: (body: {
+      prompt: string;
+      previous?: WorkflowDefinition;
+      clarifications?: { prompt: string; reply: string }[];
+    }) => WorkflowDefinition | { message: string } | Promise<WorkflowDefinition | { message: string }>;
   } = {},
 ) {
   const rows: WorkflowVersionRow[] = [...(options.saved ?? [])];
@@ -89,6 +95,9 @@ async function mockCreator(
         id = step.on_success;
       }
       data = { ok: true, plan: options.omitPreviewPlan ? undefined : { entry, order } };
+    } else if (path === '/api/workflows/assist' && options.assist) {
+      const response = await options.assist(request.postDataJSON());
+      data = 'workflow_id' in response ? { definition: response } : response;
     } else if (path === '/api/workflows/validate') {
       if (options.validateErrors?.length) {
         await route.fulfill({ status: 400, json: { ok: false, errors: options.validateErrors } });
@@ -121,9 +130,16 @@ async function mockCreator(
         definition,
       };
       rows.unshift(row);
+      if (options.loseSaveAcknowledgement?.(row)) {
+        await route.fulfill({ status: 502, json: { error: 'The upstream connection closed' } });
+        return;
+      }
       data = { ok: true, row };
     } else if (path === '/api/workflows') data = { workflows: rows };
-    else if (path === '/api/workflows/test-flow') data = { versions: rows.filter(({ workflow_id }) => workflow_id === 'test-flow') };
+    else if (method === 'GET' && /^\/api\/workflows\/[^/]+$/.test(path)) {
+      const id = decodeURIComponent(path.split('/').at(-1)!);
+      data = { versions: rows.filter(({ workflow_id }) => workflow_id === id) };
+    }
     else {
       await route.fulfill({ status: 404, json: { error: 'Unexpected test request' } });
       return;
@@ -140,6 +156,259 @@ async function createDraft(page: Page) {
   await page.keyboard.press('Control+s');
   await expect(page.getByRole('toolbar', { name: 'Workflow commands' })).toContainText('v1 · saved');
 }
+
+test('AI Assist keeps the chat open and saves follow-ups as draft versions', async ({ page }) => {
+  const rows = await mockCreator(page, {
+    assist: ({ prompt, previous }) => {
+      if (prompt === 'Add an approval') {
+        expect(previous?.workflow_id).toBe('assisted-intake');
+      }
+      return {
+        workflow_id: 'assisted-intake', name: 'Assisted intake', inputs: [], outputs: {},
+        policy: { execution_approval: previous ? 'none' : 'first_run' },
+        steps: [{ step_id: 'collect', type: 'input_collection', name: 'Collect request', on_success: 'end' }],
+      };
+    },
+  });
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox', { name: 'Message AI Assist' });
+  await expect(composer).toBeFocused();
+  await composer.fill('Create an intake workflow');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v1 · Opened in canvas')).toBeVisible();
+  await chat.getByText('1 step', { exact: true }).click();
+  await expect(chat.getByText('Collect request', { exact: true })).toBeVisible();
+  await expect.poll(async () => {
+    const panel = await chat.boundingBox();
+    const step = await page.locator('.react-flow__node[data-id="collect"]').boundingBox();
+    return !!panel && !!step && step.x >= panel.x + panel.width;
+  }).toBe(true);
+  await composer.fill('Add an approval');
+  await chat.getByRole('button', { name: 'Send message' }).click();
+  await expect(chat.getByText('Draft v2 · Opened in canvas')).toBeVisible();
+  expect(rows.map(({ workflow_id, version }) => [workflow_id, version])).toEqual([
+    ['assisted-intake', 2],
+    ['assisted-intake', 1],
+  ]);
+  expect(rows[0].definition.policy).toEqual({ execution_approval: 'first_run' });
+  await composer.press('Escape');
+  await expect(chat).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'AI Assist', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  await expect(chat.getByText('Add an approval')).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect.poll(() => page.locator('.palette-fab').evaluate((button) => {
+    const bounds = button.getBoundingClientRect();
+    return !!document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      ?.closest('.assist-chat');
+  })).toBe(true);
+  await chat.getByRole('button', { name: 'Close AI Assist' }).click();
+  await expect.poll(async () => {
+    const bounds = await page.locator('.react-flow__node[data-id="collect"]').boundingBox();
+    const center = bounds ? bounds.x + bounds.width / 2 : -1;
+    return center >= 0 && center <= 320;
+  }).toBe(true);
+  await page.setViewportSize({ width: 320, height: 360 });
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  await expect(chat.getByRole('button', { name: 'Close AI Assist' })).toBeInViewport({ ratio: 1 });
+});
+
+test('AI Assist fits a phone and lets users edit a rejected prompt', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const rows = await mockCreator(page, {
+    assist: () => ({ workflow_id: 'rejected-draft' }),
+    validateErrors: ['Add at least one workflow step.'],
+  });
+  const launcher = page.getByRole('button', { name: 'AI Assist', exact: true });
+  expect(await launcher.evaluate((el) => getComputedStyle(el, '::before').animationName)).toBe('none');
+  await launcher.click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox');
+  await composer.fill('Create an intake workflow');
+  await composer.press('Shift+Enter');
+  await expect(composer).toHaveValue('Create an intake workflow\n');
+  await composer.press('Enter');
+  await expect(chat.getByText('Add at least one workflow step.')).toBeVisible();
+  await chat.getByRole('button', { name: 'Edit message' }).click();
+  await expect(composer).toHaveValue('Create an intake workflow');
+  await expect(composer).toBeFocused();
+  const bounds = await chat.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(320);
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(480);
+  expect(rows).toHaveLength(0);
+  await page.setViewportSize({ width: 640, height: 360 });
+  await expect(chat.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
+  await expect(chat.getByRole('button', { name: 'Close AI Assist' })).toBeInViewport({ ratio: 1 });
+  await page.emulateMedia({ forcedColors: 'active' });
+  await composer.focus();
+  await expect(chat.locator('.assist-composer')).toHaveCSS('outline-style', 'solid');
+});
+
+test('AI Assist clarifies before saving and remembers the question when the user replies', async ({ page }) => {
+  const prompt = 'Create an expense workflow';
+  const reply = 'Who should approve the expense?';
+  const rows = await mockCreator(page, {
+    assist: (body) => {
+      if (body.prompt === prompt) return { message: reply };
+      expect(body.clarifications).toEqual([{ prompt, reply }]);
+      expect(body.prompt).toBe('The budget owner');
+      return { workflow_id: 'expense-approval', name: 'Expense approval' };
+    },
+  });
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox');
+  await composer.fill(prompt);
+  await composer.press('Enter');
+  await expect(chat.getByText(reply)).toBeVisible();
+  expect(rows).toHaveLength(0);
+  await composer.fill('The budget owner');
+  const navigation = page.getByRole('navigation', { name: 'Primary' });
+  await navigation.getByRole('link', { name: 'Workflow Runner' }).click();
+  await expect(page.getByRole('heading', { name: 'Workflow Runner' })).toBeVisible();
+  await navigation.getByRole('link', { name: 'Workflow Creator' }).click();
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  await expect(chat.getByText(reply)).toBeVisible();
+  await expect(composer).toHaveValue('The budget owner');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v1 · Opened in canvas')).toBeVisible();
+  expect(rows.map((row) => row.workflow_id)).toEqual(['expense-approval']);
+});
+
+test('AI Assist stops an in-flight response without creating a draft', async ({ page }) => {
+  const blocked = Promise.withResolvers<void>();
+  const rows = await mockCreator(page, {
+    assist: async ({ prompt }) => {
+      if (prompt === 'Stop this response') await blocked.promise;
+      return { workflow_id: prompt === 'Stop this response' ? 'stopped-draft' : 'new-draft' };
+    },
+  });
+  try {
+    await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+    const chat = page.getByRole('region', { name: 'AI Assist' });
+    const composer = chat.getByRole('textbox');
+    const started = page.waitForRequest('**/api/workflows/assist');
+    await composer.fill('Stop this response');
+    await composer.press('Enter');
+    await started;
+    await chat.getByRole('button', { name: 'Stop response' }).click();
+    await expect(chat.getByText('Response stopped.')).toBeVisible();
+    blocked.resolve();
+    await composer.fill('Create another workflow');
+    await composer.press('Enter');
+    await expect(chat.getByText('Draft v1 · Opened in canvas')).toBeVisible();
+    expect(rows.map((row) => row.workflow_id)).toEqual(['new-draft']);
+  } finally {
+    blocked.resolve();
+  }
+});
+
+test('AI Assist cancels pending generation on leaving Creator and keeps the transcript', async ({ page }) => {
+  const blocked = Promise.withResolvers<void>();
+  const rows = await mockCreator(page, {
+    assist: async () => {
+      await blocked.promise;
+      return { workflow_id: 'cancelled-after-leaving' };
+    },
+  });
+  try {
+    const launcher = page.getByRole('button', { name: 'AI Assist', exact: true });
+    const chat = page.getByRole('region', { name: 'AI Assist' });
+    const composer = chat.getByRole('textbox');
+    await launcher.click();
+    const started = page.waitForRequest('**/api/workflows/assist');
+    await composer.fill('Build a workflow');
+    await composer.press('Enter');
+    await started;
+    const navigation = page.getByRole('navigation', { name: 'Primary' });
+    await navigation.getByRole('link', { name: 'Workflow Runner' }).click();
+    await expect(page.getByRole('heading', { name: 'Workflow Runner' })).toBeVisible();
+    blocked.resolve();
+    await navigation.getByRole('link', { name: 'Workflow Creator' }).click();
+    await launcher.click();
+    await expect(chat.getByText('Response stopped when you left Creator.')).toBeVisible();
+    await expect(chat.getByText('Build a workflow')).toBeVisible();
+    expect(rows).toHaveLength(0);
+  } finally {
+    blocked.resolve();
+  }
+});
+
+test('AI Assist saves to the library when another workflow opens during generation', async ({ page }) => {
+  const blocked = Promise.withResolvers<void>();
+  const rows = await mockCreator(page, {
+    assist: async () => {
+      await blocked.promise;
+      return { workflow_id: 'generated-draft', name: 'Generated draft' };
+    },
+  });
+  try {
+    await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+    const chat = page.getByRole('region', { name: 'AI Assist' });
+    const started = page.waitForRequest('**/api/workflows/assist');
+    await chat.getByRole('textbox').fill('Create a workflow');
+    await chat.getByRole('textbox').press('Enter');
+    await started;
+    await createDraft(page);
+    blocked.resolve();
+    await expect(chat.getByText('Draft v1 · Saved to workflow library')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Workflow name' })).toHaveValue('Untitled');
+    expect(rows.map((row) => row.workflow_id)).toEqual(['generated-draft', 'test-flow']);
+    await chat.getByRole('button', { name: 'Open draft', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Workflow name' })).toHaveValue('Generated draft');
+  } finally {
+    blocked.resolve();
+  }
+});
+
+test('opening a saved result from AI Assist asks before replacing unsaved work', async ({ page }) => {
+  const rows = await mockCreator(page, {
+    assist: () => ({ workflow_id: 'saved-result', name: 'Saved result' }),
+  });
+  await page.getByRole('button', { name: 'New workflow', exact: true }).click();
+  await page.getByLabel('Workflow id', { exact: true }).fill('unsaved-work');
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox');
+  await composer.fill('Save a separate draft');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v1 · Saved to workflow library')).toBeVisible();
+  const open = chat.getByRole('button', { name: 'Open draft', exact: true });
+  const confirmation = page.getByRole('dialog', { name: 'Open saved draft' });
+  await open.click();
+  await confirmation.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(page.getByLabel('Workflow id', { exact: true })).toHaveValue('unsaved-work');
+  await open.click();
+  await confirmation.getByRole('button', { name: 'Open draft', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Workflow name' })).toHaveValue('Saved result');
+  expect(rows.map((row) => row.workflow_id)).toEqual(['saved-result']);
+});
+
+test('AI Assist confirms a saved revision after losing the acknowledgement', async ({ page }) => {
+  const rows = await mockCreator(page, {
+    assist: ({ prompt }) => ({
+      workflow_id: 'confirmed-save',
+      name: prompt,
+      steps: [{ step_id: 'collect', type: 'input_collection', config: { fields: ['name'] } }],
+    }),
+    loseSaveAcknowledgement: ({ version }) => version === 2,
+  });
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox');
+  await composer.fill('Create an intake draft');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v1 · Opened in canvas')).toBeVisible();
+  await composer.fill('Revise the intake draft');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v2 · Opened in canvas')).toBeVisible();
+  expect(rows.map(({ version }) => version)).toEqual([2, 1]);
+});
 
 test('open the other workspace pages and return to Creator', async ({ page }) => {
   await mockCreator(page);

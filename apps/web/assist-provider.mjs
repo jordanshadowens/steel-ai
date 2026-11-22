@@ -1,7 +1,7 @@
 import { configHome, loadConfig, resolveSecret } from '../../packages/connector/src/config.ts';
 import { chatCompletions } from '../../packages/connector/src/provider.ts';
 
-export async function completeWithConfiguredProvider(env, messages) {
+export async function completeWithConfiguredProvider(env, messages, signal) {
   const home = env.STEEL_CONNECTOR_HOME || configHome();
   let config;
   let apiKey;
@@ -19,6 +19,7 @@ export async function completeWithConfiguredProvider(env, messages) {
       messages,
       maxTokens: 4096,
       timeoutMs: config.provider_timeout_ms,
+      signal,
     });
     return { kind: 'ok', text };
   } catch {

@@ -10,7 +10,7 @@
     "agent": "node --env-file-if-exists=.env apps/developer-cli/index.mjs",
     "connector": "node --env-file-if-exists=.env packages/connector/src/cli.ts",
     "check": "npm run check --workspaces --if-present && npm run check:types -w packages/connector",
-    "test": "node --test apps/web/runtime-target.test.mts packages/sdk/index.test.ts && npm test -w apps/web && npm test -w packages/connector",
+    "test": "node --test apps/web/runtime-target.test.mts apps/web/workflow-assist.test.mts packages/sdk/index.test.ts && npm test -w apps/web && npm test -w packages/connector",
     "test:connector": "npm test -w packages/connector",
     "check:types": "npm run check"
   },

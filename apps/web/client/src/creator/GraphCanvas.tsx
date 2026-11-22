@@ -419,9 +419,18 @@ function ViewportControls({
 }
 
 export function graphViewPadding(canvas: HTMLElement | null) {
-  const inspector = canvas?.querySelector('.inspector');
-  if (!canvas || !inspector) return 0.2;
+  if (!canvas) return 0.2;
+  const inspector = canvas.querySelector('.inspector');
   const bounds = canvas.getBoundingClientRect();
+  const chat = canvas.querySelector('.assist-chat')?.getBoundingClientRect();
+  if (chat && bounds.width >= 960) {
+    const left = Math.round(chat.right - bounds.left + 20);
+    const right = inspector ? Math.round(bounds.right - inspector.getBoundingClientRect().left + 16) : 16;
+    if (bounds.width - left - right >= 350) {
+      return { top: '16px', bottom: '16px', left: `${left}px`, right: `${right}px` } as const;
+    }
+  }
+  if (!inspector) return 0.2;
   const panel = inspector.getBoundingClientRect();
   const strips = [
     { edge: 'right', area: (panel.left - bounds.left) * bounds.height, size: bounds.right - panel.left },
@@ -531,21 +540,44 @@ function ViewportButtons({
 }
 
 export function GraphCanvas({
+  assistPadding,
   stepIssues,
   onGoToStep,
 }: {
+  assistPadding?: ReturnType<typeof graphViewPadding>;
   stepIssues: ReadonlyMap<string, StepIssueCount>;
   onGoToStep: (id: string, bodyStep?: string) => void;
 }) {
   const dispatch = useAppDispatch();
   const store = useStore<RootState>();
   const notify = useNotify();
+  const { fitView } = useReactFlow();
+  const graphHost = useRef<HTMLDivElement>(null);
   const draft = useAppSelector((s) => s.workflowEditor.draft);
   const selectedStepId = useAppSelector((s) => s.workflowEditor.selectedStepId);
   const savedViewport = useAppSelector((s) => s.workflowEditor.viewport);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [minimap, setMinimap] = useState(false);
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 960px)');
+    let frame: number | undefined;
+    const onResize = () => {
+      const canvas = graphHost.current?.closest<HTMLElement>('.creator-canvas');
+      if (!canvas?.querySelector('.assist-chat')) return;
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = undefined;
+        void fitView({ padding: graphViewPadding(canvas) });
+      });
+    };
+    desktop.addEventListener('change', onResize);
+    return () => {
+      desktop.removeEventListener('change', onResize);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
+    };
+  }, [fitView]);
 
   // Rebuild from the definition on structural edits or selection changes.
   // Position commits flow through the draft too, carrying identical values,
@@ -674,7 +706,7 @@ export function GraphCanvas({
   }
 
   return (
-    <div className="canvas-wrap">
+    <div className="canvas-wrap" ref={graphHost}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -695,6 +727,7 @@ export function GraphCanvas({
             : undefined
         }
         fitView={!savedViewport}
+        fitViewOptions={assistPadding === undefined ? undefined : { padding: assistPadding }}
         minZoom={0.2}
         maxZoom={2}
         deleteKeyCode={['Backspace', 'Delete']}

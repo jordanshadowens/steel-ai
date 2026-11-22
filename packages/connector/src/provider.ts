@@ -11,6 +11,30 @@ function providerError(code, message) {
   return Object.assign(new Error(message), { code: code });
 }
 
+async function readProviderJson(response: Response, maxBytes: number) {
+  const body = response.body;
+  if (!body) throw new Error('Missing response body.');
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maxBytes) {
+        void reader.cancel().catch(() => {});
+        throw providerError(ERROR_CODES.PAYLOAD_TOO_LARGE, 'provider response exceeded its byte limit');
+      }
+      text += decoder.decode(value, { stream: true });
+    }
+    return JSON.parse(text + decoder.decode());
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 // One chat completion. `apiKey` is the LOCAL model credential (or null for
 // daemons without auth). Rejects tool-call answers: the connector has no
 // tool authority, so a provider that answers with tool_calls is an
@@ -24,49 +48,49 @@ export async function chatCompletions({
   timeoutMs = LIMITS.PROVIDER_TIMEOUT_MS_DEFAULT,
   maxResponseChars = LIMITS.MAX_OUTPUT_CHARS,
   fetchImpl = fetch,
+  signal = undefined as AbortSignal | undefined,
 }) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
+  const completionSignal = signal ? AbortSignal.any([signal, ctrl.signal]) : ctrl.signal;
+  let data;
   try {
-    res = await fetchImpl(`${base}/chat/completions`, {
+    const res = await fetchImpl(`${base}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
       },
       body: JSON.stringify({ model, messages, max_tokens: maxTokens }),
-      signal: ctrl.signal,
+      signal: completionSignal,
       redirect: 'error',
     });
+    if (!res.ok) {
+      void res.body?.cancel().catch(() => {});
+      throw providerError(ERROR_CODES.PROVIDER_BAD_RESPONSE, `provider HTTP ${res.status}`);
+    }
+    try {
+      // A JSON escape can use six bytes per character. Allow room for the
+      // provider's response envelope, including when the body is chunked.
+      data = await readProviderJson(res, maxResponseChars * 6 + 131072);
+    } catch (error) {
+      if (completionSignal.aborted || error?.code === ERROR_CODES.PAYLOAD_TOO_LARGE) throw error;
+      throw providerError(ERROR_CODES.PROVIDER_BAD_RESPONSE, 'provider answer was not JSON');
+    }
   } catch (err) {
-    if (err?.name === 'AbortError') {
+    if (ctrl.signal.aborted) {
       throw providerError(
         ERROR_CODES.PROVIDER_TIMEOUT,
         `provider did not answer within ${timeoutMs}ms`,
       );
     }
+    if (err?.code === ERROR_CODES.PROVIDER_BAD_RESPONSE || err?.code === ERROR_CODES.PAYLOAD_TOO_LARGE) throw err;
     throw providerError(
       ERROR_CODES.PROVIDER_UNAVAILABLE,
       `provider unreachable: ${shortCause(err)}`,
     );
   } finally {
     clearTimeout(timer);
-  }
-  if (!res.ok) {
-    throw providerError(
-      ERROR_CODES.PROVIDER_BAD_RESPONSE,
-      `provider HTTP ${res.status}`,
-    );
-  }
-  let data;
-  try {
-    data = await res.json();
-  } catch {
-    throw providerError(
-      ERROR_CODES.PROVIDER_BAD_RESPONSE,
-      'provider answer was not JSON',
-    );
   }
   const msg = data?.choices?.[0]?.message;
   if (!msg || typeof msg !== 'object') {

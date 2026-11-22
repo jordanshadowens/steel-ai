@@ -2,6 +2,7 @@ import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import type { UnknownAction } from '@reduxjs/toolkit';
 import { steelApi } from '../api/steelApi';
 import { workflowEditorReducer } from './workflowEditor';
+import { workflowAssistReducer } from './workflowAssist';
 import {
   loadWorkflowRecovery,
   preserveLocalRecovery,
@@ -12,6 +13,7 @@ import { getSession, onSessionBoundary } from '../auth/session';
 const reducer = combineReducers({
   [steelApi.reducerPath]: steelApi.reducer,
   workflowEditor: workflowEditorReducer,
+  workflowAssist: workflowAssistReducer,
 });
 type State = ReturnType<typeof reducer>;
 export function workspaceRootReducer(
