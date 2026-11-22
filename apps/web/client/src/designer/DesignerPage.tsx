@@ -103,6 +103,10 @@ export function DesignerPage() {
     showArchived ? { include_archived: true } : undefined,
   );
   const types = typesQ.data?.types ?? [];
+  const localModels = typesQ.data?.backend === 'pydantic-postgresql';
+  const sections: Tab[] = localModels
+    ? ['schema', 'records']
+    : ['schema', 'canvas', 'records', 'publish', 'transfer'];
   const selected = selectedId ?? types[0]?.type_id ?? null;
   const detailQ = useGetDesignerTypeQuery(selected ?? '', { skip: !selected });
   const detail = detailQ.data?.type ?? null;
@@ -180,16 +184,16 @@ export function DesignerPage() {
   );
 
   return (
-    <div className="designer-page">
+    <div className={localModels ? 'designer-page model-workspace' : 'designer-page'}>
+      {localModels && (
+        <header className="model-workspace-heading">
+          <h1>Data models</h1>
+          <p>Define the fields and validation rules for records in PostgreSQL.</p>
+        </header>
+      )}
       <TypeList
         types={types}
-        backendLabel={
-          typesQ.data?.backend === 'pydantic-postgresql'
-            ? 'Local PostgreSQL · Pydantic validation'
-            : typesQ.data
-              ? 'Hosted runtime'
-              : undefined
-        }
+        modelLibrary={localModels}
         selectedId={selected}
         showArchived={showArchived}
         busy={busyTypes}
@@ -197,9 +201,11 @@ export function DesignerPage() {
         onToggleArchived={() => setShowArchived((v) => !v)}
         onSelect={(id) => {
           setSelectedId(id);
+          if (localModels) setTab('schema');
           setPublishRefusal(null);
           setPublishResult(null);
           setValidateResult(null);
+          setValidateError(null);
           setSearched(null);
           setEditingRecord(null);
           setAddingRecord(false);
@@ -209,7 +215,14 @@ export function DesignerPage() {
             () =>
               createType({ name })
                 .unwrap()
-                .then((r) => setSelectedId(r.type.type_id)),
+                .then((r) => {
+                  setSelectedId(r.type.type_id);
+                  if (localModels) {
+                    setTab('schema');
+                    setValidateError(null);
+                    setPublishResult(null);
+                  }
+                }),
             setTypeError,
           )
         }
@@ -236,386 +249,434 @@ export function DesignerPage() {
         }
       />
 
-      {!selected || !detail ? (
-        <div className="section-card">
-          <p className="status-line">
-            {typesQ.isLoading
-              ? 'Loading types…'
-              : 'Select a type to edit its schema, records, and versions.'}
-          </p>
-        </div>
-      ) : (
-        <>
-          <nav className="designer-tabs" aria-label="Designer sections">
-            {(
-              ['schema', 'canvas', 'records', 'publish', 'transfer'] as Tab[]
-            ).map((t) => (
-              <button
-                key={t}
-                type="button"
-                className={
-                  tab === t
-                    ? 'btn btn-filter-active btn-filter'
-                    : 'btn btn-filter'
-                }
-                aria-current={tab === t ? 'page' : undefined}
-                onClick={() => setTab(t)}
-              >
-                {t === 'schema'
-                  ? 'Schema'
-                  : t === 'canvas'
-                    ? 'Canvas'
-                    : t === 'records'
-                      ? 'Records'
-                      : t === 'publish'
-                        ? 'Publish'
-                        : 'Import / Export'}
-              </button>
-            ))}
-          </nav>
+      <div className="designer-content">
+        {!selected || !detail ? (
+          <div className="section-card model-empty">
+            {localModels && <h2>{selected ? 'Opening model' : 'Create your first model'}</h2>}
+            <p className="status-line">
+              {typesQ.isLoading
+                ? 'Loading types…'
+                : localModels
+                  ? selected
+                    ? detailQ.error ? apiMessage(detailQ.error) : 'Loading model…'
+                    : 'Use the model library to add a model, then define the fields each record should contain.'
+                  : 'Select a type to edit its schema, records, and versions.'}
+            </p>
+          </div>
+        ) : (
+          <>
+            {localModels && (
+              <section className="section-card model-editor-heading">
+                <div className="model-editor-title">
+                  <div>
+                    <h2>{detail.name}</h2>
+                    <p className="status-line">
+                      {detail.version ? `Published version ${detail.version}` : 'Unpublished model'}
+                      {detail.validated?.current && detail.validated.ok ? ' · Draft validated' : ''}
+                    </p>
+                  </div>
+                  <div className="model-editor-actions">
+                    <button
+                      type="button"
+                      className="btn"
+                      disabled={validating.isLoading || publishing.isLoading}
+                      onClick={() => {
+                        setPublishResult(null);
+                        void run(() => validateDraft({ id: selected }).unwrap(), setValidateError);
+                      }}
+                    >
+                      {validating.isLoading ? 'Validating…' : 'Validate draft'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={publishing.isLoading || validating.isLoading}
+                      onClick={() => {
+                        setPublishResult(null);
+                        void run(
+                          () => publishType({ id: selected }).unwrap().then(setPublishResult),
+                          setValidateError,
+                        );
+                      }}
+                    >
+                      {publishing.isLoading ? 'Publishing…' : 'Publish model'}
+                    </button>
+                  </div>
+                </div>
+                {validateError && <p className="field-error" role="alert">{validateError}</p>}
+                {publishResult && <p role="status">Version {publishResult.version} is ready for records.</p>}
+              </section>
+            )}
+            <nav className="designer-tabs" aria-label="Designer sections">
+              {sections.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={
+                    tab === t
+                      ? 'btn btn-filter-active btn-filter'
+                      : 'btn btn-filter'
+                  }
+                  aria-current={tab === t ? 'page' : undefined}
+                  onClick={() => setTab(t)}
+                >
+                  {t === 'schema'
+                    ? localModels ? 'Fields' : 'Schema'
+                    : t === 'canvas'
+                      ? 'Canvas'
+                      : t === 'records'
+                        ? 'Records'
+                        : t === 'publish'
+                          ? 'Publish'
+                          : 'Import / Export'}
+                </button>
+              ))}
+            </nav>
 
-          {tab === 'schema' && detail.json_schema && (
-            <details className="section-card">
-              <summary>Pydantic JSON Schema</summary>
-              <h3>Draft schema</h3>
-              <pre>{JSON.stringify(detail.json_schema, null, 2)}</pre>
-              {liveSpec?.json_schema && (
-                <>
-                  <h3>Published schema (v{liveSpec.version})</h3>
-                  <pre>{JSON.stringify(liveSpec.json_schema, null, 2)}</pre>
-                </>
-              )}
-            </details>
-          )}
-          {tab === 'schema' && (
-            <>
-              <FieldEditor
-                fields={detail.fields}
-                busy={busySchema}
-                error={schemaError}
-                onAdd={(spec: FieldPayload) =>
-                  run(
-                    () => addField({ id: selected, ...spec }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-                onUpdate={(field_id, patch) =>
-                  run(
-                    () =>
-                      updateField({
-                        field_id,
-                        type_id: selected,
-                        ...patch,
-                      }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-                onRetire={(field_id, retire) =>
-                  run(
-                    () =>
-                      retireField({
-                        field_id,
-                        type_id: selected,
-                        retire,
-                      }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-                onReorder={(field_ids) =>
-                  run(
-                    () => reorderFields({ id: selected, field_ids }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-              />
-              <RelationshipEditor
-                relationships={detail.relationships}
-                types={types}
-                ownTypeId={selected}
-                busy={busySchema}
-                error={schemaError}
-                onAdd={(spec: RelationshipDraft) =>
-                  run(
-                    () =>
-                      addRel({
-                        workspace: 'default',
-                        src_type: selected,
-                        ...spec,
-                        reverse_name: spec.reverse_name.trim() || null,
-                      }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-                onUpdate={(rel_id, patch) =>
-                  run(
-                    () => updateRel({ rel_id, ...patch }).unwrap(),
-                    setSchemaError,
-                  )
-                }
-                onRetire={(rel_id) =>
-                  run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
-                }
-              />
-            </>
-          )}
-
-          {tab === 'canvas' &&
-            (workspaceQ.isLoading ? (
-              <div className="section-card">
-                <p className="status-line">Loading schema…</p>
-              </div>
-            ) : workspaceQ.error ? (
-              <div className="section-card" role="alert">
-                <p className="field-error">{apiMessage(workspaceQ.error)}</p>
-              </div>
-            ) : (
+            {tab === 'schema' && (
               <>
-                {schemaError && (
-                  <p className="field-error" role="alert">
-                    {schemaError}
-                  </p>
-                )}
-                <SchemaCanvas
-                  workspace="default"
-                  types={workspaceQ.data?.types ?? []}
-                  selectedId={selected}
-                  busy={adding.isLoading}
-                  onSelect={(id) => setSelectedId(id)}
-                  onAddRelationship={(spec) =>
+                <FieldEditor
+                  fields={detail.fields}
+                  busy={busySchema}
+                  error={schemaError}
+                  onAdd={(spec: FieldPayload) =>
                     run(
-                      () => addRel({ workspace: 'default', ...spec }).unwrap(),
+                      () => addField({ id: selected, ...spec }).unwrap(),
                       setSchemaError,
                     )
                   }
-                  onRetireRelationship={(rel_id) =>
-                    run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
+                  onUpdate={(field_id, patch) =>
+                    run(
+                      () =>
+                        updateField({
+                          field_id,
+                          type_id: selected,
+                          ...patch,
+                        }).unwrap(),
+                      setSchemaError,
+                    )
+                  }
+                  onRetire={(field_id, retire) =>
+                    run(
+                      () =>
+                        retireField({
+                          field_id,
+                          type_id: selected,
+                          retire,
+                        }).unwrap(),
+                      setSchemaError,
+                    )
+                  }
+                  onReorder={(field_ids) =>
+                    run(
+                      () => reorderFields({ id: selected, field_ids }).unwrap(),
+                      setSchemaError,
+                    )
                   }
                 />
+                {!localModels && <RelationshipEditor
+                  relationships={detail.relationships}
+                  types={types}
+                  ownTypeId={selected}
+                  busy={busySchema}
+                  error={schemaError}
+                  onAdd={(spec: RelationshipDraft) =>
+                    run(
+                      () =>
+                        addRel({
+                          workspace: 'default',
+                          src_type: selected,
+                          ...spec,
+                          reverse_name: spec.reverse_name.trim() || null,
+                        }).unwrap(),
+                      setSchemaError,
+                    )
+                  }
+                  onUpdate={(rel_id, patch) =>
+                    run(
+                      () => updateRel({ rel_id, ...patch }).unwrap(),
+                      setSchemaError,
+                    )
+                  }
+                  onRetire={(rel_id) =>
+                    run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
+                  }
+                />}
               </>
-            ))}
+            )}
 
-          {tab === 'records' &&
-            (detail.version === 0 || !liveSpec ? (
-              <div className="section-card">
-                <p className="status-line">
-                  Publish this type before entering records — records validate
-                  against the live published version.
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="toolbar">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    disabled={busyRecords}
-                    onClick={() => {
-                      setAddingRecord(true);
-                      setEditingRecord(null);
-                    }}
-                  >
-                    Add record
-                  </button>
+            {tab === 'schema' && detail.json_schema && (
+              <details className="section-card">
+                <summary>View Pydantic JSON Schema</summary>
+                <h3>Draft schema</h3>
+                <pre>{JSON.stringify(detail.json_schema, null, 2)}</pre>
+                {liveSpec?.json_schema && (
+                  <>
+                    <h3>Published schema (v{liveSpec.version})</h3>
+                    <pre>{JSON.stringify(liveSpec.json_schema, null, 2)}</pre>
+                  </>
+                )}
+              </details>
+            )}
+
+            {tab === 'canvas' &&
+              (workspaceQ.isLoading ? (
+                <div className="section-card">
+                  <p className="status-line">Loading schema…</p>
                 </div>
-                {addingRecord && (
-                  <RecordForm
-                    fields={activeLiveFields}
-                    submitLabel="Save record"
-                    busy={inserting.isLoading}
-                    error={recordError}
-                    onCancel={() => setAddingRecord(false)}
-                    onSubmit={(values) =>
+              ) : workspaceQ.error ? (
+                <div className="section-card" role="alert">
+                  <p className="field-error">{apiMessage(workspaceQ.error)}</p>
+                </div>
+              ) : (
+                <>
+                  {schemaError && (
+                    <p className="field-error" role="alert">
+                      {schemaError}
+                    </p>
+                  )}
+                  <SchemaCanvas
+                    workspace="default"
+                    types={workspaceQ.data?.types ?? []}
+                    selectedId={selected}
+                    busy={adding.isLoading}
+                    onSelect={(id) => setSelectedId(id)}
+                    onAddRelationship={(spec) =>
                       run(
-                        () =>
-                          insertRecord({ id: selected, values })
-                            .unwrap()
-                            .then(() => setAddingRecord(false)),
-                        setRecordError,
+                        () => addRel({ workspace: 'default', ...spec }).unwrap(),
+                        setSchemaError,
                       )
                     }
+                    onRetireRelationship={(rel_id) =>
+                      run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
+                    }
                   />
-                )}
-                {editingRecord && (
-                  <>
+                </>
+              ))}
+
+            {tab === 'records' &&
+              (detail.version === 0 || !liveSpec ? (
+                <div className="section-card">
+                  <p className="status-line">
+                    Publish this type before entering records — records validate
+                    against the live published version.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="toolbar">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={busyRecords}
+                      onClick={() => {
+                        setAddingRecord(true);
+                        setEditingRecord(null);
+                      }}
+                    >
+                      Add record
+                    </button>
+                  </div>
+                  {addingRecord && (
                     <RecordForm
                       fields={activeLiveFields}
-                      initial={editingRecord.values}
-                      submitLabel="Save changes"
-                      busy={updating.isLoading}
+                      submitLabel="Save record"
+                      busy={inserting.isLoading}
                       error={recordError}
-                      onCancel={() => setEditingRecord(null)}
+                      onCancel={() => setAddingRecord(false)}
                       onSubmit={(values) =>
                         run(
                           () =>
-                            updateRecord({
-                              record_id: editingRecord.record_id,
-                              values,
-                            })
+                            insertRecord({ id: selected, values })
                               .unwrap()
-                              .then(() => setEditingRecord(null)),
+                              .then(() => setAddingRecord(false)),
                           setRecordError,
                         )
                       }
                     />
-                    <LinksEditor
-                      recordId={editingRecord.record_id}
-                      relationships={activeLiveRels}
-                      types={types}
-                    />
-                  </>
-                )}
-                <RecordGrid
-                  records={searched ?? recordsQ.data?.records ?? []}
-                  fields={activeLiveFields}
-                  busy={busyRecords}
-                  error={recordError}
-                  searching={searching}
-                  onEdit={(r) => {
-                    setEditingRecord(r);
-                    setAddingRecord(false);
-                  }}
-                  onDelete={(record_id, purge) =>
-                    run(
-                      () => deleteRecord({ record_id, purge }).unwrap(),
-                      setRecordError,
-                    )
-                  }
-                  onSearch={(filters) => {
-                    setSearching(true);
-                    queryRecords({ id: selected, filters })
-                      .unwrap()
-                      .then((r) => {
-                        setSearched(r.records);
-                        setRecordError(null);
-                      })
-                      .catch((e: unknown) => setRecordError(apiMessage(e)))
-                      .finally(() => setSearching(false));
-                  }}
-                  onClearSearch={() => setSearched(null)}
-                />
-              </>
-            ))}
+                  )}
+                  {editingRecord && (
+                    <>
+                      <RecordForm
+                        fields={activeLiveFields}
+                        initial={editingRecord.values}
+                        submitLabel="Save changes"
+                        busy={updating.isLoading}
+                        error={recordError}
+                        onCancel={() => setEditingRecord(null)}
+                        onSubmit={(values) =>
+                          run(
+                            () =>
+                              updateRecord({
+                                record_id: editingRecord.record_id,
+                                values,
+                              })
+                                .unwrap()
+                                .then(() => setEditingRecord(null)),
+                            setRecordError,
+                          )
+                        }
+                      />
+                      <LinksEditor
+                        recordId={editingRecord.record_id}
+                        relationships={activeLiveRels}
+                        types={types}
+                      />
+                    </>
+                  )}
+                  <RecordGrid
+                    records={searched ?? recordsQ.data?.records ?? []}
+                    fields={activeLiveFields}
+                    busy={busyRecords}
+                    error={recordError}
+                    searching={searching}
+                    onEdit={(r) => {
+                      setEditingRecord(r);
+                      setAddingRecord(false);
+                    }}
+                    onDelete={(record_id, purge) =>
+                      run(
+                        () => deleteRecord({ record_id, purge }).unwrap(),
+                        setRecordError,
+                      )
+                    }
+                    onSearch={(filters) => {
+                      setSearching(true);
+                      queryRecords({ id: selected, filters })
+                        .unwrap()
+                        .then((r) => {
+                          setSearched(r.records);
+                          setRecordError(null);
+                        })
+                        .catch((e: unknown) => setRecordError(apiMessage(e)))
+                        .finally(() => setSearching(false));
+                    }}
+                    onClearSearch={() => setSearched(null)}
+                  />
+                </>
+              ))}
 
-          {tab === 'publish' && (
-            <PublishPanel
-              detail={detail}
-              versions={versionsQ.data?.versions ?? []}
-              validateResult={validateResult}
-              validating={validating.isLoading}
-              validateError={validateError}
-              publishing={publishing.isLoading}
-              publishResult={publishResult}
-              publishRefusal={publishRefusal}
-              rollingBack={rollingBack.isLoading}
-              diffOps={
-                (diffQ.data?.ops as DesignerMigrationOp[] | undefined) ?? null
-              }
-              diffLoading={diffQ.isFetching}
-              onValidate={() =>
-                validateDraft({ id: selected })
-                  .unwrap()
-                  .then((r) => {
-                    setValidateResult(r);
-                    setValidateError(null);
-                  })
-                  .catch((e: unknown) => {
-                    setValidateError(apiMessage(e));
-                    setValidateResult(null);
-                  })
-              }
-              onPublish={(opts) => {
-                setPublishRefusal(null);
-                setPublishResult(null);
-                publishType({ id: selected, ...opts })
-                  .unwrap()
-                  .then((r) => setPublishResult(r))
-                  .catch((e: unknown) => {
-                    const data = (e as { data?: unknown }).data as
-                      | { report?: unknown; error?: string }
-                      | undefined;
-                    setPublishRefusal({
-                      error: apiMessage(e),
-                      report:
-                        (data?.report as DesignerPublishRefusal['report']) ??
-                        null,
+            {tab === 'publish' && (
+              <PublishPanel
+                detail={detail}
+                versions={versionsQ.data?.versions ?? []}
+                validateResult={validateResult}
+                validating={validating.isLoading}
+                validateError={validateError}
+                publishing={publishing.isLoading}
+                publishResult={publishResult}
+                publishRefusal={publishRefusal}
+                rollingBack={rollingBack.isLoading}
+                diffOps={
+                  (diffQ.data?.ops as DesignerMigrationOp[] | undefined) ?? null
+                }
+                diffLoading={diffQ.isFetching}
+                onValidate={() =>
+                  validateDraft({ id: selected })
+                    .unwrap()
+                    .then((r) => {
+                      setValidateResult(r);
+                      setValidateError(null);
+                    })
+                    .catch((e: unknown) => {
+                      setValidateError(apiMessage(e));
+                      setValidateResult(null);
+                    })
+                }
+                onPublish={(opts) => {
+                  setPublishRefusal(null);
+                  setPublishResult(null);
+                  publishType({ id: selected, ...opts })
+                    .unwrap()
+                    .then((r) => setPublishResult(r))
+                    .catch((e: unknown) => {
+                      const data = (e as { data?: unknown }).data as
+                        | { report?: unknown; error?: string }
+                        | undefined;
+                      setPublishRefusal({
+                        error: apiMessage(e),
+                        report:
+                          (data?.report as DesignerPublishRefusal['report']) ??
+                          null,
+                      });
                     });
-                  });
-              }}
-              onRollback={(to_version) =>
-                run(
-                  () => rollbackType({ id: selected, to_version }).unwrap(),
-                  setValidateError,
-                )
-              }
-              onDiff={(from, to) => setDiffArgs({ from, to })}
-            />
-          )}
+                }}
+                onRollback={(to_version) =>
+                  run(
+                    () => rollbackType({ id: selected, to_version }).unwrap(),
+                    setValidateError,
+                  )
+                }
+                onDiff={(from, to) => setDiffArgs({ from, to })}
+              />
+            )}
 
-          {tab === 'transfer' && (
-            <ImportExport
-              busy={importing.isLoading}
-              exporting={exporting.isLoading}
-              exportText={exportText}
-              importReport={importReport}
-              importDone={importDone}
-              error={transferError}
-              onExport={(typesText) => {
-                const names = typesText
-                  .split(',')
-                  .map((s) => s.trim())
-                  .filter(Boolean);
-                exportSchema(names.length > 0 ? { types: names } : undefined)
-                  .unwrap()
-                  .then((doc) => {
-                    setExportText(JSON.stringify(doc, null, 2));
-                    setTransferError(null);
+            {tab === 'transfer' && (
+              <ImportExport
+                busy={importing.isLoading}
+                exporting={exporting.isLoading}
+                exportText={exportText}
+                importReport={importReport}
+                importDone={importDone}
+                error={transferError}
+                onExport={(typesText) => {
+                  const names = typesText
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  exportSchema(names.length > 0 ? { types: names } : undefined)
+                    .unwrap()
+                    .then((doc) => {
+                      setExportText(JSON.stringify(doc, null, 2));
+                      setTransferError(null);
+                    })
+                    .catch((e: unknown) => setTransferError(apiMessage(e)));
+                }}
+                onValidateImport={(docText, prefix) => {
+                  let doc: unknown;
+                  try {
+                    doc = JSON.parse(docText);
+                  } catch {
+                    setTransferError('Schema text is not valid JSON');
+                    return;
+                  }
+                  validateImport({
+                    doc,
+                    ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
                   })
-                  .catch((e: unknown) => setTransferError(apiMessage(e)));
-              }}
-              onValidateImport={(docText, prefix) => {
-                let doc: unknown;
-                try {
-                  doc = JSON.parse(docText);
-                } catch {
-                  setTransferError('Schema text is not valid JSON');
-                  return;
-                }
-                validateImport({
-                  doc,
-                  ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-                })
-                  .unwrap()
-                  .then((r) => {
-                    setImportReport(r);
-                    setTransferError(null);
+                    .unwrap()
+                    .then((r) => {
+                      setImportReport(r);
+                      setTransferError(null);
+                    })
+                    .catch((e: unknown) => setTransferError(apiMessage(e)));
+                }}
+                onImport={(docText, prefix) => {
+                  let doc: unknown;
+                  try {
+                    doc = JSON.parse(docText);
+                  } catch {
+                    setTransferError('Schema text is not valid JSON');
+                    return;
+                  }
+                  setImportDone(null);
+                  importSchema({
+                    doc,
+                    ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
                   })
-                  .catch((e: unknown) => setTransferError(apiMessage(e)));
-              }}
-              onImport={(docText, prefix) => {
-                let doc: unknown;
-                try {
-                  doc = JSON.parse(docText);
-                } catch {
-                  setTransferError('Schema text is not valid JSON');
-                  return;
-                }
-                setImportDone(null);
-                importSchema({
-                  doc,
-                  ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-                })
-                  .unwrap()
-                  .then((r) => {
-                    setImportDone(r);
-                    setImportReport(null);
-                    setTransferError(null);
-                  })
-                  .catch((e: unknown) => setTransferError(apiMessage(e)));
-              }}
-            />
-          )}
-        </>
-      )}
+                    .unwrap()
+                    .then((r) => {
+                      setImportDone(r);
+                      setImportReport(null);
+                      setTransferError(null);
+                    })
+                    .catch((e: unknown) => setTransferError(apiMessage(e)));
+                }}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

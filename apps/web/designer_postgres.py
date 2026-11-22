@@ -118,6 +118,15 @@ def save_type(conn, entry):
     """, (entry["type_id"], entry["name"], Jsonb(entry)))
 
 
+def new_type(conn, name, fields=()):
+    if not name:
+        raise RequestError("Model name is required.")
+    entry = {"type_id": uuid4().hex, "workspace_id": WORKSPACE, "name": name, "status": "active",
+             "version": 0, "fields": list(fields), "relationships": [], "versions": []}
+    save_type(conn, entry)
+    return {"ok": True, "type": detail(entry)}
+
+
 def get_type(conn, key):
     row = conn.execute("SELECT data FROM steel_designer.types WHERE id = %s OR name = %s ORDER BY id = %s DESC LIMIT 1",
                        (key, key, key)).fetchone()
@@ -234,13 +243,7 @@ def handle(conn, method, parts, query, body):
         return {"workspace": WORKSPACE, "backend": "pydantic-postgresql", "types": [detail(row["data"]) for row in rows
                 if row["data"]["status"] == "active" or query.get("include_archived") == "1"]}
     if parts == ["types"] and method == "POST":
-        name = body.get("name", "").strip()
-        if not name:
-            raise RequestError("Type name is required.")
-        entry = {"type_id": uuid4().hex, "workspace_id": WORKSPACE, "name": name, "status": "active",
-                 "version": 0, "fields": [], "relationships": [], "versions": []}
-        save_type(conn, entry)
-        return {"ok": True, "type": detail(entry)}
+        return new_type(conn, body.get("name", "").strip())
     if parts[:1] == ["types"] and len(parts) >= 2:
         entry = get_type(conn, parts[1])
         tail = parts[2:]
@@ -257,6 +260,20 @@ def handle(conn, method, parts, query, body):
             entry["status"] = "archived" if tail == ["archive"] else "active"
             save_type(conn, entry)
             return {"ok": True, "type": detail(entry)}
+        if method == "POST" and tail == ["duplicate"]:
+            fields = [field | {"field_id": uuid4().hex} for field in entry["fields"]]
+            return new_type(conn, body.get("name", "").strip(), fields)
+        if method == "POST" and tail == ["reorder"]:
+            ids = body.get("field_ids", [])
+            indexes = {field_id: index for index, field_id in enumerate(ids)}
+            fields = entry["fields"]
+            if len(indexes) != len(ids) or set(indexes) != {field["field_id"] for field in fields}:
+                raise RequestError("Order must include each field exactly once.")
+            entry["fields"] = sorted(fields, key=lambda field: indexes[field["field_id"]])
+            for index, field in enumerate(entry["fields"]):
+                field["position"] = index
+            save_type(conn, entry)
+            return {"ok": True}
         if method == "POST" and tail == ["fields"]:
             field = {"field_id": uuid4().hex, "name": "", "ftype": "text", "required": False,
                      "unique": False, "repeated": False, "default": None, "validation": {},
