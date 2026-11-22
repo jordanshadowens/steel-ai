@@ -406,40 +406,6 @@ function InputNameField({
 }
 
 function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
-  return (
-    <section aria-labelledby="finish-bindings-heading" className="configuration-card">
-      <h3 id="finish-bindings-heading">Data Designer bindings (optional)</h3>
-      {(def.inputs ?? []).length === 0 && <p>No workflow inputs to bind.</p>}
-      {(def.inputs ?? []).map((input) => (
-        <fieldset key={input.name}>
-          <legend>{input.name}</legend>
-          <DesignerBindingPicker
-            value={input.designer ?? null}
-            onChange={(binding) =>
-              edit((draft) => {
-                const target = draft.inputs?.find((field) => field.name === input.name);
-                if (!target) {
-                  return;
-                }
-                if (binding) {
-                  target.designer = binding;
-                } else {
-                  delete target.designer;
-                }
-              })
-            }
-          />
-        </fieldset>
-      ))}
-    </section>
-  );
-}
-
-function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
-  const dispatch = useAppDispatch();
-  const reduxStore = useStore<RootState>();
-  const freshDef = (): WorkflowDefinition =>
-    reduxStore.getState().workflowEditor.draft ?? def;
   const refs = [
     ...(def.inputs ?? []).map((i) => ({
       ref: i.name,
@@ -452,21 +418,139 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
       detail: `output of ${s.name || s.step_id}`,
     })),
   ];
-  const policy = (def.policy ?? {}) as {
-    execution_approval?: string;
-    skill_approval?: string;
-  };
   const outputs = (def.outputs ?? {}) as Record<string, { from?: string }>;
   const [newKey, setNewKey] = useState('');
   const [newFrom, setNewFrom] = useState('');
   const [addingBinding, setAddingBinding] = useState(false);
 
   return (
+    <div className="finish-settings configuration-card">
+      <section aria-label="Outputs" className="settings-outputs">
+        <h3>
+          Output bindings{' '}
+          <span className="count-badge">
+            {Object.values(outputs).filter((v) => v?.from?.trim()).length}{' '}
+            mapped
+          </span>
+        </h3>
+        {Object.entries(outputs).map(([k, v]) => (
+          <div key={k} className="map-row output-binding-row">
+            <code className="num">{k}</code>
+            <span className="binding-arrow" aria-hidden="true">
+              ←
+            </span>
+            <DataRefPicker
+              label={`Source for ${k}`}
+              value={v?.from ?? ''}
+              options={refs}
+              onCommit={(from) =>
+                edit((d) => {
+                  d.outputs = { ...(d.outputs ?? {}), [k]: { from } };
+                })
+              }
+            />
+            <button
+              type="button"
+              className="btn"
+              aria-label={`Remove output ${k}`}
+              onClick={() =>
+                edit((d) => {
+                  const o = { ...(d.outputs ?? {}) } as Record<string, unknown>;
+                  delete o[k];
+                  d.outputs = o;
+                })
+              }
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {addingBinding && (
+          <div className="map-row new-output-row">
+            <input
+              type="text"
+              aria-label="New output key"
+              placeholder="key"
+              value={newKey}
+              onChange={(e) => setNewKey(e.target.value)}
+            />
+            <input
+              type="text"
+              aria-label="New output source"
+              placeholder="step.field"
+              value={newFrom}
+              onChange={(e) => setNewFrom(e.target.value)}
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={newKey.trim() === '' || newFrom.trim() === ''}
+              onClick={() => {
+                const k = newKey.trim();
+                const f = newFrom.trim();
+                setNewKey('');
+                setNewFrom('');
+                setAddingBinding(false);
+                edit((d) => {
+                  d.outputs = { ...(d.outputs ?? {}), [k]: { from: f } };
+                });
+              }}
+            >
+              Add
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          className="btn add-binding-button"
+          onClick={() => setAddingBinding((v) => !v)}
+        >
+          {addingBinding ? 'Cancel new binding' : '+ Add binding'}
+        </button>
+      </section>
+      <section aria-labelledby="finish-bindings-heading">
+        <h3 id="finish-bindings-heading">Data Designer bindings (optional)</h3>
+        {(def.inputs ?? []).length === 0 && <p>No workflow inputs to bind.</p>}
+        {(def.inputs ?? []).map((input) => (
+          <fieldset key={input.name}>
+            <legend>{input.name}</legend>
+            <DesignerBindingPicker
+              value={input.designer ?? null}
+              onChange={(binding) =>
+                edit((draft) => {
+                  const target = draft.inputs?.find((field) => field.name === input.name);
+                  if (!target) {
+                    return;
+                  }
+                  if (binding) {
+                    target.designer = binding;
+                  } else {
+                    delete target.designer;
+                  }
+                })
+              }
+            />
+          </fieldset>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
+  const dispatch = useAppDispatch();
+  const reduxStore = useStore<RootState>();
+  const freshDef = (): WorkflowDefinition =>
+    reduxStore.getState().workflowEditor.draft ?? def;
+  const policy = (def.policy ?? {}) as {
+    execution_approval?: string;
+    skill_approval?: string;
+  };
+  return (
     <div className="workflow-settings configuration-card">
       <div className="settings-intro">
         <div>
           <strong>{def.name || def.workflow_id || 'Workflow'}</strong>
-          <p>Configure inputs and output bindings</p>
         </div>
       </div>
       <TextField
@@ -623,89 +707,6 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
             })
           }
         />
-      </section>
-      <section aria-label="Outputs" className="settings-outputs">
-        <h3>
-          Output bindings{' '}
-          <span className="count-badge">
-            {Object.values(outputs).filter((v) => v?.from?.trim()).length}{' '}
-            mapped
-          </span>
-        </h3>
-        {Object.entries(outputs).map(([k, v]) => (
-          <div key={k} className="map-row output-binding-row">
-            <code className="num">{k}</code>
-            <span className="binding-arrow" aria-hidden="true">
-              ←
-            </span>
-            <DataRefPicker
-              label={`Source for ${k}`}
-              value={v?.from ?? ''}
-              options={refs}
-              onCommit={(from) =>
-                edit((d) => {
-                  d.outputs = { ...(d.outputs ?? {}), [k]: { from } };
-                })
-              }
-            />
-            <button
-              type="button"
-              className="btn"
-              aria-label={`Remove output ${k}`}
-              onClick={() =>
-                edit((d) => {
-                  const o = { ...(d.outputs ?? {}) } as Record<string, unknown>;
-                  delete o[k];
-                  d.outputs = o;
-                })
-              }
-            >
-              ×
-            </button>
-          </div>
-        ))}
-        {addingBinding && (
-          <div className="map-row new-output-row">
-            <input
-              type="text"
-              aria-label="New output key"
-              placeholder="key"
-              value={newKey}
-              onChange={(e) => setNewKey(e.target.value)}
-            />
-            <input
-              type="text"
-              aria-label="New output source"
-              placeholder="step.field"
-              value={newFrom}
-              onChange={(e) => setNewFrom(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn"
-              disabled={newKey.trim() === '' || newFrom.trim() === ''}
-              onClick={() => {
-                const k = newKey.trim();
-                const f = newFrom.trim();
-                setNewKey('');
-                setNewFrom('');
-                setAddingBinding(false);
-                edit((d) => {
-                  d.outputs = { ...(d.outputs ?? {}), [k]: { from: f } };
-                });
-              }}
-            >
-              Add
-            </button>
-          </div>
-        )}
-        <button
-          type="button"
-          className="btn add-binding-button"
-          onClick={() => setAddingBinding((v) => !v)}
-        >
-          {addingBinding ? 'Cancel new binding' : '+ Add binding'}
-        </button>
       </section>
     </div>
   );

@@ -261,6 +261,8 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   expect(store.getState().workflowEditor.draft?.inputs?.[0]?.designer)
     .toEqual({ type: 'project' });
   settings();
+  expect(screen.queryByRole('region', { name: 'Outputs' })).toBeNull();
+  step(END_NODE_ID);
   fireEvent.click(screen.getByText('+ Add binding'));
   fireEvent.change(screen.getByLabelText('New output key'), {
     target: { value: 'total' },
@@ -269,10 +271,14 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     target: { value: 'amount' },
   });
   fireEvent.click(screen.getByText('Add', { selector: 'button' }));
-  step('calc');
   settings();
+  expect(screen.queryByRole('region', { name: 'Outputs' })).toBeNull();
+  step(END_NODE_ID);
   expect(
     (screen.getByLabelText('Source for total') as HTMLInputElement).value,
   ).toBe('amount');
   expect(screen.getByText('1 mapped')).toBeTruthy();
+  expect(store.getState().workflowEditor.draft?.outputs?.total).toEqual({ from: 'amount' });
+  fireEvent.click(screen.getByRole('button', { name: 'Remove output total' }));
+  expect(screen.getByText('0 mapped')).toBeTruthy();
 });

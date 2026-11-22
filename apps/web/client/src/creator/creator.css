@@ -197,7 +197,7 @@
 .workflow-settings > .status-line { display: none; }
 .workflow-settings > .field { order: -3; }
 .workflow-settings .settings-inputs { order: -2; }
-.workflow-settings .settings-outputs { order: -1; }
+.finish-settings > section + section { border-top: 1px solid #ebebee; margin-top: 16px; padding-top: 16px; }
 .workflow-settings > section { border-top: 1px solid #ebebee; padding-top: 10px; }
 .workflow-settings h3 { color: #242428; font-size: 14px; font-weight: 600; }
 .count-badge { font-size: 11px; font-weight: 500; background: #eeeeef; border-radius: 12px; padding: 3px 7px; margin-left: 5px; white-space: nowrap; }
