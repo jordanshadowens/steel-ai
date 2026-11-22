@@ -214,6 +214,28 @@ test('AI Assist keeps the chat open and saves follow-ups as draft versions', asy
   await expect(chat.getByRole('button', { name: 'Close AI Assist' })).toBeInViewport({ ratio: 1 });
 });
 
+test('AI Assist visibly expands and brightens its launcher halo', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await mockCreator(page);
+  const launcher = page.getByRole('button', { name: 'AI Assist', exact: true });
+  const pulse = await launcher.evaluate(async (el) => {
+    const animation = el.getAnimations({ subtree: true }).find((candidate) =>
+      candidate instanceof CSSAnimation && candidate.animationName === 'assist-halo-pulse');
+    if (!animation) throw new Error('Launcher halo animation is missing');
+    animation.pause();
+    await animation.ready;
+    function sample(time: number) {
+      animation!.currentTime = time;
+      const style = getComputedStyle(el, '::before');
+      return { opacity: Number(style.opacity), scaleY: new DOMMatrix(style.transform).d };
+    }
+    return { low: sample(0), peak: sample(1200), end: sample(2400) };
+  });
+  expect(pulse.peak.opacity - pulse.low.opacity).toBeGreaterThan(0.5);
+  expect(pulse.peak.scaleY - pulse.low.scaleY).toBeGreaterThan(0.25);
+  expect(pulse.end).toEqual(pulse.low);
+});
+
 test('AI Assist fits a phone and lets users edit a rejected prompt', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 480 });
   await page.emulateMedia({ reducedMotion: 'reduce' });

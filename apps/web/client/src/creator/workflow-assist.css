@@ -17,6 +17,7 @@
 }
 
 .assist-launcher {
+  --assist-halo: 0 0 14px 3px #537cffc7, 0 0 28px 7px #a37bff94;
   position: relative;
   isolation: isolate;
   display: flex;
@@ -39,8 +40,9 @@
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  box-shadow: 0 0 22px 4px #507eff80, 4px 0 15px #b385ff54;
-  animation: assist-breathe 4s ease-in-out infinite alternate;
+  box-shadow: var(--assist-halo);
+  opacity: 0.45;
+  animation: assist-halo-pulse 2.4s ease-in-out infinite;
   content: '';
   pointer-events: none;
 }
@@ -285,6 +287,11 @@
   to { opacity: 1; }
 }
 
+@keyframes assist-halo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.28; }
+  50% { transform: scale(1.15, 1.35); opacity: 1; }
+}
+
 @keyframes assist-open {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
   to { opacity: 1; transform: none; }
@@ -315,7 +322,7 @@
   }
   .assist-command-launcher .assist-launcher-icon { width: 28px; height: 28px; }
   .assist-command-launcher .assist-launcher-icon svg { width: 18px; height: 18px; }
-  .assist-command-launcher::before { box-shadow: 0 0 10px #507eff80; }
+  .assist-command-launcher { --assist-halo: 0 0 9px 2px #537cffc7, 0 0 16px 4px #a37bff94; }
   .workflow-assist[data-docked] .assist-chat {
     position: fixed;
     inset: auto auto 12px 12px;
