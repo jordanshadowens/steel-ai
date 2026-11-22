@@ -9,7 +9,7 @@ import {
   setPanel,
   workflowEditorReducer,
 } from '../store/workflowEditor';
-import { REASON_TOOLS, STEP_TYPES, defaultConfig } from './adapter';
+import { END_NODE_ID, REASON_TOOLS, STEP_TYPES, defaultConfig } from './adapter';
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -48,7 +48,7 @@ vi.mock('../api/steelApi', () => ({
   useGetTemplateVersionsQuery: () => ({ data: { versions: [] } }),
   useGetTemplateVersionQuery: () => ({ data: { slots: [] } }),
   useGetDesignerWorkspaceQuery: () => ({
-    data: { types: [] },
+    data: { types: [{ name: 'project', type_id: 'project', version: 1, fields: [] }] },
     isLoading: false,
     error: undefined,
   }),
@@ -227,15 +227,40 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     }
     settings();
     fireEvent.click(screen.getByLabelText('Input 1 required'));
-    fireEvent.click(screen.getByLabelText('Four-eyes publish'));
     step('calc');
     settings();
     check('Input 1 required', expected);
-    check('Four-eyes publish', expected);
     step('calc');
   }
   settings();
-  expect(screen.getByText('Not validated')).toBeTruthy();
+  expect(screen.queryByText('Not validated')).toBeNull();
+  expect(screen.queryByLabelText('Four-eyes publish')).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Limits' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Input presentation' })).toBeNull();
+  expect(screen.queryByLabelText('Bound designer type')).toBeNull();
+  expect(
+    Array.from((screen.getByLabelText('Input 1 type') as HTMLSelectElement).options)
+      .map((option) => [option.text, option.value]),
+  ).toEqual([
+    ['Text', 'string'],
+    ['Number', 'number'],
+    ['Boolean', 'boolean'],
+    ['JSON', 'object'],
+    ['Array', 'array'],
+  ]);
+  step(END_NODE_ID);
+  expect(screen.getByRole('complementary', { name: 'Finish' })).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Bound designer type'), {
+    target: { value: 'project' },
+  });
+  settings();
+  expect(screen.queryByLabelText('Bound designer type')).toBeNull();
+  step(END_NODE_ID);
+  expect((screen.getByLabelText('Bound designer type') as HTMLSelectElement).value)
+    .toBe('project');
+  expect(store.getState().workflowEditor.draft?.inputs?.[0]?.designer)
+    .toEqual({ type: 'project' });
+  settings();
   fireEvent.click(screen.getByText('+ Add binding'));
   fireEvent.change(screen.getByLabelText('New output key'), {
     target: { value: 'total' },

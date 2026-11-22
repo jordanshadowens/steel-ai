@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { RootState } from '../store/store';
 import { selectStep, setPanel, updateDraft } from '../store/workflowEditor';
 import {
+  END_NODE_ID,
   TYPE_LABELS,
   addWorkflowInput,
   defaultStartStaleFields,
@@ -34,15 +35,8 @@ import { VerificationStepInspector } from './VerificationStepInspector';
 import { SkillStepInspector } from './SkillStepInspector';
 import { ArtifactStepInspector } from './ArtifactStepInspector';
 import { DocStepInspector } from './DocStepInspector';
-import {
-  CheckField,
-  DataRefPicker,
-  NumberField,
-  SelectField,
-  TextField,
-} from './fields';
+import { DataRefPicker, SelectField, TextField } from './fields';
 import { DesignerBindingPicker } from '../designer/DesignerBindingPicker';
-import { InputPresentationEditor } from './InputPresentationEditor';
 import { availableRefs, bodyRefs } from './preflight';
 import { useNotify } from './notices';
 import { useFloatingPanel } from './useFloatingPanel';
@@ -52,12 +46,10 @@ import { useFloatingPanel } from './useFloatingPanel';
 export function Inspector({
   bodySel,
   setBodySel,
-  validationStatus = null,
   requiredSetup = false,
 }: {
   bodySel: { loop: string; step: string } | null;
   setBodySel: (v: { loop: string; step: string } | null) => void;
-  validationStatus?: 'valid' | 'invalid' | null;
   requiredSetup?: boolean;
 }) {
   const dispatch = useAppDispatch();
@@ -93,13 +85,7 @@ export function Inspector({
   };
 
   let title = 'Workflow settings';
-  let body: React.ReactNode = (
-    <WorkflowSettings
-      def={draft}
-      edit={edit}
-      validationStatus={validationStatus}
-    />
-  );
+  let body: React.ReactNode = <WorkflowSettings def={draft} edit={edit} />;
   if (bodySel) {
     const loop = findStep(draft, bodySel.loop, null);
     const bstep = findStep(draft, bodySel.step, bodySel.loop);
@@ -125,6 +111,9 @@ export function Inspector({
         </>
       );
     }
+  } else if (selectedStepId === END_NODE_ID) {
+    title = 'Finish';
+    body = <FinishSettings def={draft} edit={edit} />;
   } else if (selectedStepId) {
     const step = findStep(draft, selectedStepId, null);
     if (step) {
@@ -416,15 +405,37 @@ function InputNameField({
   );
 }
 
-function WorkflowSettings({
-  def,
-  edit,
-  validationStatus,
-}: {
-  def: WorkflowDefinition;
-  edit: EditFn;
-  validationStatus: 'valid' | 'invalid' | null;
-}) {
+function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
+  return (
+    <section aria-labelledby="finish-bindings-heading" className="configuration-card">
+      <h3 id="finish-bindings-heading">Data Designer bindings (optional)</h3>
+      {(def.inputs ?? []).length === 0 && <p>No workflow inputs to bind.</p>}
+      {(def.inputs ?? []).map((input) => (
+        <fieldset key={input.name}>
+          <legend>{input.name}</legend>
+          <DesignerBindingPicker
+            value={input.designer ?? null}
+            onChange={(binding) =>
+              edit((draft) => {
+                const target = draft.inputs?.find((field) => field.name === input.name);
+                if (!target) {
+                  return;
+                }
+                if (binding) {
+                  target.designer = binding;
+                } else {
+                  delete target.designer;
+                }
+              })
+            }
+          />
+        </fieldset>
+      ))}
+    </section>
+  );
+}
+
+function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
   const dispatch = useAppDispatch();
   const reduxStore = useStore<RootState>();
   const freshDef = (): WorkflowDefinition =>
@@ -444,11 +455,6 @@ function WorkflowSettings({
   const policy = (def.policy ?? {}) as {
     execution_approval?: string;
     skill_approval?: string;
-    four_eyes?: boolean;
-  };
-  const limits = (def.limits ?? {}) as {
-    max_rounds?: number;
-    max_iterations?: number;
   };
   const outputs = (def.outputs ?? {}) as Record<string, { from?: string }>;
   const [newKey, setNewKey] = useState('');
@@ -462,21 +468,10 @@ function WorkflowSettings({
           <strong>{def.name || def.workflow_id || 'Workflow'}</strong>
           <p>Configure inputs and output bindings</p>
         </div>
-        <span
-          className={`settings-validation ${validationStatus ?? 'unchecked'}`}
-        >
-          {validationStatus === 'valid'
-            ? 'Valid'
-            : validationStatus === 'invalid'
-              ? 'Needs attention'
-              : 'Not validated'}
-        </span>
       </div>
-      <p className="status-line">
-        Select a step on the canvas, or edit the workflow itself:
-      </p>
       <TextField
         label="Workflow id"
+        description="Unique identifier the connected model provider uses to look up and run the workflow."
         value={def.workflow_id}
         onCommit={(v) =>
           edit((d) => {
@@ -527,8 +522,8 @@ function WorkflowSettings({
                         {
                           string: 'Text',
                           number: 'Number',
-                          boolean: 'Yes / No',
-                          object: 'Object',
+                          boolean: 'Boolean',
+                          object: 'JSON',
                           array: 'Array',
                         } as Record<string, string>
                       )[t]
@@ -566,22 +561,6 @@ function WorkflowSettings({
                 ×
               </button>
             </div>
-            <DesignerBindingPicker
-              value={inp.designer ?? null}
-              onChange={(next) =>
-                edit((d) => {
-                  const t = d.inputs?.[i];
-                  if (!t) {
-                    return;
-                  }
-                  if (next === null) {
-                    delete t.designer;
-                  } else {
-                    t.designer = next;
-                  }
-                })
-              }
-            />
           </div>
         ))}
         {(def.inputs ?? []).length === 0 && (
@@ -641,38 +620,6 @@ function WorkflowSettings({
           onChange={(v) =>
             edit((d) => {
               d.policy = { ...(d.policy ?? {}), skill_approval: v };
-            })
-          }
-        />
-        <CheckField
-          label="Four-eyes publish"
-          checked={policy.four_eyes === true}
-          onChange={(v) =>
-            edit((d) => {
-              d.policy = { ...(d.policy ?? {}), four_eyes: v };
-            })
-          }
-        />
-      </section>
-      <section aria-label="Limits">
-        <h3>Limits</h3>
-        <NumberField
-          label="Max rounds"
-          min={1}
-          value={limits.max_rounds}
-          onCommit={(v) =>
-            edit((d) => {
-              d.limits = { ...(d.limits ?? {}), max_rounds: v };
-            })
-          }
-        />
-        <NumberField
-          label="Max iterations"
-          min={1}
-          value={limits.max_iterations}
-          onCommit={(v) =>
-            edit((d) => {
-              d.limits = { ...(d.limits ?? {}), max_iterations: v };
             })
           }
         />
@@ -760,7 +707,6 @@ function WorkflowSettings({
           {addingBinding ? 'Cancel new binding' : '+ Add binding'}
         </button>
       </section>
-      <InputPresentationEditor def={def} edit={edit} />
     </div>
   );
 }

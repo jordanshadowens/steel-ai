@@ -10,7 +10,7 @@ import {
   undo,
   updateDraft,
 } from '../store/workflowEditor';
-import { withPositions } from './adapter';
+import { END_NODE_ID, withPositions } from './adapter';
 import { CommandBar } from './CommandBar';
 import type { ValidationReport } from './CommandBar';
 import { GraphCanvas } from './GraphCanvas';
@@ -124,6 +124,7 @@ function CreatorWorkspace() {
         !needsSetup &&
         !typing &&
         selectedStepId &&
+        selectedStepId !== END_NODE_ID &&
         draft &&
         ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)
       ) {
@@ -248,7 +249,6 @@ function CreatorWorkspace() {
               key="inspector"
               bodySel={bodySel}
               setBodySel={setBodySel}
-              validationStatus={validationStatus}
               requiredSetup={needsSetup}
             />
           )}

@@ -594,7 +594,7 @@ export function definitionToFlow(
     position: { x: maxX + 320, y: 60 },
     data: {},
     draggable: false,
-    selectable: false,
+    selected: selectedStepId === END_NODE_ID,
     deletable: false,
   });
 

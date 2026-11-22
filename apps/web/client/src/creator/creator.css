@@ -107,6 +107,9 @@
   font-weight: 600;
 }
 
+.react-flow__node-end.selected .end-node { outline: 2px solid var(--color-nav); outline-offset: 2px; }
+.workflow-settings .field small { display: block; margin-top: 4px; }
+
 /* Edges: identity by dash pattern + label, never color alone */
 
 .react-flow__edge.edge-success path {
@@ -190,9 +193,6 @@
 .panel-drag-handle:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 3px; }
 .workflow-settings { display: flex; flex-direction: column; gap: 12px; }
 .settings-intro { order: -4; padding: 12px 0 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.settings-validation { border-radius: 16px; padding: 3px 8px; font-size: 11px; white-space: nowrap; background: #ededf0; color: #606069; }
-.settings-validation.valid { background: #daf3e4; color: #087b36; }
-.settings-validation.invalid { background: #fff0db; color: #8a5200; }
 .settings-intro p { color: #68686f; margin: 4px 0 0; font-size: 13px; }
 .workflow-settings > .status-line { display: none; }
 .workflow-settings > .field { order: -3; }

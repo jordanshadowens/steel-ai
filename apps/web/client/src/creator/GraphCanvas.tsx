@@ -87,7 +87,7 @@ function EndNode() {
   return (
     <div className="end-node">
       <Handle type="target" position={Position.Left} />
-      end
+      Finish
     </div>
   );
 }

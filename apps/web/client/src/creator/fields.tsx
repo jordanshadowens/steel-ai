@@ -8,6 +8,7 @@ export function TextField({
   value,
   onCommit,
   placeholder,
+  description,
   multiline,
   type,
 }: {
@@ -15,6 +16,7 @@ export function TextField({
   value: string;
   onCommit: (v: string) => void;
   placeholder?: string;
+  description?: string;
   multiline?: boolean;
   type?: string;
 }) {
@@ -30,10 +32,12 @@ export function TextField({
     <div className="field">
       <span>
         <label htmlFor={id}>{label}</label>
+        {description && <small id={`${id}-description`}>{description}</small>}
       </span>
       {multiline ? (
         <textarea
           id={id}
+          aria-describedby={description ? `${id}-description` : undefined}
           rows={3}
           value={text}
           placeholder={placeholder}
@@ -43,6 +47,7 @@ export function TextField({
       ) : (
         <input
           id={id}
+          aria-describedby={description ? `${id}-description` : undefined}
           type={type ?? 'text'}
           value={text}
           placeholder={placeholder}
