@@ -3,7 +3,6 @@ import type { DesignerTypeRow } from '../api/contracts';
 
 export interface TypeListProps {
   types: DesignerTypeRow[];
-  modelLibrary?: boolean;
   selectedId: string | null;
   showArchived: boolean;
   busy: boolean;
@@ -26,7 +25,7 @@ export function TypeList(props: TypeListProps) {
 
   return (
     <div className="section-card">
-      <h2>{props.modelLibrary ? 'Model library' : 'Entity types'}</h2>
+      <h2>Model library</h2>
       <form
         className="map-row"
         onSubmit={(e) => {
@@ -39,8 +38,8 @@ export function TypeList(props: TypeListProps) {
       >
         <input
           type="text"
-          aria-label={props.modelLibrary ? 'Model name' : 'New type name'}
-          placeholder={props.modelLibrary ? 'Model name' : 'New type name'}
+          aria-label="Model name"
+          placeholder="Model name"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           disabled={props.busy}
@@ -50,7 +49,7 @@ export function TypeList(props: TypeListProps) {
           className="btn btn-primary"
           disabled={props.busy || !draft.trim()}
         >
-          {props.modelLibrary ? 'Add model' : 'Create'}
+          Add model
         </button>
       </form>
       <label className="status-line">
@@ -61,12 +60,6 @@ export function TypeList(props: TypeListProps) {
         />{' '}
         Show archived
       </label>
-      {!props.modelLibrary && props.types.length === 0 && (
-        <p className="status-line">
-          No types yet. Create one to start drafting its schema — drafts never
-          touch live data.
-        </p>
-      )}
       <ul className="designer-typelist">
         {props.types.map((t) => (
           <li
@@ -85,7 +78,7 @@ export function TypeList(props: TypeListProps) {
             >
               <strong>{t.name}</strong>
               <span className="status-line">
-                {props.modelLibrary && t.version === 0 ? 'Draft' : `v${t.version} · ${t.status}`}
+                {t.version === 0 ? 'Draft' : `v${t.version} · ${t.status}`}
               </span>
             </button>
             <span className="designer-type-actions">

@@ -1,57 +1,37 @@
 import { useState } from 'react';
 import type {
-  DesignerMigrationOp,
-  DesignerPublishRefusal,
   DesignerPublishResult,
   DesignerRecord,
-  DesignerValidateResult,
 } from '../api/contracts';
 import {
   useAddDesignerFieldMutation,
-  useAddDesignerRelationshipMutation,
   useArchiveDesignerTypeMutation,
   useCreateDesignerTypeMutation,
   useDeleteDesignerRecordMutation,
-  useDiffDesignerVersionsQuery,
   useDuplicateDesignerTypeMutation,
-  useExportDesignerSchemaMutation,
   useGetDesignerTypeQuery,
   useGetDesignerVersionQuery,
-  useImportDesignerSchemaMutation,
   useInsertDesignerRecordMutation,
   useListDesignerRecordsQuery,
-  useGetDesignerWorkspaceQuery,
   useListDesignerTypesQuery,
-  useListDesignerVersionsQuery,
   usePublishDesignerTypeMutation,
   useQueryDesignerRecordsMutation,
   useRenameDesignerTypeMutation,
   useReorderDesignerFieldsMutation,
   useRetireDesignerFieldMutation,
-  useRetireDesignerRelationshipMutation,
-  useRollbackDesignerTypeMutation,
   useUnarchiveDesignerTypeMutation,
   useUpdateDesignerFieldMutation,
   useUpdateDesignerRecordMutation,
-  useUpdateDesignerRelationshipMutation,
   useValidateDesignerDraftMutation,
-  useValidateDesignerImportMutation,
 } from '../api/steelApi';
-import { SchemaCanvas } from './SchemaCanvas';
 import { TypeList } from './TypeList';
 import { FieldEditor, type FieldPayload } from './FieldEditor';
-import {
-  RelationshipEditor,
-  type RelationshipDraft,
-} from './RelationshipEditor';
-import { PublishPanel } from './PublishPanel';
 import { RecordForm, RecordGrid } from './RecordViews';
-import { LinksEditor } from './LinksEditor';
-import { ImportExport } from './ImportExport';
-import { apiMessage, isUnavailable } from './valueInputs';
+import { apiMessage } from './valueInputs';
 import './designer.css';
 
-type Tab = 'schema' | 'canvas' | 'records' | 'publish' | 'transfer';
+const SECTIONS = { schema: 'Fields', records: 'Records' } as const;
+type Tab = keyof typeof SECTIONS;
 
 async function run<T>(
   fn: () => Promise<T>,
@@ -74,45 +54,23 @@ export function DesignerPage() {
   const [typeError, setTypeError] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);
   const [recordError, setRecordError] = useState<string | null>(null);
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [publishRefusal, setPublishRefusal] =
-    useState<DesignerPublishRefusal | null>(null);
   const [publishResult, setPublishResult] =
     useState<DesignerPublishResult | null>(null);
-  const [validateResult, setValidateResult] =
-    useState<DesignerValidateResult | null>(null);
   const [validateError, setValidateError] = useState<string | null>(null);
-  const [diffArgs, setDiffArgs] = useState<{ from: number; to: number } | null>(
-    null,
-  );
   const [searched, setSearched] = useState<DesignerRecord[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [addingRecord, setAddingRecord] = useState(false);
   const [editingRecord, setEditingRecord] = useState<DesignerRecord | null>(
     null,
   );
-  const [exportText, setExportText] = useState<string | null>(null);
-  const [importReport, setImportReport] =
-    useState<Parameters<typeof ImportExport>[0]['importReport']>(null);
-  const [importDone, setImportDone] = useState<{
-    created: Array<{ name: string }>;
-    relationships: number;
-  } | null>(null);
-
   const typesQ = useListDesignerTypesQuery(
     showArchived ? { include_archived: true } : undefined,
   );
   const types = typesQ.data?.types ?? [];
   const localModels = typesQ.data?.backend === 'pydantic-postgresql';
-  const sections: Tab[] = localModels
-    ? ['schema', 'records']
-    : ['schema', 'canvas', 'records', 'publish', 'transfer'];
-  const selected = selectedId ?? types[0]?.type_id ?? null;
+  const selected = localModels ? (selectedId ?? types[0]?.type_id ?? null) : null;
   const detailQ = useGetDesignerTypeQuery(selected ?? '', { skip: !selected });
   const detail = detailQ.data?.type ?? null;
-  const versionsQ = useListDesignerVersionsQuery(selected ?? '', {
-    skip: !selected,
-  });
   const liveSpecQ = useGetDesignerVersionQuery(
     selected && detail && detail.version > 0
       ? { id: selected, version: detail.version }
@@ -122,23 +80,10 @@ export function DesignerPage() {
     },
   );
   const liveSpec = liveSpecQ.data?.spec ?? null;
-  const diffQ = useDiffDesignerVersionsQuery(
-    selected && diffArgs
-      ? { id: selected, ...diffArgs }
-      : { id: '', from: 0, to: 0 },
-    {
-      skip: !selected || !diffArgs,
-    },
-  );
   const recordsQ = useListDesignerRecordsQuery(
     selected ? { id: selected } : { id: '' },
     { skip: !selected || (detail?.version ?? 0) === 0 },
   );
-  const workspaceQ = useGetDesignerWorkspaceQuery(
-    showArchived ? { include_archived: true } : undefined,
-    { skip: tab !== 'canvas' },
-  );
-
   const [createType, creating] = useCreateDesignerTypeMutation();
   const [renameType] = useRenameDesignerTypeMutation();
   const [duplicateType] = useDuplicateDesignerTypeMutation();
@@ -148,26 +93,27 @@ export function DesignerPage() {
   const [updateField] = useUpdateDesignerFieldMutation();
   const [retireField] = useRetireDesignerFieldMutation();
   const [reorderFields] = useReorderDesignerFieldsMutation();
-  const [addRel] = useAddDesignerRelationshipMutation();
-  const [updateRel] = useUpdateDesignerRelationshipMutation();
-  const [retireRel] = useRetireDesignerRelationshipMutation();
   const [validateDraft, validating] = useValidateDesignerDraftMutation();
   const [publishType, publishing] = usePublishDesignerTypeMutation();
-  const [rollbackType, rollingBack] = useRollbackDesignerTypeMutation();
   const [insertRecord, inserting] = useInsertDesignerRecordMutation();
   const [updateRecord, updating] = useUpdateDesignerRecordMutation();
   const [deleteRecord] = useDeleteDesignerRecordMutation();
   const [queryRecords] = useQueryDesignerRecordsMutation();
-  const [exportSchema, exporting] = useExportDesignerSchemaMutation();
-  const [validateImport] = useValidateDesignerImportMutation();
-  const [importSchema, importing] = useImportDesignerSchemaMutation();
-
-  if (typesQ.error && isUnavailable(typesQ.error)) {
+  if (!localModels) {
     return (
-      <div className="section-card" role="alert">
-        <h2>Data Designer unavailable</h2>
-        <p>{apiMessage(typesQ.error)}</p>
-      </div>
+      <section className="section-card">
+        <h1>Data models</h1>
+        {typesQ.isLoading ? (
+          <p role="status">Connecting to Data Designer…</p>
+        ) : typesQ.error ? (
+          <p className="field-error" role="alert">{apiMessage(typesQ.error)}</p>
+        ) : (
+          <p>
+            Set <code>DATABASE_URL</code> in the Workflow Creator <code>.env</code>{' '}
+            file and restart the server to open the model editor.
+          </p>
+        )}
+      </section>
     );
   }
 
@@ -179,50 +125,37 @@ export function DesignerPage() {
   const activeLiveFields = (liveSpec?.fields ?? []).filter(
     (f) => f.status === 'active',
   );
-  const activeLiveRels = (liveSpec?.relationships ?? []).filter(
-    (r) => r.status === 'active',
-  );
+
+  function openModel(id: string) {
+    setSelectedId(id);
+    setTab('schema');
+    setPublishResult(null);
+    setValidateError(null);
+    setSearched(null);
+    setEditingRecord(null);
+    setAddingRecord(false);
+  }
 
   return (
-    <div className={localModels ? 'designer-page model-workspace' : 'designer-page'}>
-      {localModels && (
-        <header className="model-workspace-heading">
-          <h1>Data models</h1>
-          <p>Define the fields and validation rules for records in PostgreSQL.</p>
-        </header>
-      )}
+    <div className="designer-page model-workspace">
+      <header className="model-workspace-heading">
+        <h1>Data models</h1>
+        <p>Define the fields and validation rules for records in PostgreSQL.</p>
+      </header>
       <TypeList
         types={types}
-        modelLibrary={localModels}
         selectedId={selected}
         showArchived={showArchived}
         busy={busyTypes}
         error={typeError ?? (typesQ.error ? apiMessage(typesQ.error) : null)}
         onToggleArchived={() => setShowArchived((v) => !v)}
-        onSelect={(id) => {
-          setSelectedId(id);
-          if (localModels) setTab('schema');
-          setPublishRefusal(null);
-          setPublishResult(null);
-          setValidateResult(null);
-          setValidateError(null);
-          setSearched(null);
-          setEditingRecord(null);
-          setAddingRecord(false);
-        }}
+        onSelect={openModel}
         onCreate={(name) =>
           run(
             () =>
               createType({ name })
                 .unwrap()
-                .then((r) => {
-                  setSelectedId(r.type.type_id);
-                  if (localModels) {
-                    setTab('schema');
-                    setValidateError(null);
-                    setPublishResult(null);
-                  }
-                }),
+                .then((r) => openModel(r.type.type_id)),
             setTypeError,
           )
         }
@@ -234,7 +167,7 @@ export function DesignerPage() {
             () =>
               duplicateType({ id, name })
                 .unwrap()
-                .then((r) => setSelectedId(r.type.type_id)),
+                .then((r) => openModel(r.type.type_id)),
             setTypeError,
           )
         }
@@ -252,63 +185,57 @@ export function DesignerPage() {
       <div className="designer-content">
         {!selected || !detail ? (
           <div className="section-card model-empty">
-            {localModels && <h2>{selected ? 'Opening model' : 'Create your first model'}</h2>}
+            <h2>{selected ? 'Opening model' : 'Create your first model'}</h2>
             <p className="status-line">
-              {typesQ.isLoading
-                ? 'Loading types…'
-                : localModels
-                  ? selected
-                    ? detailQ.error ? apiMessage(detailQ.error) : 'Loading model…'
-                    : 'Use the model library to add a model, then define the fields each record should contain.'
-                  : 'Select a type to edit its schema, records, and versions.'}
+              {selected
+                ? detailQ.error ? apiMessage(detailQ.error) : 'Loading model…'
+                : 'Use the model library to add a model, then define the fields each record should contain.'}
             </p>
           </div>
         ) : (
           <>
-            {localModels && (
-              <section className="section-card model-editor-heading">
-                <div className="model-editor-title">
-                  <div>
-                    <h2>{detail.name}</h2>
-                    <p className="status-line">
-                      {detail.version ? `Published version ${detail.version}` : 'Unpublished model'}
-                      {detail.validated?.current && detail.validated.ok ? ' · Draft validated' : ''}
-                    </p>
-                  </div>
-                  <div className="model-editor-actions">
-                    <button
-                      type="button"
-                      className="btn"
-                      disabled={validating.isLoading || publishing.isLoading}
-                      onClick={() => {
-                        setPublishResult(null);
-                        void run(() => validateDraft({ id: selected }).unwrap(), setValidateError);
-                      }}
-                    >
-                      {validating.isLoading ? 'Validating…' : 'Validate draft'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={publishing.isLoading || validating.isLoading}
-                      onClick={() => {
-                        setPublishResult(null);
-                        void run(
-                          () => publishType({ id: selected }).unwrap().then(setPublishResult),
-                          setValidateError,
-                        );
-                      }}
-                    >
-                      {publishing.isLoading ? 'Publishing…' : 'Publish model'}
-                    </button>
-                  </div>
+            <section className="section-card model-editor-heading">
+              <div className="model-editor-title">
+                <div>
+                  <h2>{detail.name}</h2>
+                  <p className="status-line">
+                    {detail.version ? `Published version ${detail.version}` : 'Unpublished model'}
+                    {detail.validated?.current && detail.validated.ok ? ' · Draft validated' : ''}
+                  </p>
                 </div>
-                {validateError && <p className="field-error" role="alert">{validateError}</p>}
-                {publishResult && <p role="status">Version {publishResult.version} is ready for records.</p>}
-              </section>
-            )}
+                <div className="model-editor-actions">
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={validating.isLoading || publishing.isLoading}
+                    onClick={() => {
+                      setPublishResult(null);
+                      void run(() => validateDraft({ id: selected }).unwrap(), setValidateError);
+                    }}
+                  >
+                    {validating.isLoading ? 'Validating…' : 'Validate draft'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={publishing.isLoading || validating.isLoading}
+                    onClick={() => {
+                      setPublishResult(null);
+                      void run(
+                        () => publishType({ id: selected }).unwrap().then(setPublishResult),
+                        setValidateError,
+                      );
+                    }}
+                  >
+                    {publishing.isLoading ? 'Publishing…' : 'Publish model'}
+                  </button>
+                </div>
+              </div>
+              {validateError && <p className="field-error" role="alert">{validateError}</p>}
+              {publishResult && <p role="status">Version {publishResult.version} is ready for records.</p>}
+            </section>
             <nav className="designer-tabs" aria-label="Designer sections">
-              {sections.map((t) => (
+              {(Object.keys(SECTIONS) as Tab[]).map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -320,15 +247,7 @@ export function DesignerPage() {
                   aria-current={tab === t ? 'page' : undefined}
                   onClick={() => setTab(t)}
                 >
-                  {t === 'schema'
-                    ? localModels ? 'Fields' : 'Schema'
-                    : t === 'canvas'
-                      ? 'Canvas'
-                      : t === 'records'
-                        ? 'Records'
-                        : t === 'publish'
-                          ? 'Publish'
-                          : 'Import / Export'}
+                  {SECTIONS[t]}
                 </button>
               ))}
             </nav>
@@ -374,34 +293,6 @@ export function DesignerPage() {
                     )
                   }
                 />
-                {!localModels && <RelationshipEditor
-                  relationships={detail.relationships}
-                  types={types}
-                  ownTypeId={selected}
-                  busy={busySchema}
-                  error={schemaError}
-                  onAdd={(spec: RelationshipDraft) =>
-                    run(
-                      () =>
-                        addRel({
-                          workspace: 'default',
-                          src_type: selected,
-                          ...spec,
-                          reverse_name: spec.reverse_name.trim() || null,
-                        }).unwrap(),
-                      setSchemaError,
-                    )
-                  }
-                  onUpdate={(rel_id, patch) =>
-                    run(
-                      () => updateRel({ rel_id, ...patch }).unwrap(),
-                      setSchemaError,
-                    )
-                  }
-                  onRetire={(rel_id) =>
-                    run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
-                  }
-                />}
               </>
             )}
 
@@ -418,41 +309,6 @@ export function DesignerPage() {
                 )}
               </details>
             )}
-
-            {tab === 'canvas' &&
-              (workspaceQ.isLoading ? (
-                <div className="section-card">
-                  <p className="status-line">Loading schema…</p>
-                </div>
-              ) : workspaceQ.error ? (
-                <div className="section-card" role="alert">
-                  <p className="field-error">{apiMessage(workspaceQ.error)}</p>
-                </div>
-              ) : (
-                <>
-                  {schemaError && (
-                    <p className="field-error" role="alert">
-                      {schemaError}
-                    </p>
-                  )}
-                  <SchemaCanvas
-                    workspace="default"
-                    types={workspaceQ.data?.types ?? []}
-                    selectedId={selected}
-                    busy={adding.isLoading}
-                    onSelect={(id) => setSelectedId(id)}
-                    onAddRelationship={(spec) =>
-                      run(
-                        () => addRel({ workspace: 'default', ...spec }).unwrap(),
-                        setSchemaError,
-                      )
-                    }
-                    onRetireRelationship={(rel_id) =>
-                      run(() => retireRel({ rel_id }).unwrap(), setSchemaError)
-                    }
-                  />
-                </>
-              ))}
 
             {tab === 'records' &&
               (detail.version === 0 || !liveSpec ? (
@@ -517,11 +373,6 @@ export function DesignerPage() {
                           )
                         }
                       />
-                      <LinksEditor
-                        recordId={editingRecord.record_id}
-                        relationships={activeLiveRels}
-                        types={types}
-                      />
                     </>
                   )}
                   <RecordGrid
@@ -556,124 +407,6 @@ export function DesignerPage() {
                 </>
               ))}
 
-            {tab === 'publish' && (
-              <PublishPanel
-                detail={detail}
-                versions={versionsQ.data?.versions ?? []}
-                validateResult={validateResult}
-                validating={validating.isLoading}
-                validateError={validateError}
-                publishing={publishing.isLoading}
-                publishResult={publishResult}
-                publishRefusal={publishRefusal}
-                rollingBack={rollingBack.isLoading}
-                diffOps={
-                  (diffQ.data?.ops as DesignerMigrationOp[] | undefined) ?? null
-                }
-                diffLoading={diffQ.isFetching}
-                onValidate={() =>
-                  validateDraft({ id: selected })
-                    .unwrap()
-                    .then((r) => {
-                      setValidateResult(r);
-                      setValidateError(null);
-                    })
-                    .catch((e: unknown) => {
-                      setValidateError(apiMessage(e));
-                      setValidateResult(null);
-                    })
-                }
-                onPublish={(opts) => {
-                  setPublishRefusal(null);
-                  setPublishResult(null);
-                  publishType({ id: selected, ...opts })
-                    .unwrap()
-                    .then((r) => setPublishResult(r))
-                    .catch((e: unknown) => {
-                      const data = (e as { data?: unknown }).data as
-                        | { report?: unknown; error?: string }
-                        | undefined;
-                      setPublishRefusal({
-                        error: apiMessage(e),
-                        report:
-                          (data?.report as DesignerPublishRefusal['report']) ??
-                          null,
-                      });
-                    });
-                }}
-                onRollback={(to_version) =>
-                  run(
-                    () => rollbackType({ id: selected, to_version }).unwrap(),
-                    setValidateError,
-                  )
-                }
-                onDiff={(from, to) => setDiffArgs({ from, to })}
-              />
-            )}
-
-            {tab === 'transfer' && (
-              <ImportExport
-                busy={importing.isLoading}
-                exporting={exporting.isLoading}
-                exportText={exportText}
-                importReport={importReport}
-                importDone={importDone}
-                error={transferError}
-                onExport={(typesText) => {
-                  const names = typesText
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean);
-                  exportSchema(names.length > 0 ? { types: names } : undefined)
-                    .unwrap()
-                    .then((doc) => {
-                      setExportText(JSON.stringify(doc, null, 2));
-                      setTransferError(null);
-                    })
-                    .catch((e: unknown) => setTransferError(apiMessage(e)));
-                }}
-                onValidateImport={(docText, prefix) => {
-                  let doc: unknown;
-                  try {
-                    doc = JSON.parse(docText);
-                  } catch {
-                    setTransferError('Schema text is not valid JSON');
-                    return;
-                  }
-                  validateImport({
-                    doc,
-                    ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-                  })
-                    .unwrap()
-                    .then((r) => {
-                      setImportReport(r);
-                      setTransferError(null);
-                    })
-                    .catch((e: unknown) => setTransferError(apiMessage(e)));
-                }}
-                onImport={(docText, prefix) => {
-                  let doc: unknown;
-                  try {
-                    doc = JSON.parse(docText);
-                  } catch {
-                    setTransferError('Schema text is not valid JSON');
-                    return;
-                  }
-                  setImportDone(null);
-                  importSchema({
-                    doc,
-                    ...(prefix.trim() ? { prefix: prefix.trim() } : {}),
-                  })
-                    .unwrap()
-                    .then((r) => {
-                      setImportDone(r);
-                      setImportReport(null);
-                      setTransferError(null);
-                    })
-                    .catch((e: unknown) => setTransferError(apiMessage(e)));
-                }}
-              />
-            )}
           </>
         )}
       </div>

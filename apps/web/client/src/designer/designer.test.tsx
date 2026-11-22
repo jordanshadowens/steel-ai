@@ -106,10 +106,10 @@ it('type list creates, selects, and renames', () => {
       onArchive={() => {}}
     />,
   );
-  fireEvent.change(screen.getByLabelText('New type name'), {
+  fireEvent.change(screen.getByLabelText('Model name'), {
     target: { value: 'Author' },
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
   expect(onCreate).toHaveBeenCalledWith('Author');
   fireEvent.click(screen.getByRole('button', { name: /Book/ }));
   expect(onSelect).toHaveBeenCalledWith('ut_1');
