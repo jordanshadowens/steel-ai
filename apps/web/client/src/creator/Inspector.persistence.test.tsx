@@ -250,6 +250,9 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   ]);
   step(END_NODE_ID);
   expect(screen.getByRole('complementary', { name: 'Finish' })).toBeTruthy();
+  const bindings = screen.getByRole('region', { name: 'Bindings' });
+  expect(bindings.contains(screen.getByRole('group', { name: 'Workflow outputs' }))).toBe(true);
+  expect(bindings.contains(screen.getByRole('group', { name: 'Data Designer inputs' }))).toBe(true);
   fireEvent.change(screen.getByLabelText('Bound designer type'), {
     target: { value: 'project' },
   });
@@ -261,7 +264,7 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   expect(store.getState().workflowEditor.draft?.inputs?.[0]?.designer)
     .toEqual({ type: 'project' });
   settings();
-  expect(screen.queryByRole('region', { name: 'Outputs' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Bindings' })).toBeNull();
   step(END_NODE_ID);
   fireEvent.click(screen.getByText('+ Add binding'));
   fireEvent.change(screen.getByLabelText('New output key'), {
@@ -272,7 +275,7 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   });
   fireEvent.click(screen.getByText('Add', { selector: 'button' }));
   settings();
-  expect(screen.queryByRole('region', { name: 'Outputs' })).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Bindings' })).toBeNull();
   step(END_NODE_ID);
   expect(
     (screen.getByLabelText('Source for total') as HTMLInputElement).value,

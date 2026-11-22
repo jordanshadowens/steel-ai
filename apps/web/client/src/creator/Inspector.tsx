@@ -424,15 +424,19 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
   const [addingBinding, setAddingBinding] = useState(false);
 
   return (
-    <div className="finish-settings configuration-card">
-      <section aria-label="Outputs" className="settings-outputs">
-        <h3>
-          Output bindings{' '}
+    <section
+      className="finish-settings configuration-card"
+      aria-labelledby="finish-bindings-heading"
+    >
+      <h3 id="finish-bindings-heading">Bindings</h3>
+      <div className="settings-outputs" role="group" aria-label="Workflow outputs">
+        <h4>
+          Workflow outputs{' '}
           <span className="count-badge">
             {Object.values(outputs).filter((v) => v?.from?.trim()).length}{' '}
             mapped
           </span>
-        </h3>
+        </h4>
         {Object.entries(outputs).map(([k, v]) => (
           <div key={k} className="map-row output-binding-row">
             <code className="num">{k}</code>
@@ -498,18 +502,31 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
             >
               Add
             </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                setNewKey('');
+                setNewFrom('');
+                setAddingBinding(false);
+              }}
+            >
+              Cancel
+            </button>
           </div>
         )}
-        <button
-          type="button"
-          className="btn add-binding-button"
-          onClick={() => setAddingBinding((v) => !v)}
-        >
-          {addingBinding ? 'Cancel new binding' : '+ Add binding'}
-        </button>
-      </section>
-      <section aria-labelledby="finish-bindings-heading">
-        <h3 id="finish-bindings-heading">Data Designer bindings (optional)</h3>
+        {!addingBinding && (
+          <button
+            type="button"
+            className="btn add-binding-button"
+            onClick={() => setAddingBinding(true)}
+          >
+            + Add binding
+          </button>
+        )}
+      </div>
+      <div className="finish-inputs" role="group" aria-label="Data Designer inputs">
+        <h4>Data Designer inputs</h4>
         {(def.inputs ?? []).length === 0 && <p>No workflow inputs to bind.</p>}
         {(def.inputs ?? []).map((input) => (
           <fieldset key={input.name}>
@@ -532,8 +549,8 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
             />
           </fieldset>
         ))}
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
