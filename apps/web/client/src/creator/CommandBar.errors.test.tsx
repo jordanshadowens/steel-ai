@@ -30,7 +30,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('shows the structured validation error on save failure, not generic Request failed', async () => {
+it('sends structured save errors to Issues', async () => {
   const store = configureStore({
     reducer: { workflowEditor: workflowEditorReducer },
   });
@@ -59,13 +59,14 @@ it('shows the structured validation error on save failure, not generic Request f
       };
     },
   }));
+  const onValidated = vi.fn();
   render(
     <Provider store={store}>
       <NoticeProvider>
         <CommandBar
           onOpenLibrary={vi.fn()}
           onOpenSettings={vi.fn()}
-          onValidated={vi.fn()}
+          onValidated={onValidated}
           validationStatus={null}
         />
       </NoticeProvider>
@@ -76,7 +77,11 @@ it('shows the structured validation error on save failure, not generic Request f
   });
   const alert = screen.getByRole('alert');
   expect(alert.textContent).toContain('Save failed');
-  expect(alert.textContent).toContain('"item" is not a declared input');
+  expect(alert.textContent).toContain('See Issues for details.');
+  expect(onValidated).toHaveBeenCalledWith(expect.objectContaining({
+    valid: false,
+    serverErrors: ['steps[0].start.config.fields: "item" is not a declared input'],
+  }), true);
   expect(alert.textContent).not.toContain('Request failed');
-  expect(alert.textContent).toContain('Your draft is kept locally');
+  expect(alert.textContent).toContain('Your edits are still in this draft');
 });

@@ -3,6 +3,7 @@ import { blankDefinition } from '../creator/adapter';
 import {
   openDefinition,
   setSkillMode,
+  setViewport,
   setSkillSample,
   updateDraft,
   workflowEditorReducer,
@@ -45,19 +46,16 @@ it('recovers unsaved fields and sample values without marking the draft saved', 
     workflowEditorReducer(initial, updateDraft(draft)),
     setSkillSample({ stepId: 'start', param: 'expenses', value: '123' }),
   );
-  saveWorkflowRecovery(
-    sessionStorage,
-    workflowEditorReducer(
-      edited,
-      setSkillMode({ stepId: 'start', mode: 'new' }),
-    ),
-  );
+  const withMode = workflowEditorReducer(edited, setSkillMode({ stepId: 'start', mode: 'new' }));
+  const viewport = { x: 120, y: -20, zoom: 1.4 };
+  saveWorkflowRecovery(sessionStorage, workflowEditorReducer(withMode, setViewport(viewport)));
   const recovered = loadWorkflowRecovery(sessionStorage)!;
   expect(recovered.draft?.steps?.[0].name).toBe('Expense details');
   expect(recovered.savedJson).toBe(initial.savedJson);
   expect(JSON.stringify(recovered.draft)).not.toBe(recovered.savedJson);
   expect(recovered.skillSamples.start.expenses).toBe('123');
   expect(recovered.skillModes.start).toBe('new');
+  expect(recovered.viewport).toEqual(viewport);
 });
 
 it('ignores corrupt recovery and removes recovery when the draft is closed', () => {
@@ -68,4 +66,15 @@ it('ignores corrupt recovery and removes recovery when the draft is closed', () 
     workflowEditorReducer(undefined, { type: '@@init' }),
   );
   expect(sessionStorage.getItem('steel.workflow-draft.v1')).toBeNull();
+});
+
+
+it('recovers the saved canvas view when the local view is invalid', () => {
+  const draft = blankDefinition();
+  draft.ui = { ...draft.ui, view: { x: 10, y: 20, w: 0, h: 0, zoom: 3 } };
+  sessionStorage.setItem('steel.workflow-draft.local.v1', JSON.stringify({
+    draft,
+    viewport: { x: null, y: 0, zoom: 1 },
+  }));
+  expect(loadWorkflowRecovery(sessionStorage)?.viewport).toEqual({ x: 10, y: 20, zoom: 2 });
 });

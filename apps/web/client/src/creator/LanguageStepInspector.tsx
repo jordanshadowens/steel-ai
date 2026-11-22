@@ -40,7 +40,7 @@ export function LanguageStepInspector({
     return (
       <section aria-label="Recall executions">
         <CheckField
-          label="Only definition-verified cases"
+          label="Verified runs only"
           checked={c.verified_only === true}
           onChange={(v) => set('verified_only', v)}
         />
@@ -50,7 +50,7 @@ export function LanguageStepInspector({
           onCommit={(v) => set('query_template', v)}
         />
         <CheckField
-          label="Require exact verified candidate"
+          label="Require an exact match"
           checked={!!c.match}
           onChange={(enabled) =>
             edit((d) => {
@@ -93,10 +93,8 @@ export function LanguageStepInspector({
           </fieldset>
         )}
         <p>
-          Exact selection filters verified cases before ranking. No match
-          returns no candidate; it never falls back to similarity. Copy hashes
-          from the verification evidence and test the selected source again
-          before reuse.
+          Copy the hashes from the test results. Only verified cases with
+          matching hashes qualify.
         </p>
       </section>
     );
@@ -105,20 +103,21 @@ export function LanguageStepInspector({
     return (
       <section aria-label="Verify observed source">
         <DataRefPicker
-          label="Observed execution ID"
+          label="Program run ID"
           value={c.candidate?.from ?? ''}
           options={refs}
           onCommit={(from) => set('candidate', { from })}
         />
         <NumberField
           label="Source output index"
+          integer
+          min={0}
           value={c.output_index ?? 0}
           onCommit={(v) => set('output_index', v)}
         />
         <p>
-          Enter tests independently of generated source. They become immutable
-          in the published version. Passing promotes a case only for these
-          examples, not universal correctness.
+          Write tests using independently known answers. Publishing saves these
+          tests with the workflow version.
         </p>
         {(c.tests ?? []).map((t: any, i: number) => (
           <fieldset key={i}>
@@ -180,7 +179,7 @@ export function LanguageStepInspector({
   return (
     <section aria-label="Execute language">
       <CheckField
-        label="Load inputs from an authorized repository"
+        label="Load inputs from a repository"
         checked={!!c.repository}
         onChange={(enabled) =>
           edit((d) => {
@@ -211,7 +210,7 @@ export function LanguageStepInspector({
             onCommit={(v) => set('repository', { ...c.repository, grant: v })}
           />
           <TextField
-            label="Exact source commit"
+            label="Source commit"
             value={c.repository.commit ?? ''}
             onCommit={(v) => set('repository', { ...c.repository, commit: v })}
           />
@@ -230,9 +229,8 @@ export function LanguageStepInspector({
             }
           />
           <p>
-            The runtime owner must grant this account access to these exact
-            files and commit. Files load in the listed order during execution.
-            Repository source is not sent to the model by the draft button.
+            Use a grant for these files and commit. The program reads the
+            files in order when it runs.
           </p>
         </fieldset>
       )}
@@ -258,16 +256,16 @@ export function LanguageStepInspector({
             }
             set('program', proposal.program);
             setError(
-              'Draft source received. Save and test it before verification or reuse.',
+              'Draft ready. Review the program and run your tests.',
             );
           } catch {
             setError(
-              'Generation unavailable or refused. An authorized language connector is required.',
+              'Could not draft the program. Check the language connector.',
             );
           }
         }}
       >
-        Draft executable program
+        Draft program
       </button>
       <TextField
         label="Problem description"
@@ -275,7 +273,7 @@ export function LanguageStepInspector({
         onCommit={(v) => set('problem', v)}
       />
       <TextField
-        label="Executable .lang program"
+        label=".lang program"
         multiline
         value={c.program ?? ''}
         onCommit={(v) => set('program', v)}

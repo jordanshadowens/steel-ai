@@ -43,8 +43,9 @@ export interface WorkflowStep {
 
 export interface WorkflowUiState {
   positions?: Record<string, { x: number; y: number }>;
-  view?: { x: number; y: number; w: number; h: number };
+  view?: { x: number; y: number; w: number; h: number; zoom?: number };
   input_presentation?: unknown;
+  finishModelInputs?: Record<string, string>;
 }
 
 export interface WorkflowDefinition {

@@ -3,8 +3,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { Inspector } from './Inspector';
-import { blankDefinition } from './adapter';
+import { blankDefinition, savePayload } from './adapter';
 import {
+  acceptSavedDraft,
   openDefinition,
   selectStep,
   setPanel,
@@ -20,6 +21,7 @@ vi.stubGlobal(
 );
 
 vi.mock('../api/steelApi', () => ({
+  useListWorkflowsQuery: () => ({ data: { workflows: [] } }),
   useListSkillsQuery: () => ({ data: { skills: [] } }),
   useDraftSkillMutation: () => [vi.fn(), {}],
   useListTemplatesQuery: () => ({ data: { templates: [] } }),
@@ -65,14 +67,22 @@ it('commits input renames on blur (not per keystroke) and keeps the default star
   const { store, rerender } = setup();
   const nameBox = screen.getByLabelText('Input 1 name') as HTMLInputElement;
   expect(nameBox.value).toBe('item');
+  const initialDraft = store.getState().workflowEditor.draft;
+  fireEvent.change(nameBox, { target: { value: '  item  ' } });
+  fireEvent.blur(nameBox);
+  expect(nameBox.value).toBe('item');
+  expect(store.getState().workflowEditor.draft).toBe(initialDraft);
   fireEvent.change(nameBox, { target: { value: 'food_total' } });
+  nameBox.focus();
+  fireEvent.keyDown(nameBox, { key: 'Enter', isComposing: true });
+  expect(document.activeElement).toBe(nameBox);
   rerender();
   // Typing buffers locally: the draft is untouched until blur (no transient resets).
   expect(store.getState().workflowEditor.draft?.inputs?.[0].name).toBe('item');
   expect(
     (screen.getByLabelText('Input 1 name') as HTMLInputElement).value,
   ).toBe('food_total');
-  fireEvent.blur(screen.getByLabelText('Input 1 name'));
+  fireEvent.keyDown(nameBox, { key: 'Enter' });
   rerender();
   const draft = store.getState().workflowEditor.draft!;
   expect(draft.inputs?.[0].name).toBe('food_total');
@@ -82,6 +92,20 @@ it('commits input renames on blur (not per keystroke) and keeps the default star
   // Type/required preserved across the rename commit.
   expect(draft.inputs?.[0].type).toBe('string');
   expect(draft.inputs?.[0].required).toBe(true);
+});
+
+it('keeps focus in Inputs as fields are added or removed', () => {
+  const { rerender } = setup();
+  const add = screen.getByRole('button', { name: '+ Add input' });
+  fireEvent.click(add);
+  rerender();
+  expect(document.activeElement).toBe(screen.getByLabelText('Input 2 name'));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove input input2' }));
+  rerender();
+  expect(document.activeElement).toBe(screen.getByLabelText('Input 1 name'));
+  fireEvent.click(screen.getByRole('button', { name: 'Remove input item' }));
+  rerender();
+  expect(document.activeElement).toBe(add);
 });
 
 it('adds typed inputs via settings and preserves them across navigation', () => {
@@ -180,4 +204,53 @@ it('offers explicit sync for a stale default start without rewriting custom work
   expect((draft.steps?.[0]?.config as { fields: string[] }).fields).toEqual([
     'food_total',
   ]);
+});
+
+it('locks the workflow ID after save and keeps the identity from the accepted draft', () => {
+  const { store, rerender } = setup();
+  const id = screen.getByLabelText('Workflow id') as HTMLInputElement;
+  expect(id.readOnly).toBe(false);
+  fireEvent.change(id, { target: { value: 'before-save' } });
+  fireEvent.blur(id);
+  const submitted = store.getState().workflowEditor.draft!;
+  fireEvent.change(id, { target: { value: 'changed-during-save' } });
+  fireEvent.blur(id);
+  store.dispatch(acceptSavedDraft({ definition: submitted, version: 1, status: 'draft' }));
+  rerender();
+  expect(id.readOnly).toBe(true);
+  expect(id.value).toBe('before-save');
+  expect(store.getState().workflowEditor.openWorkflowId).toBe('before-save');
+});
+
+it('keeps input names unique by default and flags duplicate names in settings', () => {
+  const { store } = setup();
+  fireEvent.click(screen.getByRole('button', { name: '+ Add input' }));
+  const second = screen.getByLabelText('Input 2 name');
+  fireEvent.change(second, { target: { value: 'input3' } });
+  fireEvent.blur(second);
+  fireEvent.click(screen.getByRole('button', { name: '+ Add input' }));
+  const third = screen.getByLabelText('Input 3 name') as HTMLInputElement;
+  expect(third.value).toBe('input4');
+  fireEvent.change(third, { target: { value: 'item' } });
+  fireEvent.blur(third);
+  expect(third.getAttribute('aria-invalid')).toBe('true');
+  expect(screen.getAllByText('"item" is used more than once.')).toHaveLength(2);
+  expect(store.getState().workflowEditor.draft?.steps?.[0]?.config?.fields)
+    .toEqual(['item', 'input3', 'input4']);
+  fireEvent.change(third, { target: { value: 'input4' } });
+  fireEvent.blur(third);
+  expect(third.hasAttribute('aria-invalid')).toBe(false);
+});
+
+
+it('sends approval choices using the runtime policy values', () => {
+  const { store } = setup();
+  fireEvent.change(screen.getByLabelText('Execution approval'), { target: { value: 'always' } });
+  fireEvent.change(screen.getByLabelText('Skill approval'), { target: { value: 'auto' } });
+
+  const { draft, viewport } = store.getState().workflowEditor;
+  expect(savePayload(draft!, viewport).policy).toMatchObject({
+    execution_approval: 'always',
+    skill_approval: 'auto',
+  });
 });

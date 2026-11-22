@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -9,6 +9,7 @@ import {
   applyEdgeChanges,
   applyNodeChanges,
   useReactFlow,
+  useStore as useFlowStore,
 } from '@xyflow/react';
 import type {
   Connection,
@@ -19,6 +20,9 @@ import type {
   NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useStore } from 'react-redux';
+import type { WorkflowStep } from '../api/contracts';
+import type { RootState } from '../store/store';
 import { ModalDialog } from '../app/FocusTrap';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import {
@@ -30,13 +34,16 @@ import {
 } from '../store/workflowEditor';
 import {
   END_NODE_ID,
-  TYPE_LABELS,
+  stepTypeLabel,
+  arrangeSteps,
   definitionToFlow,
   deleteStep,
-  structureKey,
   withPositions,
 } from './adapter';
 import type { StepNodeData } from './adapter';
+
+type StepIssueCount = { errors: number; warnings: number };
+type CreatorNodeData = StepNodeData & { issues?: StepIssueCount };
 import type { WorkflowDefinition } from '../api/contracts';
 import { useNotify } from './notices';
 
@@ -45,7 +52,7 @@ import { useNotify } from './notices';
 const StepNode = memo(function StepNode({
   data,
   selected,
-}: NodeProps<Node<StepNodeData>>) {
+}: NodeProps<Node<CreatorNodeData>>) {
   const condHandles = [];
   for (let i = 0; i < data.ruleCount; i++) {
     condHandles.push(
@@ -64,12 +71,20 @@ const StepNode = memo(function StepNode({
       <Handle type="target" position={Position.Left} title="Connect here" />
       <div className="step-node-label">{data.label}</div>
       <div className="step-node-type">{data.typeLabel}</div>
-      <div className="step-node-id num">{data.stepId}</div>
+      {data.stepId !== data.label && <div className="step-node-id num">{data.stepId}</div>}
+      {data.issues && (
+        <div className={data.issues.errors ? 'step-node-check status-bad' : 'step-node-check status-warn'}>
+          {[
+            data.issues.errors && `${data.issues.errors} ${data.issues.errors === 1 ? 'error' : 'errors'}`,
+            data.issues.warnings && `${data.issues.warnings} ${data.issues.warnings === 1 ? 'warning' : 'warnings'}`,
+          ].filter(Boolean).join(' · ')}
+        </div>
+      )}
       <Handle
         type="source"
         position={Position.Right}
         style={{ top: '50%' }}
-        title="Next step (on success)"
+        title={data.stepType === 'conditional_routing' ? 'If no rule matches' : 'Next step (on success)'}
       />
       <Handle
         id="fail"
@@ -165,10 +180,165 @@ function applyEdgeDelete(
   return null;
 }
 
+function StepFinder({ onSelect }: { onSelect: (id: string, bodyStep?: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const searchField = useRef<HTMLInputElement>(null);
+  const results = useRef<HTMLUListElement>(null);
+  const steps = useAppSelector((state) => state.workflowEditor.draft?.steps);
+  const selected = useAppSelector((state) => state.workflowEditor.selectedStepId);
+  const close = useCallback(() => {
+    setOpen(false);
+    setSearch('');
+  }, []);
+
+  useEffect(() => {
+    function openFromKeyboard(event: KeyboardEvent) {
+      if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey ||
+          event.isComposing || event.defaultPrevented || open ||
+          document.querySelector('[aria-modal="true"]')) return;
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.closest('.react-flow, .viewport-controls') ||
+          target.closest('input, textarea, select, [contenteditable]')) return;
+      event.preventDefault();
+      setOpen(true);
+    }
+    window.addEventListener('keydown', openFromKeyboard);
+    return () => window.removeEventListener('keydown', openFromKeyboard);
+  }, [open]);
+
+  const entries: Array<{ id: string; name: string; type: string; loopId?: string; loopName?: string }> = open ? [
+    ...(steps ?? []).flatMap((step) => {
+      const name = step.name || step.step_id;
+      const body = step.type === 'iteration' && Array.isArray(step.config?.body)
+        ? step.config.body as WorkflowStep[]
+        : [];
+      return [
+        { id: step.step_id, name, type: stepTypeLabel(step) },
+        ...body.filter((child) => typeof child?.step_id === 'string' && typeof child.type === 'string')
+          .map((child) => ({
+          id: child.step_id,
+          name: child.name || child.step_id,
+          type: stepTypeLabel(child),
+          loopId: step.step_id,
+          loopName: name,
+        })),
+      ];
+    }),
+    { id: END_NODE_ID, name: 'Finish', type: 'Workflow outputs' },
+  ] : [];
+  const query = search.trim().toLowerCase();
+  const terms = query.split(/\s+/);
+  const ranked = query
+    ? entries.map((entry) => {
+        const id = entry.id.toLowerCase();
+        const name = entry.name.toLowerCase();
+        const exact = id === query || name === query;
+        const prefix = id.startsWith(query) || name.startsWith(query);
+        const fields = [id, name, entry.type.toLowerCase(), entry.loopName?.toLowerCase()];
+        const partial = fields.some((value) => value?.includes(query));
+        const allTerms = terms.every((term) => fields.some((value) => value?.includes(term)));
+        return { entry, rank: exact ? 0 : prefix ? 1 : partial ? 2 : allTerms ? 3 : 4 };
+      })
+    : [];
+  const lastRank = ranked.some(({ rank }) => rank < 3) ? 2 : 3;
+  const matches = query
+    ? ranked.filter(({ rank }) => rank <= lastRank)
+      .sort((a, b) => a.rank - b.rank)
+      .map(({ entry }) => entry)
+    : entries;
+
+  function choose(id: string, loopId?: string) {
+    close();
+    if (loopId) onSelect(loopId, id);
+    else onSelect(id);
+  }
+
+  return (
+    <>
+      <button type="button" className="btn" aria-haspopup="dialog" aria-keyshortcuts="/" title="Find step (/)" onClick={() => setOpen(true)}>
+        Find step
+      </button>
+      {open && (
+        <ModalDialog label="Find step" onClose={close}>
+          <h2>Find step</h2>
+          <form onSubmit={(event) => {
+            event.preventDefault();
+            if (matches[0]) choose(matches[0].id, matches[0].loopId);
+          }}>
+            <label className="step-finder-search">
+              <span>Search by name, ID, or type</span>
+              <input
+                ref={searchField}
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'ArrowDown' || event.nativeEvent.isComposing) return;
+                  const first = results.current?.querySelector<HTMLButtonElement>('button');
+                  if (!first) return;
+                  event.preventDefault();
+                  first.focus();
+                }}
+              />
+            </label>
+          </form>
+          <p className="status-line" role="status">
+            {matches.length === 0 ? 'No matching steps.' : `${matches.length} ${matches.length === 1 ? 'result' : 'results'}`}
+          </p>
+          {matches.length === 0 && search.trim() && (
+            <button type="button" className="btn" onClick={() => {
+              setSearch('');
+              searchField.current?.focus();
+            }}>Clear search</button>
+          )}
+          <ul
+            ref={results}
+            className="step-finder-results"
+            onKeyDown={(event) => {
+              if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+              const buttons = Array.from(event.currentTarget.querySelectorAll('button'));
+              const index = buttons.findIndex((button) => button === event.target);
+              if (index === -1) return;
+              event.preventDefault();
+              if (event.key === 'Home' || event.key === 'End') {
+                buttons.at(event.key === 'Home' ? 0 : -1)?.focus();
+                return;
+              }
+              const next = index + (event.key === 'ArrowUp' ? -1 : 1);
+              if (next < 0) searchField.current?.focus();
+              else buttons[next]?.focus();
+            }}
+          >
+            {matches.map(({ id, name, type, loopId, loopName }) => (
+              <li key={JSON.stringify([loopId, id])}>
+                <button
+                  type="button"
+                  className="btn"
+                  aria-current={!loopId && id === selected ? 'true' : undefined}
+                  onClick={() => choose(id, loopId)}
+                >
+                  <strong>{name}</strong>
+                  <span>{id === END_NODE_ID ? type : `${type} · ${id}${loopName ? ` · In ${loopName}` : ''}`}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="dialog-actions">
+            <button type="button" className="btn" onClick={close}>Close</button>
+          </div>
+        </ModalDialog>
+      )}
+    </>
+  );
+}
+
 function ViewportControls({
+  onGoToStep,
   minimap,
   setMinimap,
 }: {
+  onGoToStep: (id: string, bodyStep?: string) => void;
   minimap: boolean;
   setMinimap: (v: boolean) => void;
 }) {
@@ -178,6 +348,7 @@ function ViewportControls({
   const canRedo = useAppSelector((s) => s.workflowEditor.future.length > 0);
   return (
     <div className="viewport-controls" role="toolbar" aria-label="Canvas view">
+      <StepFinder onSelect={onGoToStep} />
       <ViewportButtons minimap={minimap} setMinimap={setMinimap} />
       <button
         type="button"
@@ -215,13 +386,15 @@ function ViewportControls({
         >
           <h2>Keyboard shortcuts</h2>
           <ul>
-            <li>Delete / Backspace — delete the selected step or connection</li>
-            <li>Escape — close the topmost panel, then clear selection</li>
-            <li>Ctrl+Z / Ctrl+Y — undo / redo</li>
-            <li>Arrow keys — move the selected step (Shift for 1px)</li>
-            <li>Drag canvas background — pan; mouse wheel — zoom to cursor</li>
-            <li>Drag from a step edge handle — connect steps</li>
+            <li>Press <kbd>Delete</kbd> or <kbd>Backspace</kbd> to remove the selected step or connection.</li>
+            <li>Press <kbd>Esc</kbd> to close the open panel or clear your selection.</li>
+            <li>Press <kbd>Ctrl</kbd> or <kbd>Cmd</kbd> + <kbd>S</kbd> to save.</li>
+            <li>Press <kbd>Ctrl</kbd> or <kbd>Cmd</kbd> + <kbd>Z</kbd> to undo. Add <kbd>Shift</kbd> to redo.</li>
+            <li>Use the arrow keys to move the selected step. Hold <kbd>Shift</kbd> to move one pixel.</li>
+            <li>With the canvas or its toolbar focused, press <kbd>/</kbd> to open Find step.</li>
+            <li>In Find step, press <kbd>Down</kbd> to enter the results, <kbd>Home</kbd> or <kbd>End</kbd> to jump, and <kbd>Enter</kbd> to open a step.</li>
           </ul>
+          <p>Drag the canvas to pan. Scroll to zoom toward the pointer. Drag from a step handle to connect steps.</p>
           <button
             type="button"
             className="btn btn-primary"
@@ -233,6 +406,26 @@ function ViewportControls({
       )}
     </div>
   );
+}
+
+export function graphViewPadding(canvas: HTMLElement | null) {
+  const inspector = canvas?.querySelector('.inspector');
+  if (!canvas || !inspector) return 0.2;
+  const bounds = canvas.getBoundingClientRect();
+  const panel = inspector.getBoundingClientRect();
+  const strips = [
+    { edge: 'right', area: (panel.left - bounds.left) * bounds.height, size: bounds.right - panel.left },
+    { edge: 'left', area: (bounds.right - panel.right) * bounds.height, size: panel.right - bounds.left },
+    { edge: 'bottom', area: (panel.top - bounds.top) * bounds.width, size: bounds.bottom - panel.top },
+    { edge: 'top', area: (bounds.bottom - panel.bottom) * bounds.width, size: panel.bottom - bounds.top },
+  ];
+  const abovePanel = strips.find((strip) => strip.edge === 'bottom');
+  const widest = panel.width >= bounds.width * 0.85 && abovePanel && abovePanel.area > 0
+    ? abovePanel
+    : strips.reduce((best, strip) => strip.area > best.area ? strip : best);
+  if (widest.area <= 0) return 0.2;
+  return { top: '16px', right: '16px', bottom: '16px', left: '16px',
+    [widest.edge]: `${Math.round(widest.size + 16)}px` } as const;
 }
 
 function ViewportButtons({
@@ -249,12 +442,30 @@ function ViewportButtons({
     setViewport: setFlowViewport,
   } = useReactFlow();
   const dispatch = useAppDispatch();
+  const store = useStore<RootState>();
+  const zoomPercent = useFlowStore((state) => Math.round(state.transform[2] * 100));
+  const atMinZoom = useFlowStore((state) => state.transform[2] <= state.minZoom);
+  const atMaxZoom = useFlowStore((state) => state.transform[2] >= state.maxZoom);
+  const atResetView = useFlowStore(({ transform: [x, y, zoom] }) => x === 0 && y === 0 && zoom === 1);
+  function fitCanvas(button: HTMLElement) {
+    void fitView({ padding: graphViewPadding(button.closest<HTMLElement>('.creator-canvas')) });
+  }
+  function arrange(button: HTMLElement) {
+    const draft = store.getState().workflowEditor.draft;
+    if (!draft) return;
+    const next = arrangeSteps(draft);
+    if (JSON.stringify(next.ui?.positions) !== JSON.stringify(draft.ui?.positions)) {
+      dispatch(updateDraft(next));
+    }
+    window.requestAnimationFrame(() => fitCanvas(button));
+  }
   return (
     <>
       <button
         type="button"
         className="btn"
         title="Zoom in"
+        disabled={atMaxZoom}
         onClick={() => void zoomIn()}
         aria-label="Zoom in"
       >
@@ -264,24 +475,30 @@ function ViewportButtons({
         type="button"
         className="btn"
         title="Zoom out"
+        disabled={atMinZoom}
         onClick={() => void zoomOut()}
         aria-label="Zoom out"
       >
         −
       </button>
+      <span className="canvas-zoom num" title="Canvas zoom">{zoomPercent}%</span>
       <button
         type="button"
         className="btn"
         title="Fit graph to view"
-        onClick={() => void fitView({ padding: 0.2 })}
+        onClick={(event) => fitCanvas(event.currentTarget)}
         aria-label="Fit graph"
       >
         Fit
       </button>
+      <button type="button" className="btn" title="Arrange steps without changing routes" onClick={(event) => arrange(event.currentTarget)}>
+        Arrange
+      </button>
       <button
         type="button"
         className="btn"
-        title="Reset saved view"
+        title="Reset canvas pan and zoom to 100%"
+        disabled={atResetView}
         onClick={() => {
           dispatch(setViewport({ x: 0, y: 0, zoom: 1 }));
           void setFlowViewport({ x: 0, y: 0, zoom: 1 });
@@ -303,8 +520,15 @@ function ViewportButtons({
   );
 }
 
-export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
+export function GraphCanvas({
+  stepIssues,
+  onGoToStep,
+}: {
+  stepIssues: ReadonlyMap<string, StepIssueCount>;
+  onGoToStep: (id: string, bodyStep?: string) => void;
+}) {
   const dispatch = useAppDispatch();
+  const store = useStore<RootState>();
   const notify = useNotify();
   const draft = useAppSelector((s) => s.workflowEditor.draft);
   const selectedStepId = useAppSelector((s) => s.workflowEditor.selectedStepId);
@@ -313,7 +537,6 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
   const [edges, setEdges] = useState<Edge[]>([]);
   const [minimap, setMinimap] = useState(false);
 
-  const key = useMemo(() => (draft ? structureKey(draft) : ''), [draft]);
   // Rebuild from the definition on structural edits or selection changes.
   // Position commits flow through the draft too, carrying identical values,
   // so the canvas never jumps after a drop.
@@ -322,9 +545,12 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
       return;
     }
     const flow = definitionToFlow(draft, selectedStepId);
-    setNodes(flow.nodes);
+    setNodes(flow.nodes.map((node) => {
+      const issues = stepIssues.get(node.id);
+      return issues ? { ...node, data: { ...node.data, issues } } : node;
+    }));
     setEdges(flow.edges);
-  }, [draft, key, selectedStepId, workflowKey]);
+  }, [draft, selectedStepId, stepIssues]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -336,18 +562,6 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
             : selected === undefined
               ? null
               : selected;
-        } else if (ch.type === 'remove' && draft) {
-          const next = deleteStep(draft, ch.id);
-          if (!next) {
-            notify('error', 'A workflow needs at least one step.');
-            const flow = definitionToFlow(draft, selectedStepId);
-            setNodes(flow.nodes);
-            setEdges(flow.edges);
-          } else {
-            dispatch(updateDraft(next));
-            dispatch(selectStep(null));
-            notify('ok', `Deleted ${ch.id}; dangling edges now point at end.`);
-          }
         }
       }
       if (selected !== undefined) {
@@ -360,34 +574,49 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
         ),
       );
     },
-    [dispatch, draft, notify, selectedStepId],
+    [dispatch],
   );
 
-  const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => {
-      for (const ch of changes) {
-        if (ch.type === 'remove' && draft) {
-          const next = applyEdgeDelete(draft, ch.id);
-          if (next) {
-            dispatch(updateDraft(next));
-            notify(
-              'ok',
-              ch.id.startsWith('fail:')
-                ? 'Failure route removed.'
-                : 'Rule now follows the default path.',
-            );
-          }
-        }
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((current) =>
+      applyEdgeChanges(changes.filter((change) => change.type !== 'remove'), current),
+    );
+  }, []);
+
+  const onDelete = useCallback(({ nodes: removedNodes, edges: removedEdges }: {
+    nodes: Node[];
+    edges: Edge[];
+  }) => {
+    const editor = store.getState().workflowEditor;
+    const current = editor.draft;
+    if (!current) return;
+
+    const removedIds = new Set(removedNodes.map((node) => node.id));
+    const stepIds = (current.steps ?? [])
+      .filter((step) => removedIds.has(step.step_id))
+      .map((step) => step.step_id);
+    if (stepIds.length && stepIds.length === current.steps?.length) {
+      notify('error', 'Keep at least one step in the workflow.');
+      return;
+    }
+
+    let next = current;
+    for (const id of stepIds) next = deleteStep(next, id) ?? next;
+    for (const edge of removedEdges) {
+      if (!removedIds.has(edge.source) && !removedIds.has(edge.target)) {
+        next = applyEdgeDelete(next, edge.id) ?? next;
       }
-      setEdges((eds) =>
-        applyEdgeChanges(
-          changes.filter((c) => c.type !== 'remove'),
-          eds,
-        ),
-      );
-    },
-    [dispatch, draft, notify],
-  );
+    }
+    if (next === current) return;
+    dispatch(updateDraft(next));
+    if (editor.selectedStepId && removedIds.has(editor.selectedStepId)) {
+      dispatch(selectStep(null));
+    }
+    const count = stepIds.length;
+    notify('ok', count > 0
+      ? `Removed ${count} ${count === 1 ? 'step' : 'steps'}.`
+      : 'Removed selected connections.');
+  }, [dispatch, notify, store]);
 
   const onConnect = useCallback(
     (conn: Connection) => {
@@ -442,6 +671,7 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onDelete={onDelete}
         onConnect={onConnect}
         onNodeDragStop={onNodeDragStop}
         onMoveEnd={onMoveEnd}
@@ -464,7 +694,7 @@ export function GraphCanvas({ workflowKey }: { workflowKey: string }) {
         <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
         {minimap && <MiniMap pannable zoomable />}
       </ReactFlow>
-      <ViewportControls minimap={minimap} setMinimap={setMinimap} />
+      <ViewportControls minimap={minimap} setMinimap={setMinimap} onGoToStep={onGoToStep} />
     </div>
   );
 }

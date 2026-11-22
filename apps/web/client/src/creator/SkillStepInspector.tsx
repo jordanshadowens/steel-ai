@@ -12,7 +12,7 @@ import {
   setSkillMode,
 } from '../store/workflowEditor';
 import { CheckField, DataRefPicker, SelectField, TextField } from './fields';
-import { MappingEditor } from './stepConfigs';
+import { MappingEditor, findStep } from './stepConfigs';
 import type { EditFn } from './stepConfigs';
 import type { RefOption } from './preflight';
 import { useNotify } from './notices';
@@ -84,8 +84,8 @@ export function SkillStepInspector({
   const mapping = cfg.inputs_mapping ?? {};
   const params = Object.keys(mapping);
   const samples = useAppSelector(
-    (s) => s.workflowEditor.skillSamples[step.step_id] ?? {},
-  );
+    (s) => s.workflowEditor.skillSamples[step.step_id],
+  ) ?? {};
   const draftOutcome = useAppSelector(
     (s) => s.workflowEditor.skillDrafts[step.step_id],
   );
@@ -116,26 +116,30 @@ export function SkillStepInspector({
     .sort();
 
   const banked = pinned
-    ? (grouped.get(pinned.name)?.find((s) => s.version === pinned.version) ??
-      grouped.get(pinned.name)?.[0])
+    ? grouped.get(pinned.name)?.find((s) => s.version === pinned.version)
     : undefined;
+  const missingParams = (banked?.input_params ?? []).filter((name) => !Object.hasOwn(mapping, name));
+
+  function addMissingBindings() {
+    edit((draft) => {
+      const target = findStep(draft, step.step_id, bodyOf);
+      if (!target) return;
+      const current = (target.config?.inputs_mapping ?? {}) as Record<string, { from?: string }>;
+      const missing = missingParams.filter((name) => !Object.hasOwn(current, name));
+      target.config = {
+        ...target.config,
+        inputs_mapping: {
+          ...current,
+          ...Object.fromEntries(missing.map((name) => [name, { from: '' }])),
+        },
+      };
+    });
+  }
 
   const setCfg = (patch: Record<string, unknown>) =>
-    edit((d) => {
-      const t = (d.steps ?? []).find((s) => s.step_id === step.step_id);
-      if (bodyOf) {
-        const loop = (d.steps ?? []).find((s) => s.step_id === bodyOf);
-        const body = (loop?.config as Record<string, unknown> | undefined)
-          ?.body as WorkflowStep[] | undefined;
-        const b = body?.find((s) => s.step_id === step.step_id);
-        if (b) {
-          b.config = { ...(b.config ?? {}), ...patch };
-        }
-        return;
-      }
-      if (t) {
-        t.config = { ...(t.config ?? {}), ...patch };
-      }
+    edit((draft) => {
+      const target = findStep(draft, step.step_id, bodyOf);
+      if (target) target.config = { ...(target.config ?? {}), ...patch };
     });
 
   const pin = (name: string, version: number) => {
@@ -144,42 +148,23 @@ export function SkillStepInspector({
     notify('ok', `Pinned ${name} v${version}.`);
   };
 
-  const unpin = () => {
-    edit((d) => {
-      const apply = (t: WorkflowStep | undefined) => {
-        if (!t) {
-          return;
-        }
-        const c = { ...(t.config ?? {}) } as Record<string, unknown>;
-        delete c.skill;
-        t.config = c;
-      };
-      if (bodyOf) {
-        const loop = (d.steps ?? []).find((s) => s.step_id === bodyOf);
-        apply(
-          ((loop?.config as Record<string, unknown> | undefined)
-            ?.body as unknown as WorkflowStep[] | undefined)
-            ? (
-                (loop?.config as Record<string, unknown>).body as WorkflowStep[]
-              ).find((s) => s.step_id === step.step_id)
-            : undefined,
-        );
-      } else {
-        apply((d.steps ?? []).find((s) => s.step_id === step.step_id));
-      }
+  const clearSkill = () => {
+    edit((draft) => {
+      const target = findStep(draft, step.step_id, bodyOf);
+      if (target?.config) delete target.config.skill;
     });
   };
 
   const doDraft = async () => {
     const nl = (cfg.calculation_nl ?? '').trim();
     if (!nl) {
-      notify('error', 'Write the natural-language calculation first.');
+      notify('error', 'Describe the calculation first.');
       return;
     }
     if (params.length === 0) {
       notify(
         'error',
-        'Add at least one parameter first (its name becomes the skill param).',
+        'Add at least one parameter.',
       );
       return;
     }
@@ -267,8 +252,7 @@ export function SkillStepInspector({
         <section aria-label="Saved skill">
           <h3>Workspace skills</h3>
           <p className="status-line">
-            Skills saved in the connected workspace. Starter examples are hidden
-            unless you choose to show them; a pinned example stays visible.
+            Choose a saved calculation and version.
           </p>
           <label>
             <input
@@ -280,8 +264,7 @@ export function SkillStepInspector({
           </label>
           {cfg.calculation_nl && cfg.calculation_nl.trim() !== '' && (
             <p className="status-line status-warn">
-              Natural-language text is present but ignored while a skill is
-              pinned.
+              This step uses the saved version.
               <button
                 type="button"
                 className="btn"
@@ -294,7 +277,7 @@ export function SkillStepInspector({
           <div className="field">
             <span>
               <label htmlFor={`skill-search-${step.step_id}`}>
-                Search verified skills
+                Search calculations
               </label>
             </span>
             <input
@@ -310,29 +293,32 @@ export function SkillStepInspector({
               const versions = grouped.get(n) ?? [];
               const current =
                 pinned?.name === n ? pinned.version : versions[0]?.version;
+              const selectedVersion = versions.find((version) => version.version === current);
               return (
                 <li key={n} className="skill-row">
                   <div>
                     <span className="list-title num">{n}</span>
                     <span className="status-line">
                       {' '}
-                      · {versions[0]?.status ?? 'unknown'} ·{' '}
-                      {versions[0]?.source ?? ''}
+                      · {selectedVersion?.status ?? 'Unavailable'}{selectedVersion?.source ? ` · ${selectedVersion.source}` : ''}
                     </span>
                     <div className="status-line">
-                      {versions[0]?.description ?? 'No description.'}
+                      {selectedVersion?.description}
                     </div>
-                    <div className="status-line num">
-                      Params:{' '}
-                      {(versions[0]?.input_params ?? []).join(', ') ||
-                        '(none declared)'}
-                    </div>
+                    {selectedVersion && (
+                      <div className="status-line num">
+                        Parameters: {selectedVersion.input_params?.join(', ') || 'None'}
+                      </div>
+                    )}
                   </div>
                   <select
                     aria-label={`Version of ${n}`}
                     value={current ?? ''}
                     onChange={(e) => pin(n, Number(e.target.value))}
                   >
+                    {!selectedVersion && current !== undefined && (
+                      <option value={current} disabled>v{current} (unavailable)</option>
+                    )}
                     {versions.map((v) => (
                       <option key={v.version} value={v.version}>
                         v{v.version}
@@ -357,10 +343,10 @@ export function SkillStepInspector({
             })}
           </ul>
           {names.length === 0 && (
-            <p className="status-line">No skills match.</p>
+            <p className="status-line">No matching calculations.</p>
           )}
           {pinned && (
-            <button type="button" className="btn" onClick={unpin}>
+            <button type="button" className="btn" onClick={clearSkill}>
               Clear pin
             </button>
           )}
@@ -373,26 +359,34 @@ export function SkillStepInspector({
           {pinned && (
             <p className="status-line status-warn">
               A pinned skill overrides the run-time reference.
-              <button type="button" className="btn" onClick={unpin}>
+              <button type="button" className="btn" onClick={clearSkill}>
                 Unpin
               </button>
             </p>
           )}
           <DataRefPicker
-            label="Skill from"
+            label="Calculation source"
             value={fromRef ?? ''}
             options={refs}
-            onCommit={(v) =>
-              setCfg(v.trim() === '' ? {} : { skill: { from: v.trim() } })
-            }
+            onCommit={(value) => {
+              const from = value.trim();
+              if (from) setCfg({ skill: { from } });
+              else clearSkill();
+            }}
             placeholder="find.skills[0]"
           />
         </section>
       )}
 
       <section aria-label="Parameter bindings">
+        {missingParams.length > 0 && (
+          <button type="button" className="btn" onClick={addMissingBindings}>
+            Add missing parameter mappings
+          </button>
+        )}
         <MappingEditor
           step={step}
+          bodyOf={bodyOf}
           holder="inputs_mapping"
           refs={refs}
           edit={edit}
@@ -405,21 +399,20 @@ export function SkillStepInspector({
           {pinned && (
             <p className="status-line status-warn">
               A pinned skill overrides this description.
-              <button type="button" className="btn" onClick={unpin}>
+              <button type="button" className="btn" onClick={clearSkill}>
                 Unpin
               </button>
             </p>
           )}
           <TextField
-            label="Plain-language calculation"
+            label="Calculation instructions"
             multiline
             value={cfg.calculation_nl ?? ''}
             onCommit={(v) => setCfg({ calculation_nl: v })}
           />
           <h3>Parameters</h3>
           <p className="status-line">
-            Each parameter is a number the skill receives. Bind them to run data
-            below.
+            Name each number the calculation needs.
           </p>
           <div className="map-row">
             <input
@@ -529,17 +522,17 @@ export function SkillStepInspector({
       <details open={advancedOpen}>
         <summary>Advanced execution</summary>
         <SelectField
-          label="On miss"
+          label="If no calculation matches"
           value={cfg.on_miss ?? 'propose'}
           options={[
-            { value: 'propose', label: 'propose (pause and acquire)' },
-            { value: 'fail', label: 'fail' },
-            { value: 'ask', label: 'ask (human pre-gate)' },
+            { value: 'propose', label: 'Draft a calculation' },
+            { value: 'fail', label: 'Fail the run' },
+            { value: 'ask', label: 'Ask for approval' },
           ]}
           onChange={(v) => setCfg({ on_miss: v })}
         />
         <CheckField
-          label="Deferred (acquire at run time)"
+          label="Find or draft at run time"
           checked={cfg.deferred === true}
           onChange={(v) => setCfg({ deferred: v })}
         />

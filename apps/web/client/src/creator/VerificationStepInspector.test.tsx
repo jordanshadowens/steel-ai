@@ -48,19 +48,22 @@ test('customer changes expected answers through fields and persisted definition 
   fireEvent.change(screen.getByLabelText('Example 1: expected answer'), {
     target: { value: '6' },
   });
+  fireEvent.blur(screen.getByLabelText('Example 1: expected answer'));
   fireEvent.click(screen.getByText('Add example'));
   fireEvent.change(screen.getByLabelText('Example 2: quantity'), {
     target: { value: '3' },
   });
+  fireEvent.blur(screen.getByLabelText('Example 2: quantity'));
   fireEvent.change(screen.getByLabelText('Example 2: expected answer'), {
-    target: { value: '9' },
+    target: { value: '9.5' },
   });
+  fireEvent.blur(screen.getByLabelText('Example 2: expected answer'));
   expect((saved!.steps![0].config as any).cases).toEqual([
     { inputs: { quantity: 2 }, expected: 6 },
-    { inputs: { quantity: 3 }, expected: 9 },
+    { inputs: { quantity: 3 }, expected: 9.5 },
   ]);
   fireEvent.click(screen.getByText('Remove example 1'));
   expect((saved!.steps![0].config as any).cases).toEqual([
-    { inputs: { quantity: 3 }, expected: 9 },
+    { inputs: { quantity: 3 }, expected: 9.5 },
   ]);
 });

@@ -52,23 +52,27 @@ export function useFloatingPanel(visible = true) {
     if (!el || !parent) {
       return;
     }
-    const observer = new ResizeObserver(() =>
-      setPosition((p) =>
-        p
-          ? clampPanel(
-              p.x,
-              p.y,
-              el.offsetWidth,
-              el.offsetHeight,
-              parent.clientWidth,
-              parent.clientHeight,
-            )
-          : p,
-      ),
-    );
+    let pendingFrame: number | null = null;
+    const observer = new ResizeObserver(() => {
+      if (pendingFrame !== null) return;
+      pendingFrame = window.requestAnimationFrame(() => {
+        pendingFrame = null;
+        setPosition((current) => {
+          if (!current) return current;
+          const next = clampPanel(
+            current.x, current.y, el.offsetWidth, el.offsetHeight,
+            parent.clientWidth, parent.clientHeight,
+          );
+          return current.x === next.x && current.y === next.y ? current : next;
+        });
+      });
+    });
     observer.observe(parent);
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (pendingFrame !== null) window.cancelAnimationFrame(pendingFrame);
+    };
   }, [visible]);
   return {
     ref,

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
-import { MotionConfig } from 'motion/react';
+import { domAnimation, LazyMotion, MotionConfig } from 'motion/react';
 import '@fontsource/montserrat/400.css';
 import '@fontsource/montserrat/500.css';
 import '@fontsource/montserrat/600.css';
@@ -24,7 +24,9 @@ createRoot(root).render(
   <StrictMode>
     <Provider store={store}>
       <MotionConfig reducedMotion="user">
-        <App />
+        <LazyMotion features={domAnimation}>
+          <App />
+        </LazyMotion>
       </MotionConfig>
     </Provider>
   </StrictMode>,

@@ -9,7 +9,7 @@ import {
   setPanel,
   workflowEditorReducer,
 } from '../store/workflowEditor';
-import { END_NODE_ID, REASON_TOOLS, STEP_TYPES, defaultConfig } from './adapter';
+import { END_NODE_ID, REASON_TOOLS, REASON_TOOL_LABELS, STEP_TYPES, defaultConfig } from './adapter';
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -20,6 +20,7 @@ vi.stubGlobal(
 );
 
 vi.mock('../api/steelApi', () => ({
+  useListWorkflowsQuery: () => ({ data: { workflows: [] } }),
   useListSkillsQuery: () => ({
     data: {
       skills: [
@@ -64,7 +65,7 @@ vi.mock('../api/steelApi', () => ({
 
 afterEach(cleanup);
 
-it('hides starter examples unless requested while preserving an existing pin', () => {
+it('hides starter examples unless requested while preserving an existing pin', async () => {
   const store = configureStore({
     reducer: { workflowEditor: workflowEditorReducer },
   });
@@ -93,7 +94,7 @@ it('hides starter examples unless requested while preserving an existing pin', (
       <Inspector bodySel={null} setBodySel={() => {}} />
     </Provider>,
   );
-  fireEvent.click(screen.getByLabelText('Use a saved skill'));
+  fireEvent.click(await screen.findByLabelText('Use a saved skill'));
   expect(screen.queryByText('starter_example', { exact: true })).toBeNull();
   expect(screen.getByText('my_calculation', { exact: true })).toBeTruthy();
   fireEvent.click(screen.getByLabelText('Show starter examples'));
@@ -136,15 +137,13 @@ it('uses the shared configuration layout and routing controls for every step typ
   for (const { value, label } of STEP_TYPES) {
     store.dispatch(selectStep(value));
     mounted.rerender(view());
-    expect(
-      screen.getByText('Configure this step and connect its data'),
-    ).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Step details' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Step details' })).toBeTruthy();
     expect(mounted.container.querySelector('.step-settings input')).toBe(
-      screen.getByLabelText('Step id'),
+      screen.getByLabelText('Step name'),
     );
+    expect(screen.getByLabelText('Step id')).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Routing' })).toBeTruthy();
-    expect(screen.getByLabelText('On success')).toBeTruthy();
+    expect(screen.getByLabelText(value === 'conditional_routing' ? 'If no rule matches' : 'On success')).toBeTruthy();
     expect(screen.getByText(label, { selector: '.count-badge' })).toBeTruthy();
     expect(
       mounted.container.querySelector('.step-settings.configuration-card'),
@@ -152,7 +151,7 @@ it('uses the shared configuration layout and routing controls for every step typ
   }
 });
 
-it('retains all Creator checkbox values and calculation modes after leaving and returning', () => {
+it('retains all Creator checkbox values and calculation modes after leaving and returning', async () => {
   const store = configureStore({
     reducer: { workflowEditor: workflowEditorReducer },
   });
@@ -200,7 +199,7 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     );
 
   step('calc');
-  fireEvent.click(screen.getByLabelText('Describe a new calculation'));
+  fireEvent.click(await screen.findByLabelText('Describe a new calculation'));
   step('reason');
   step('calc');
   check('Describe a new calculation', true);
@@ -214,19 +213,28 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     step('calc');
     check(mode, true);
   }
+  fireEvent.click(screen.getByLabelText('Resolve at run time'));
+  const source = screen.getByLabelText('Calculation source');
+  fireEvent.change(source, { target: { value: 'reason.skill' } });
+  fireEvent.blur(source);
+  expect(store.getState().workflowEditor.draft?.steps?.[0]?.config?.skill).toEqual({ from: 'reason.skill' });
+  fireEvent.change(source, { target: { value: '' } });
+  fireEvent.blur(source);
+  expect(store.getState().workflowEditor.draft?.steps?.[0]?.config?.skill).toBeUndefined();
+  fireEvent.click(screen.getByLabelText('Describe a new calculation'));
   for (const expected of [true, false]) {
-    fireEvent.click(screen.getByLabelText('Deferred (acquire at run time)'));
+    fireEvent.click(screen.getByLabelText('Find or draft at run time'));
     step('reason');
     step('calc');
-    check('Deferred (acquire at run time)', expected);
+    check('Find or draft at run time', expected);
     step('reason');
     for (const tool of REASON_TOOLS) {
-      fireEvent.click(screen.getByLabelText(tool));
+      fireEvent.click(screen.getByLabelText(REASON_TOOL_LABELS[tool]));
     }
     step('calc');
     step('reason');
     for (const tool of REASON_TOOLS) {
-      check(tool, expected);
+      check(REASON_TOOL_LABELS[tool], expected);
     }
     settings();
     fireEvent.click(screen.getByLabelText('Input 1 required'));
@@ -252,9 +260,8 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     ['Array', 'array'],
   ]);
   step(END_NODE_ID);
-  expect(screen.getByRole('complementary', { name: 'Finish' })).toBeTruthy();
-  const bindings = screen.getByRole('region', { name: 'Bindings' });
-  expect(bindings.contains(screen.getByRole('group', { name: 'Workflow outputs' }))).toBe(true);
+  const finish = screen.getByRole('complementary', { name: 'Finish' });
+  expect(finish.contains(screen.getByRole('group', { name: 'Workflow outputs' }))).toBe(true);
   fireEvent.click(screen.getByText('Workflow input bindings'));
   fireEvent.change(screen.getByLabelText('Bound designer type'), {
     target: { value: 'project' },
@@ -267,33 +274,51 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
   expect(store.getState().workflowEditor.draft?.inputs?.[0]?.designer)
     .toEqual({ type: 'project' });
   settings();
-  expect(screen.queryByRole('region', { name: 'Bindings' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Workflow outputs' })).toBeNull();
   step(END_NODE_ID);
   fireEvent.click(screen.getByText('+ Add output'));
   fireEvent.change(screen.getByLabelText('Output name'), {
     target: { value: 'total' },
   });
+  fireEvent.change(screen.getByLabelText('Step result'), { target: { value: '$path' } });
+  expect(screen.getByLabelText('Step output').getAttribute('aria-required')).toBe('true');
   fireEvent.change(screen.getByLabelText('Step output'), {
     target: { value: 'amount' },
   });
+  const name = screen.getByLabelText('Output name');
+  fireEvent.compositionStart(name);
+  fireEvent.submit(name.closest('form')!);
+  expect(store.getState().workflowEditor.draft?.outputs?.total).toBeUndefined();
+  fireEvent.compositionEnd(name);
   fireEvent.click(screen.getByText('Add', { selector: 'button' }));
   settings();
-  expect(screen.queryByRole('region', { name: 'Bindings' })).toBeNull();
+  expect(screen.queryByRole('group', { name: 'Workflow outputs' })).toBeNull();
   step(END_NODE_ID);
   expect(
     (screen.getByLabelText('Source for total') as HTMLInputElement).value,
   ).toBe('amount');
   expect(screen.getByText('1 mapped')).toBeTruthy();
+  fireEvent.click(screen.getByText('+ Add output'));
+  fireEvent.change(screen.getByLabelText('Output name'), { target: { value: 'total' } });
+  fireEvent.change(screen.getByLabelText('Step result'), { target: { value: '$path' } });
+  fireEvent.change(screen.getByLabelText('Step output'), { target: { value: 'start' } });
+  expect(screen.getByText('That output name is already in use.')).toBeTruthy();
+  expect((screen.getByText('Add', { selector: 'button' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
   expect(store.getState().workflowEditor.draft?.outputs?.total).toEqual({ from: 'amount' });
   fireEvent.click(screen.getByRole('button', { name: 'Remove output total' }));
-  expect(screen.getByText('0 mapped')).toBeTruthy();
+  expect(screen.getByText('Add an output to return a step result or a field from a data model.')).toBeTruthy();
 
-  fireEvent.click(screen.getByText('+ Add output'));
-  fireEvent.change(screen.getByLabelText('Output name'), { target: { value: 'team' } });
-  fireEvent.change(screen.getByLabelText('Source type'), { target: { value: 'model' } });
-  fireEvent.change(screen.getByLabelText('Data model'), { target: { value: 'project' } });
-  fireEvent.change(screen.getByLabelText('Model field'), { target: { value: 'Team' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  function addModelOutput(name: string) {
+    fireEvent.click(screen.getByText('+ Add output'));
+    fireEvent.change(screen.getByLabelText('Output name'), { target: { value: name } });
+    fireEvent.change(screen.getByLabelText('Source type'), { target: { value: 'model' } });
+    fireEvent.change(screen.getByLabelText('Data model'), { target: { value: 'project' } });
+    fireEvent.change(screen.getByLabelText('Model field'), { target: { value: 'Team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+  }
+  addModelOutput('team');
+  addModelOutput('team_copy');
   const draft = store.getState().workflowEditor.draft;
   expect(draft?.outputs?.team).toEqual({ from: 'model_team' });
   expect(draft?.inputs).toContainEqual({
@@ -302,4 +327,10 @@ it('retains all Creator checkbox values and calculation modes after leaving and 
     required: true,
     designer: { type: 'project', mode: 'value', field: 'Team' },
   });
+  expect(draft?.outputs?.team_copy).toEqual({ from: 'model_team' });
+  expect(draft?.inputs).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove output team' }));
+  expect(store.getState().workflowEditor.draft?.inputs).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Remove output team_copy' }));
+  expect(store.getState().workflowEditor.draft?.inputs).toHaveLength(1);
 });

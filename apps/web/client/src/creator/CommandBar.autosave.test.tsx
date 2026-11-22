@@ -65,6 +65,22 @@ function setup(version: number | null) {
   return { store, definition, settings };
 }
 
+it('closes Publish review when another workflow opens at the same version', () => {
+  const { store, definition } = setup(1);
+  fireEvent.click(screen.getByRole('button', { name: /^Publish$/ }));
+  expect(screen.getByRole('dialog', { name: 'Review publication' }).textContent).toContain('Expenses');
+  act(() => {
+    store.dispatch(openDefinition({
+      workflowId: 'inventory',
+      version: 1,
+      definition: { ...definition, workflow_id: 'inventory', name: 'Inventory' },
+    }));
+  });
+  expect(screen.queryByRole('dialog', { name: 'Review publication' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /^Publish$/ }));
+  expect(screen.getByRole('dialog', { name: 'Review publication' }).textContent).toContain('Inventory');
+});
+
 it('requires the first explicit save, then autosaves edits without overwriting newer edits', async () => {
   const { store, definition } = setup(null);
   await act(async () => {
@@ -156,7 +172,7 @@ it('ignores a save response after opening a different workflow', async () => {
   expect(store.getState().workflowEditor.openVersion).toBe(7);
 });
 
-it('keeps failed saves dirty, surfaces a transient alert, and exposes settings through the menu', async () => {
+it('keeps failed saves dirty, surfaces a transient alert, and opens settings from the toolbar', async () => {
   const { store, definition, settings } = setup(1);
   mocks.save.mockImplementationOnce(() => ({
     unwrap: async () => {
@@ -169,7 +185,7 @@ it('keeps failed saves dirty, surfaces a transient alert, and exposes settings t
   await act(async () => {
     vi.advanceTimersByTime(800);
   });
-  expect(screen.getByRole('alert').textContent).toContain('Auto save paused');
+  expect(screen.getByRole('alert').textContent).toContain('Autosave paused');
   expect(isDirty(store.getState().workflowEditor)).toBe(true);
   await act(async () => {
     vi.advanceTimersByTime(6000);
@@ -193,8 +209,7 @@ it('keeps failed saves dirty, surfaces a transient alert, and exposes settings t
   expect(mocks.save).toHaveBeenCalledTimes(2);
   expect(isDirty(store.getState().workflowEditor)).toBe(false);
   expect(screen.queryByText('Inputs & outputs')).toBeNull();
-  fireEvent.click(screen.getByLabelText('Workflow menu'));
-  fireEvent.click(screen.getByText('Workflow settings'));
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   expect(settings).toHaveBeenCalledOnce();
   fireEvent.click(screen.getByLabelText('Edit workflow name'));
   expect(

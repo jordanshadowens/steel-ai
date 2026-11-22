@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import type { WorkflowDefinition, WorkflowStep } from '../api/contracts';
+import { useEffect, useId, useRef, useState } from 'react';
+import type { StepType, WorkflowDefinition, WorkflowStep } from '../api/contracts';
 import { useGetDesignerWorkspaceQuery } from '../api/steelApi';
 import {
   CheckField,
@@ -8,7 +8,7 @@ import {
   SelectField,
   TextField,
 } from './fields';
-import { PRED_OPS, PROJECT_TABLES, REASON_TOOLS } from './adapter';
+import { PRED_OPS, PROJECT_TABLES, REASON_TOOLS, REASON_TOOL_LABELS, STEP_TYPES, defaultConfig, insertWorkflowStep, stepNameWithId, stepTypeLabel } from './adapter';
 import { availableRefs } from './preflight';
 import type { RefOption } from './preflight';
 
@@ -51,11 +51,13 @@ export function RoutingSection({
   step,
   bodyOf,
   edit,
+  onFollow,
 }: {
   def: WorkflowDefinition;
   step: WorkflowStep;
   bodyOf: string | null;
   edit: EditFn;
+  onFollow: (target: string) => void;
 }) {
   const list = bodyOf
     ? (((
@@ -69,17 +71,29 @@ export function RoutingSection({
       .filter((s) => s.step_id !== step.step_id)
       .map((s) => ({
         value: s.step_id,
-        label: `${s.name || s.step_id} (${s.step_id})`,
+        label: stepNameWithId(s),
       })),
-    { value: 'end', label: 'end (finish)' },
+    { value: 'end', label: bodyOf ? 'Finish loop' : 'Finish' },
   ];
+  const success = step.on_success ?? 'end';
+  const failure = step.on_failure ?? '';
+  const isBranch = step.type === 'conditional_routing';
+  const isUnavailable = (target: string) => target !== '' && !options.some((option) => option.value === target);
+  function optionsFor(target: string) {
+    return isUnavailable(target)
+      ? [...options, { value: target, label: `Unavailable: ${target}` }]
+      : options;
+  }
   return (
     <section aria-label="Routing">
       <h3>Next step</h3>
       <SelectField
-        label="On success"
-        value={step.on_success ?? 'end'}
-        options={options}
+        id="creator-route-success"
+        label={isBranch ? 'If no rule matches' : 'On success'}
+        error={isUnavailable(success) ? 'This destination is unavailable. Choose another step.' : undefined}
+        description={isBranch ? undefined : 'Choose where the workflow continues when this step succeeds.'}
+        value={success}
+        options={optionsFor(success)}
         onChange={(v) =>
           edit((d) => {
             const t = findStep(d, step.step_id, bodyOf);
@@ -90,10 +104,13 @@ export function RoutingSection({
         }
       />
       <SelectField
+        id="creator-route-failure"
         label="On failure"
-        value={step.on_failure ?? ''}
-        options={options}
-        emptyLabel="(none — fail the run)"
+        error={isUnavailable(failure) ? 'This destination is unavailable. Choose another step or fail the run.' : undefined}
+        description={bodyOf ? 'Choose where the loop continues if this step fails.' : 'Choose where the workflow continues if this step fails.'}
+        value={failure}
+        options={optionsFor(failure)}
+        emptyLabel="Fail the run"
         onChange={(v) =>
           edit((d) => {
             const t = findStep(d, step.step_id, bodyOf);
@@ -108,6 +125,26 @@ export function RoutingSection({
           })
         }
       />
+      <div className="route-actions">
+        <button
+          className="btn"
+          type="button"
+          disabled={!options.some((option) => option.value === success)}
+          onClick={() => onFollow(success)}
+        >
+          {isBranch ? 'Follow fallback route' : 'Follow success route'}
+        </button>
+        {failure && (
+          <button
+            className="btn"
+            type="button"
+            disabled={!options.some((option) => option.value === failure)}
+            onClick={() => onFollow(failure)}
+          >
+            Follow failure route
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -115,12 +152,14 @@ export function RoutingSection({
 export function MappingEditor({
   step,
   holder,
+  bodyOf,
   refs,
   edit,
   title,
 }: {
   step: WorkflowStep;
   holder: string;
+  bodyOf: string | null;
   refs: RefOption[];
   edit: EditFn;
   title: string;
@@ -130,8 +169,15 @@ export function MappingEditor({
       holder
     ] ?? {};
   const [newKey, setNewKey] = useState('');
+  const duplicateKey = Object.hasOwn(mapping, newKey.trim());
+  const duplicateErrorId = useId();
   const [newFrom, setNewFrom] = useState('');
   const [adding, setAdding] = useState(false);
+  const keyField = useRef<HTMLInputElement>(null);
+  const toggle = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (adding) keyField.current?.focus();
+  }, [adding]);
   return (
     <section aria-label={title} className="binding-section">
       <h3>
@@ -152,7 +198,7 @@ export function MappingEditor({
             options={refs}
             onCommit={(from) =>
               edit((d) => {
-                const t = findStep(d, step.step_id, null);
+                const t = findStep(d, step.step_id, bodyOf);
                 if (!t) {
                   return;
                 }
@@ -172,7 +218,7 @@ export function MappingEditor({
             aria-label={`Remove ${k}`}
             onClick={() =>
               edit((d) => {
-                const t = findStep(d, step.step_id, null);
+                const t = findStep(d, step.step_id, bodyOf);
                 const cfg = (t?.config ?? {}) as Record<
                   string,
                   Record<string, { from?: string }>
@@ -191,52 +237,60 @@ export function MappingEditor({
         <p className="status-line">No bindings yet.</p>
       )}
       {adding && (
-        <div className="map-row new-binding-row">
-          <input
-            type="text"
-            aria-label="New binding key"
-            placeholder="key"
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-          />
-          <input
-            type="text"
-            aria-label="New binding source"
-            placeholder="step.field"
-            value={newFrom}
-            onChange={(e) => setNewFrom(e.target.value)}
-          />
-          <button
-            type="button"
-            className="btn"
-            disabled={newKey.trim() === '' || newFrom.trim() === ''}
-            onClick={() => {
-              const k = newKey.trim();
-              const f = newFrom.trim();
-              setNewKey('');
-              setNewFrom('');
-              setAdding(false);
-              edit((d) => {
-                const t = findStep(d, step.step_id, null);
-                if (!t) {
-                  return;
-                }
-                const cfg = (t.config ?? {}) as Record<
-                  string,
-                  Record<string, { from?: string }>
-                >;
-                cfg[holder] = cfg[holder] ?? {};
-                cfg[holder][k] = { from: f };
-                t.config = cfg;
-              });
-            }}
-          >
-            Add
-          </button>
-        </div>
+        <>
+          <div className="map-row new-binding-row">
+            <input
+              type="text"
+              ref={keyField}
+              aria-label="New binding key"
+              placeholder="key"
+              value={newKey}
+              aria-invalid={duplicateKey || undefined}
+              aria-describedby={duplicateKey ? duplicateErrorId : undefined}
+              onChange={(e) => setNewKey(e.target.value)}
+            />
+            <DataRefPicker
+              label="New binding source"
+              value={newFrom}
+              options={refs}
+              onEdit={setNewFrom}
+              onCommit={setNewFrom}
+            />
+            <button
+              type="button"
+              className="btn"
+              disabled={duplicateKey || newKey.trim() === '' || newFrom.trim() === ''}
+              onClick={() => {
+                const k = newKey.trim();
+                const f = newFrom.trim();
+                setNewKey('');
+                setNewFrom('');
+                setAdding(false);
+                toggle.current?.focus();
+                edit((d) => {
+                  const t = findStep(d, step.step_id, bodyOf);
+                  if (!t) {
+                    return;
+                  }
+                  const cfg = (t.config ?? {}) as Record<
+                    string,
+                    Record<string, { from?: string }>
+                  >;
+                  if (Object.hasOwn(cfg[holder] ?? {}, k)) return;
+                  cfg[holder] = { ...cfg[holder], [k]: { from: f } };
+                  t.config = cfg;
+                });
+              }}
+            >
+              Add
+            </button>
+          </div>
+          {duplicateKey && <p id={duplicateErrorId} className="status-bad">That name is already mapped. Edit its source above.</p>}
+        </>
       )}
       <button
         type="button"
+        ref={toggle}
         className="btn section-add-button"
         onClick={() => setAdding((v) => !v)}
       >
@@ -315,19 +369,19 @@ export function ReasoningConfig({
   const allowed = new Set(cfg.tools_allowed ?? []);
   return (
     <section aria-label="Reasoning">
-      <h3>Goal and tools</h3>
+      <h3>Model instructions</h3>
       <TextField
-        label="Goal"
+        label="Instructions"
         multiline
         value={cfg.goal ?? ''}
         onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { goal: v })}
       />
       <fieldset>
-        <legend>Tools (skill_propose is forbidden here)</legend>
+        <legend>Allowed tools</legend>
         {REASON_TOOLS.map((t) => (
           <CheckField
             key={t}
-            label={t}
+            label={REASON_TOOL_LABELS[t]}
             checked={allowed.has(t)}
             onChange={(on) => {
               const next = new Set(allowed);
@@ -345,6 +399,7 @@ export function ReasoningConfig({
       </fieldset>
       <NumberField
         label="Max rounds"
+        integer
         min={1}
         value={cfg.max_rounds}
         onCommit={(v) =>
@@ -469,8 +524,10 @@ export function DatabaseConfig({
           />
           <NumberField
             label="Limit"
+            integer
             min={1}
             value={cfg.limit}
+            onClear={() => patchCfg(edit, step.step_id, bodyOf, { limit: undefined })}
             onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { limit: v })}
           />
         </>
@@ -597,9 +654,11 @@ export function DatabaseConfig({
           </div>
           <NumberField
             label="Limit"
+            integer
             min={1}
             value={scope.limit}
-            onCommit={(v) => patchScope({ limit: v ?? undefined })}
+            onClear={() => patchScope({ limit: undefined })}
+            onCommit={(v) => patchScope({ limit: v })}
           />
         </>
       )}
@@ -625,14 +684,16 @@ export function SkillRetrievalConfig({
     <section aria-label="Search">
       <h3>What to find</h3>
       <TextField
-        label="Query template ({ref} tokens)"
+        label="Search query"
+        description="Use {step.field} to include a workflow value."
         value={cfg.query_template ?? ''}
         onCommit={(v) =>
           patchCfg(edit, step.step_id, bodyOf, { query_template: v })
         }
       />
       <NumberField
-        label="Top k"
+        label="Max results"
+        integer
         min={1}
         value={cfg.top_k}
         onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { top_k: v })}
@@ -665,6 +726,17 @@ export function SkillRetrievalConfig({
   );
 }
 
+const COMPARISON_LABELS: Record<(typeof PRED_OPS)[number], string> = {
+  eq: 'Equals',
+  ne: 'Does not equal',
+  gt: 'Greater than',
+  gte: 'Greater than or equal to',
+  lt: 'Less than',
+  lte: 'Less than or equal to',
+  contains: 'Contains',
+  exists: 'Exists',
+};
+
 export function BranchConfig({
   def,
   step,
@@ -682,6 +754,14 @@ export function BranchConfig({
     rules?: Array<{ when?: unknown; goto?: string }>;
   };
   const rules = Array.isArray(cfg.rules) ? cfg.rules : [];
+  const [ruleError, setRuleError] = useState<number | null>(null);
+  const ruleSection = useRef<HTMLElement>(null);
+  const focusNewRule = useRef(false);
+  useEffect(() => {
+    if (!focusNewRule.current) return;
+    focusNewRule.current = false;
+    ruleSection.current?.querySelector<HTMLInputElement>('.rule-block:last-of-type input')?.focus();
+  }, [rules.length]);
   const list = bodyOf
     ? (((
         findStep(def, bodyOf, null)?.config as
@@ -692,13 +772,31 @@ export function BranchConfig({
   const targets = [
     ...list
       .filter((s) => s.step_id !== step.step_id)
-      .map((s) => ({ value: s.step_id, label: s.step_id })),
-    { value: 'end', label: 'end' },
+      .map((s) => ({ value: s.step_id, label: stepNameWithId(s) })),
+    { value: 'end', label: bodyOf ? 'Finish loop' : 'Finish' },
   ];
+  const fallback = step.on_success ?? 'end';
+  const fallbackLabel = targets.find((target) => target.value === fallback)?.label ?? fallback;
+
+  function moveRule(index: number, offset: number) {
+    setRuleError(null);
+    edit((draft) => {
+      const target = findStep(draft, step.step_id, bodyOf);
+      const current = (target?.config as { rules?: unknown[] } | undefined)?.rules;
+      const next = index + offset;
+      if (!current || next < 0 || next >= current.length) return;
+      const [rule] = current.splice(index, 1);
+      current.splice(next, 0, rule);
+    });
+  }
+
   return (
-    <section aria-label="Branch rules">
-      <h3>Rules (first match wins; otherwise the next step)</h3>
+    <section ref={ruleSection} aria-label="Branch rules">
+      <h3>Branch rules</h3>
+      <p className="status-line">Checks rules in order. If none match, go to {fallbackLabel}.</p>
       {rules.map((r, i) => {
+        const destination = r?.goto ?? 'end';
+        const unavailable = destination !== '' && !targets.some((target) => target.value === destination);
         const when = (r?.when ?? {}) as {
           ref?: string;
           op?: string;
@@ -709,15 +807,30 @@ export function BranchConfig({
         const compound = Array.isArray(when.all) || Array.isArray(when.any);
         return (
           <div key={i} className="rule-block">
-            <div className="status-line num">Rule {i + 1}</div>
+            <div className="branch-rule-heading">
+              <strong>Rule {i + 1}</strong>
+              <div className="branch-rule-order">
+                <button type="button" className="btn" disabled={i === 0} onClick={() => moveRule(i, -1)} aria-label={`Move rule ${i + 1} up`}>↑</button>
+                <button type="button" className="btn" disabled={i === rules.length - 1} onClick={() => moveRule(i, 1)} aria-label={`Move rule ${i + 1} down`}>↓</button>
+              </div>
+            </div>
             {compound ? (
               <TextField
-                label="Condition (compound all/any — edit as JSON)"
+                label="Condition JSON"
                 multiline
                 value={JSON.stringify(r.when)}
                 onCommit={(v) => {
                   try {
-                    const parsed = JSON.parse(v) as unknown;
+                    const parsed = JSON.parse(v) as typeof when | null;
+                    const isCondition = parsed && (
+                      Array.isArray(parsed.all) || Array.isArray(parsed.any) ||
+                      (typeof parsed.ref === 'string' && typeof parsed.op === 'string')
+                    );
+                    if (!isCondition) {
+                      setRuleError(i);
+                      return;
+                    }
+                    setRuleError(null);
                     edit((d) => {
                       const t = findStep(d, step.step_id, bodyOf);
                       const rs = (
@@ -730,14 +843,14 @@ export function BranchConfig({
                       }
                     });
                   } catch {
-                    // Invalid JSON keeps the old condition; validation reports it.
+                    setRuleError(i);
                   }
                 }}
               />
             ) : (
               <>
                 <DataRefPicker
-                  label="Value"
+                  label="Value source"
                   value={when.ref ?? ''}
                   options={refs}
                   onCommit={(v) =>
@@ -763,7 +876,7 @@ export function BranchConfig({
                 <SelectField
                   label="Comparison"
                   value={when.op ?? 'eq'}
-                  options={PRED_OPS.map((o) => ({ value: o, label: o }))}
+                  options={PRED_OPS.map((op) => ({ value: op, label: COMPARISON_LABELS[op] }))}
                   onChange={(v) =>
                     edit((d) => {
                       const t = findStep(d, step.step_id, bodyOf);
@@ -786,7 +899,7 @@ export function BranchConfig({
                 />
                 {when.op !== 'exists' && (
                   <TextField
-                    label="Against"
+                    label="Compare with"
                     value={fmt(when.value)}
                     onCommit={(v) =>
                       edit((d) => {
@@ -811,10 +924,15 @@ export function BranchConfig({
                 )}
               </>
             )}
+            {ruleError === i && <p className="status-bad" role="alert">Use an all or any list, or provide a ref and op.</p>}
             <SelectField
+              id={`creator-route-rule-${i + 1}`}
               label="Go to"
-              value={r?.goto ?? 'end'}
-              options={targets}
+              error={unavailable ? 'This destination is unavailable. Choose another step.' : undefined}
+              value={destination}
+              options={unavailable
+                ? [...targets, { value: destination, label: `Unavailable: ${destination}` }]
+                : targets}
               onChange={(v) =>
                 edit((d) => {
                   const t = findStep(d, step.step_id, bodyOf);
@@ -830,13 +948,14 @@ export function BranchConfig({
             <button
               type="button"
               className="btn"
-              onClick={() =>
+              onClick={() => {
+                setRuleError(null);
                 edit((d) => {
                   const t = findStep(d, step.step_id, bodyOf);
                   const rs = ((t?.config ?? {}) as { rules?: unknown[] }).rules;
                   rs?.splice(i, 1);
-                })
-              }
+                });
+              }}
             >
               Remove rule
             </button>
@@ -845,7 +964,7 @@ export function BranchConfig({
       })}
       {rules.length === 0 && (
         <p className="status-line">
-          No rules — every run follows the next step.
+          No rules yet.
         </p>
       )}
       <button
@@ -859,6 +978,7 @@ export function BranchConfig({
             }
             const c = (t.config ?? {}) as { rules?: unknown[] };
             c.rules = Array.isArray(c.rules) ? c.rules : [];
+            focusNewRule.current = true;
             c.rules.push({
               when: { ref: '', op: 'eq', value: '' },
               goto: 'end',
@@ -890,19 +1010,57 @@ export function LoopConfig({
     body?: WorkflowStep[];
   };
   const body = Array.isArray(cfg.body) ? cfg.body : [];
-  const [addType, setAddType] = useState('input_collection');
+  const bodyById = new Map(body.map((child) => [child.step_id, child]));
+  function destinationLabel(id: string) {
+    if (id === 'end') return 'Finish loop';
+    const target = bodyById.get(id);
+    return target ? stepNameWithId(target) : `${id} (unavailable)`;
+  }
+  const [addType, setAddType] = useState<StepType>('input_collection');
+  const [afterId, setAfterId] = useState<string>();
+  const tails = body.filter((child) => !child.on_success || child.on_success === 'end');
+  const connectAfter = afterId !== undefined && (afterId === '' || body.some((child) => child.step_id === afterId))
+    ? afterId
+    : tails.length === 1 ? tails[0].step_id : '';
   const refs = availableRefs(def, step.step_id);
+  const bodyTypes = STEP_TYPES.filter(({ value }) => value !== 'iteration' && value !== 'human_approval');
+
+  function addBodyStep() {
+    let addedId: string | undefined;
+    edit((draft) => {
+      const loop = findStep(draft, step.step_id, null);
+      if (!loop) return;
+      const config = loop.config ?? {};
+      const list = Array.isArray(config.body) ? config.body as WorkflowStep[] : [];
+      let n = list.length + 1;
+      while (list.some((child) => child.step_id === `b${n}`)) n++;
+      addedId = `b${n}`;
+      loop.config = {
+        ...config,
+        body: insertWorkflowStep(list, {
+          step_id: addedId,
+          type: addType,
+          name: stepTypeLabel({ type: addType }),
+          config: defaultConfig(addType),
+          on_success: 'end',
+        }, connectAfter || null),
+      };
+    });
+    if (addedId) onEditBody(step.step_id, addedId);
+  }
+
   return (
     <section aria-label="Loop">
-      <h3>What to repeat over</h3>
+      <h3>Repeat for each item</h3>
       <DataRefPicker
-        label="Over (list)"
+        label="List source"
         value={cfg.over ?? ''}
         options={refs}
         onCommit={(v) => patchCfg(edit, step.step_id, null, { over: v })}
       />
       <NumberField
         label="Max iterations"
+        integer
         min={1}
         value={cfg.max_iterations}
         onCommit={(v) =>
@@ -911,72 +1069,49 @@ export function LoopConfig({
       />
       <h3>Body steps ({body.length})</h3>
       <p className="status-line">
-        Body steps run once per item. Loops and approvals are not allowed inside
-        a body.
+        These steps run for each item. Add approvals or other loops outside this loop.
       </p>
       <ul className="plain">
-        {body.map((b) => (
+        {body.map((b, index) => (
           <li key={b.step_id} className="list-row">
             <button
               type="button"
               className="link-button list-title"
               onClick={() => onEditBody(step.step_id, b.step_id)}
             >
-              {b.name || b.step_id}
+              {stepNameWithId(b)}
             </button>
-            <span className="list-meta">{b.type}</span>
+            <span className="list-meta">{stepTypeLabel(b)}{index === 0 ? ' · Starts loop' : ''}</span>
+            <div className="loop-step-route">
+              <span>{b.type === 'conditional_routing' ? 'If no rule matches' : 'On success'} → {destinationLabel(b.on_success ?? 'end')}</span>
+              {b.on_failure && <span>On failure → {destinationLabel(b.on_failure)}</span>}
+            </div>
           </li>
         ))}
       </ul>
-      {body.length === 0 && <p className="status-line">Empty body.</p>}
+      {body.length === 0 && <p className="status-line">No steps in this loop.</p>}
+      {body.length > 0 && (
+        <SelectField
+          label="Connect after"
+          value={connectAfter}
+          options={[
+            { value: '', label: 'Leave unconnected' },
+            ...body.map((child) => ({ value: child.step_id, label: stepNameWithId(child) })),
+          ]}
+          onChange={setAfterId}
+        />
+      )}
       <div className="map-row">
         <select
           aria-label="Body step type"
           value={addType}
-          onChange={(e) => setAddType(e.target.value)}
+          onChange={(event) => setAddType(event.target.value as StepType)}
         >
-          {[
-            'input_collection',
-            'model_reasoning',
-            'database_retrieval',
-            'skill_retrieval',
-            'skill_execution',
-            'conditional_routing',
-            'output_composition',
-            'document_generation',
-          ].map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
+          {bodyTypes.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
           ))}
         </select>
-        <button
-          type="button"
-          className="btn"
-          onClick={() =>
-            edit((d) => {
-              const t = findStep(d, step.step_id, null);
-              if (!t) {
-                return;
-              }
-              const c = (t.config ?? {}) as { body?: WorkflowStep[] };
-              const list = Array.isArray(c.body) ? c.body : [];
-              let n = list.length + 1;
-              while (list.some((s) => s.step_id === `b${n}`)) {
-                n++;
-              }
-              list.push({
-                step_id: `b${n}`,
-                type: addType,
-                name: addType,
-                config: {},
-                on_success: 'end',
-              });
-              c.body = list;
-              t.config = c;
-            })
-          }
-        >
+        <button type="button" className="btn" onClick={addBodyStep}>
           Add to body
         </button>
       </div>

@@ -8,8 +8,14 @@ import {
   defaultStartMirrorsInputs,
   defaultStartStaleFields,
   definitionToFlow,
+  insertWorkflowStep,
+  duplicateWorkflowStep,
+  arrangeSteps,
+  workflowCheckKey,
+  STEP_TYPES,
   deleteStep,
   isDefaultStartDefinition,
+  moveWorkflowInput,
   removeWorkflowInput,
   renameStep,
   renameWorkflowInput,
@@ -63,7 +69,7 @@ describe('definitionToFlow', () => {
     expect(edges.find((e) => e.id === 'cond:a:0')?.label).toBe('rule 1');
   });
 
-  it('dangling targets collapse to the end node', () => {
+  it('omits the edge for a dangling destination', () => {
     const def = blankDefinition();
     def.steps = [
       {
@@ -75,7 +81,7 @@ describe('definitionToFlow', () => {
       },
     ];
     const { edges } = definitionToFlow(def, null);
-    expect(edges[0].target).toBe(END_NODE_ID);
+    expect(edges).toHaveLength(0);
   });
 });
 
@@ -176,6 +182,29 @@ describe('deleteStep', () => {
     expect(out?.steps?.map((s) => s.step_id)).toEqual(['a']);
     expect(out?.steps?.[0].on_success).toBe('end');
   });
+
+  it('updates success, failure, and branch routes within the edited loop', () => {
+    const def = blankDefinition();
+    def.steps = [{
+      step_id: 'loop',
+      type: 'iteration',
+      config: { body: [
+        { step_id: 'branch', type: 'conditional_routing', on_success: 'old', on_failure: 'old',
+          config: { rules: [{ goto: 'old' }, { goto: 'end' }] } },
+        { step_id: 'old', type: 'document_generation' },
+      ] },
+    }, {
+      step_id: 'old',
+      type: 'output_composition',
+    }];
+    const next = deleteStep(def, 'old', 'loop');
+    expect(next?.steps?.map((step) => step.step_id)).toEqual(['loop', 'old']);
+    expect(next?.steps?.[0].config?.body).toEqual([
+      { step_id: 'branch', type: 'conditional_routing', on_success: 'end',
+        config: { rules: [{ goto: 'end' }, { goto: 'end' }] } },
+    ]);
+    expect(def.steps[0].config?.body).toHaveLength(2);
+  });
 });
 
 describe('defaultConfig', () => {
@@ -190,7 +219,6 @@ describe('defaultConfig', () => {
       'iteration',
       'human_approval',
       'output_composition',
-      'document_generation',
     ]) {
       expect(typeof defaultConfig(t)).toBe('object');
     }
@@ -430,4 +458,139 @@ describe('workflow input references (batch10 bounded behavior)', () => {
       'supplies_total',
     ]);
   });
+});
+
+it('inserts a step on the selected success path and preserves its failure route', () => {
+  const start = { ...blankDefinition().steps![0], on_success: 'done', on_failure: 'recover' };
+  const finish = { ...start, step_id: 'done', on_success: 'end' };
+  const inserted = { ...finish, step_id: 'inserted' };
+  const steps = insertWorkflowStep([start, finish], inserted, 'start');
+  expect(steps.map((step) => [step.step_id, step.on_success])).toEqual([
+    ['start', 'inserted'],
+    ['inserted', 'done'],
+    ['done', 'end'],
+  ]);
+  expect(steps[0].on_failure).toBe('recover');
+  expect(start.on_success).toBe('done');
+});
+
+it('excludes retired generators from the step palette', () => {
+  const types = STEP_TYPES.map((step) => step.value);
+  expect(types).not.toContain('document_generation');
+  expect(types).not.toContain('artifact_generation');
+});
+
+it('keeps checks across saves and layout edits and invalidates them when routing changes', () => {
+  const draft = blankDefinition();
+  const saved = { ...draft, version: 2, status: 'published', ui: { positions: { start: { x: 20, y: 40 } } } };
+  expect(workflowCheckKey(saved)).toBe(workflowCheckKey(draft));
+  const steps = draft.steps?.map((step) => ({ ...step, on_failure: 'recovery' }));
+  expect(workflowCheckKey({ ...draft, steps })).not.toBe(workflowCheckKey(draft));
+});
+
+it('arranges branches and disconnected steps without changing routes', () => {
+  const root = { ...blankDefinition().steps![0], on_success: 'success', on_failure: 'failure' };
+  const success = { ...root, step_id: 'success', on_success: 'end', on_failure: undefined };
+  const failure = { ...root, step_id: 'failure', on_success: root.step_id, on_failure: undefined };
+  const separate = { ...success, step_id: 'separate' };
+  const draft = { ...blankDefinition(), steps: [root, success, failure, separate] };
+  const arranged = arrangeSteps(draft);
+  const positions = arranged.ui!.positions!;
+  expect(arranged.steps).toBe(draft.steps);
+  expect(positions.success.x).toBeGreaterThan(positions.start.x);
+  expect(positions.failure.x).toBe(positions.success.x);
+  expect(positions.failure.y).toBeGreaterThan(positions.success.y);
+  expect(positions.separate.y).toBeGreaterThan(positions.failure.y);
+  expect(arrangeSteps(arranged)).toEqual(arranged);
+});
+
+it('updates program bindings and verification sources when a workflow input or source step changes', () => {
+  const draft = blankDefinition();
+  draft.steps = [
+    { ...draft.steps![0], on_success: 'run' },
+    {
+      step_id: 'run', name: 'Run', type: 'lang_execution', on_success: 'verify',
+      config: { program: 'item', bindings: { inputs: { from: 'item.value' } } },
+    },
+    {
+      step_id: 'verify', name: 'Verify', type: 'lang_verification', on_success: 'end',
+      config: { candidate: { from: 'run.run_id' } },
+    },
+  ];
+  const renamedInput = renameWorkflowInput(draft, 0, 'source')!;
+  expect(renamedInput.steps?.[1]?.config).toEqual({
+    program: 'item',
+    bindings: { inputs: { from: 'source.value' } },
+  });
+  const renamedStep = renameStep(renamedInput, 'run', 'execute')!;
+  expect(renamedStep.steps?.[2]?.config).toEqual({ candidate: { from: 'execute.run_id' } });
+  expect(renameStep(draft, 'run', 'invalid id')).toBeNull();
+  expect(renameStep(draft, 'run', 'item')).toBeNull();
+});
+
+it('renames collected fields in step results without changing the current loop item', () => {
+  const draft = blankDefinition();
+  draft.steps = [
+    { ...draft.steps![0], on_success: 'loop' },
+    {
+      step_id: 'loop', type: 'iteration', name: 'Loop', on_success: 'end',
+      config: {
+        over: 'start.item.values',
+        body: [{
+          step_id: 'result', type: 'output_composition', name: 'Set result',
+          config: { mapping: { current: { from: 'item.name' }, source: { from: 'start.item.name' } } },
+          on_success: 'end',
+        }],
+      },
+    },
+  ];
+  draft.outputs = { all: { from: 'start.item' }, distinct: { from: 'start.items' } };
+
+  const changed = renameWorkflowInput(draft, 0, 'source')!;
+  expect(changed.outputs).toEqual({ all: { from: 'start.source' }, distinct: { from: 'start.items' } });
+  expect(changed.steps?.[1]?.config).toMatchObject({
+    over: 'start.source.values',
+    body: [{ config: { mapping: { current: { from: 'item.name' }, source: { from: 'start.source.name' } } } }],
+  });
+});
+
+it('does not duplicate a loop that contains a retired generator', () => {
+  const draft = blankDefinition();
+  draft.steps = [{
+    step_id: 'loop',
+    type: 'iteration',
+    config: { body: [{ step_id: 'legacy', type: 'document_generation' }] },
+  }];
+  expect(duplicateWorkflowStep(draft, 'loop')).toBeNull();
+});
+
+it('duplicates a step as a single successor without sharing config', () => {
+  const draft = blankDefinition();
+  draft.inputs?.push({ name: 'start_copy', type: 'string' });
+  const original = draft.steps![0];
+  original.on_failure = 'end';
+  const result = duplicateWorkflowStep(draft, 'start')!;
+  expect(result.stepId).toBe('start_copy_2');
+  const [start, copy] = result.definition.steps!;
+  expect(start.on_success).toBe(result.stepId);
+  expect(copy.on_success).toBe('end');
+  expect(copy.on_failure).toBe('end');
+  expect(copy.config).toEqual(original.config);
+  expect(copy.config).not.toBe(original.config);
+  expect(original.on_success).toBe('end');
+});
+
+
+it('reorders workflow inputs without changing a custom Start step', () => {
+  const def = blankDefinition();
+  def.inputs = [{ name: 'item', type: 'string' }, { name: 'quantity', type: 'number', required: true }];
+  def.steps![0].config = { fields: ['item', 'quantity'], prompt: 'Enter the order details.' };
+
+  const moved = moveWorkflowInput(def, 1, -1);
+
+  expect(moved?.inputs?.map(({ name }) => name)).toEqual(['quantity', 'item']);
+  expect(moved?.inputs?.[0]).toMatchObject({ type: 'number', required: true });
+  expect(moved?.steps?.[0].config).toEqual(def.steps![0].config);
+  expect(def.inputs.map(({ name }) => name)).toEqual(['item', 'quantity']);
+  expect(moveWorkflowInput(def, 0, -1)).toBeNull();
 });

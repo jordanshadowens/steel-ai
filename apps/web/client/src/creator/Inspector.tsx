@@ -1,21 +1,28 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
+import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
+import * as m from 'motion/react-m';
 import { useStore } from 'react-redux';
 import type { WorkflowDefinition, WorkflowStep } from '../api/contracts';
 import {
   useGetDesignerVersionQuery,
   useGetDesignerWorkspaceQuery,
   useListSkillsQuery,
+  useListWorkflowsQuery,
 } from '../api/steelApi';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { RootState } from '../store/store';
 import { selectStep, setPanel, updateDraft } from '../store/workflowEditor';
 import {
   END_NODE_ID,
-  TYPE_LABELS,
+  EXECUTION_APPROVAL_OPTIONS,
+  INPUT_TYPE_LABELS,
+  SKILL_APPROVAL_OPTIONS,
+  stepTypeLabel,
+  canDuplicateStep,
+  duplicateWorkflowStep,
   addWorkflowInput,
   defaultStartStaleFields,
   deleteStep,
+  moveWorkflowInput,
   removeWorkflowInput,
   renameStep,
   renameWorkflowInput,
@@ -34,16 +41,29 @@ import {
 } from './stepConfigs';
 import type { EditFn } from './stepConfigs';
 import { MappingEditor } from './stepConfigs';
-import { LanguageStepInspector } from './LanguageStepInspector';
-import { VerificationStepInspector } from './VerificationStepInspector';
-import { SkillStepInspector } from './SkillStepInspector';
-import { ArtifactStepInspector } from './ArtifactStepInspector';
-import { DocStepInspector } from './DocStepInspector';
 import { DataRefPicker, SelectField, TextField } from './fields';
 import { DesignerBindingPicker } from '../designer/DesignerBindingPicker';
-import { availableRefs, bodyRefs } from './preflight';
+import { bindModelField, releaseModelInput, setOutputSource } from './finishBindings';
+import { availableRefs, bodyRefs, outputSourceIssue, workflowInputNameErrors } from './preflight';
 import { useNotify } from './notices';
 import { useFloatingPanel } from './useFloatingPanel';
+
+function UnavailableStepSettings() {
+  return <p role="alert">Could not load these step settings. Save your draft before reloading.</p>;
+}
+
+const LanguageStepInspector = lazy(() => import('./LanguageStepInspector').then(
+  (module) => ({ default: module.LanguageStepInspector }),
+  () => ({ default: UnavailableStepSettings }),
+));
+const VerificationStepInspector = lazy(() => import('./VerificationStepInspector').then(
+  (module) => ({ default: module.VerificationStepInspector }),
+  () => ({ default: UnavailableStepSettings }),
+));
+const SkillStepInspector = lazy(() => import('./SkillStepInspector').then(
+  (module) => ({ default: module.SkillStepInspector }),
+  () => ({ default: UnavailableStepSettings }),
+));
 
 // Right contextual inspector: selected node, loop-body step, or workflow
 // settings. Resizable via CSS within bounds; closes without moving the graph.
@@ -51,13 +71,16 @@ export function Inspector({
   bodySel,
   setBodySel,
   requiredSetup = false,
+  onGoToStep,
 }: {
   bodySel: { loop: string; step: string } | null;
   setBodySel: (v: { loop: string; step: string } | null) => void;
   requiredSetup?: boolean;
+  onGoToStep?: (id: string, bodyStep?: string) => void;
 }) {
   const dispatch = useAppDispatch();
   const draft = useAppSelector((s) => s.workflowEditor.draft);
+  const openVersion = useAppSelector((s) => s.workflowEditor.openVersion);
   const selectedStepId = useAppSelector((s) => s.workflowEditor.selectedStepId);
   const skills = useListSkillsQuery();
   const floating = useFloatingPanel();
@@ -89,12 +112,16 @@ export function Inspector({
   };
 
   let title = 'Workflow settings';
-  let body: React.ReactNode = <WorkflowSettings def={draft} edit={edit} />;
+  let stepHeading: { name: string; type: string } | null = null;
+  let body: React.ReactNode = (
+    <WorkflowSettings def={draft} edit={edit} saved={openVersion !== null} requiredSetup={requiredSetup} />
+  );
   if (bodySel) {
     const loop = findStep(draft, bodySel.loop, null);
     const bstep = findStep(draft, bodySel.step, bodySel.loop);
     if (loop && bstep) {
-      title = `Body step: ${bstep.name || bstep.step_id}`;
+      stepHeading = { name: bstep.name || bstep.step_id, type: stepTypeLabel(bstep) };
+      title = `Body step: ${stepHeading.name}`;
       body = (
         <>
           <button
@@ -110,6 +137,9 @@ export function Inspector({
             step={bstep}
             bodyOf={bodySel.loop}
             edit={edit}
+            onFollowRoute={(target) =>
+              setBodySel(target === 'end' ? null : { loop: bodySel.loop, step: target })
+            }
             skillsVersion={skills.data ? 1 : 0}
           />
         </>
@@ -121,7 +151,8 @@ export function Inspector({
   } else if (selectedStepId) {
     const step = findStep(draft, selectedStepId, null);
     if (step) {
-      title = `Step: ${step.name || step.step_id}`;
+      stepHeading = { name: step.name || step.step_id, type: stepTypeLabel(step) };
+      title = `Step: ${stepHeading.name}`;
       body = (
         <StepEditor
           key={step.step_id}
@@ -129,7 +160,15 @@ export function Inspector({
           step={step}
           bodyOf={null}
           edit={edit}
-          onEditBody={(loop, s) => setBodySel({ loop, step: s })}
+          onFollowRoute={(target) => {
+            const id = target === 'end' ? END_NODE_ID : target;
+            if (onGoToStep) onGoToStep(id);
+            else dispatch(selectStep(id));
+          }}
+          onEditBody={(loop, child) => {
+            if (onGoToStep) onGoToStep(loop, child);
+            else setBodySel({ loop, step: child });
+          }}
           skillsVersion={skills.data ? 1 : 0}
         />
       );
@@ -137,7 +176,7 @@ export function Inspector({
   }
 
   return (
-    <motion.aside
+    <m.aside
       ref={floating.ref}
       style={floating.style}
       className="overlay-panel overlay-right inspector"
@@ -149,7 +188,10 @@ export function Inspector({
       transition={{ duration: 0.18, ease: 'easeOut' }}
     >
       <div className="drawer-head panel-drag-handle" {...floating.handle}>
-        <h2>{title}</h2>
+        <div className="inspector-title">
+          <h2 tabIndex={-1}>{stepHeading?.name ?? title}</h2>
+          {stepHeading && <span className="count-badge">{stepHeading.type}</span>}
+        </div>
         {!requiredSetup && (
           <button
             type="button"
@@ -162,7 +204,7 @@ export function Inspector({
         )}
       </div>
       <div className="inspector-body">{body}</div>
-    </motion.aside>
+    </m.aside>
   );
 }
 
@@ -172,101 +214,75 @@ function StepEditor({
   bodyOf,
   edit,
   onEditBody,
+  onFollowRoute,
   skillsVersion,
 }: {
   def: WorkflowDefinition;
   step: WorkflowStep;
   bodyOf: string | null;
   edit: EditFn;
+  onFollowRoute: (target: string) => void;
   onEditBody?: (loop: string, body: string) => void;
   skillsVersion: number;
 }) {
   void skillsVersion;
   const dispatch = useAppDispatch();
+  const store = useStore<RootState>();
   const notify = useNotify();
   const skills = useListSkillsQuery();
   const refs = bodyOf
     ? bodyRefs(def, bodyOf, step.step_id)
     : availableRefs(def, step.step_id);
 
+  const canDelete = Boolean(bodyOf) || (def.steps?.length ?? 0) > 1;
   const remove = () => {
-    if (bodyOf) {
-      edit((d) => {
-        const loop = findStep(d, bodyOf, null);
-        const body = (loop?.config as Record<string, unknown> | undefined)
-          ?.body as WorkflowStep[] | undefined;
-        if (loop && Array.isArray(body)) {
-          (loop.config as Record<string, unknown>).body = body.filter(
-            (s) => s.step_id !== step.step_id,
-          );
-        }
-      });
-      notify(
-        'ok',
-        `Deleted ${step.step_id} from the loop body; run Validate to find dangling body refs.`,
-      );
-      return;
-    }
-    const next = deleteStep(def, step.step_id);
+    const current = store.getState().workflowEditor.draft ?? def;
+    const next = deleteStep(current, step.step_id, bodyOf ?? undefined);
     if (!next) {
       notify('error', 'A workflow needs at least one step.');
       return;
     }
     dispatch(updateDraft(next));
-    dispatch(selectStep(null));
-    notify('ok', `Deleted ${step.step_id}; dangling edges now point at end.`);
+    if (bodyOf) onFollowRoute('end');
+    else dispatch(selectStep(null));
+    notify('ok', `Deleted ${step.name || step.step_id}.`);
   };
+
+  function duplicate() {
+    const current = store.getState().workflowEditor.draft;
+    if (!current) return;
+    const copy = duplicateWorkflowStep(current, step.step_id);
+    if (!copy) return;
+    dispatch(updateDraft(copy.definition));
+    onFollowRoute(copy.stepId);
+  }
 
   return (
     <div className="step-settings configuration-card">
-      <div className="settings-intro">
-        <div>
-          <strong>{step.name || step.step_id}</strong>
-          <p>Configure this step and connect its data</p>
-        </div>
-        <span className="count-badge">
-          {TYPE_LABELS[step.type] ?? step.type}
-        </span>
-      </div>
-      <section aria-label="Step identity" className="step-identity">
+      <section aria-label="Step details" className="step-identity">
+        <TextField
+          label="Step name"
+          value={step.name ?? ''}
+          onCommit={(value) =>
+            edit((draft) => {
+              const target = findStep(draft, step.step_id, bodyOf);
+              if (target) target.name = value;
+            })
+          }
+        />
         <TextField
           label="Step id"
           value={step.step_id}
-          onCommit={(v) => {
-            if (bodyOf) {
-              notify('error', 'Body step ids cannot be renamed here yet.');
-              return;
-            }
-            const next = renameStep(def, step.step_id, v);
+          readOnly={bodyOf !== null}
+          onCommit={(value) => {
+            const next = renameStep(def, step.step_id, value);
             if (!next) {
-              notify(
-                'error',
-                `"${v.trim()}" is not usable: ids must be unique, non-empty, and not "end".`,
-              );
+              notify('error', 'Use a unique step ID with letters, numbers, hyphens, or underscores.');
               return;
             }
             dispatch(updateDraft(next));
-            dispatch(selectStep(v.trim()));
-            notify(
-              'ok',
-              `Renamed to ${v.trim()}; every reference was rewritten.`,
-            );
+            dispatch(selectStep(value.trim()));
           }}
-        />
-      </section>
-      <section aria-label="Step details" className="step-details">
-        <h3>Step details</h3>
-        <TextField
-          label="What should this step do? (name)"
-          value={step.name ?? ''}
-          onCommit={(v) =>
-            edit((d) => {
-              const t = findStep(d, step.step_id, bodyOf);
-              if (t) {
-                t.name = v;
-              }
-            })
-          }
         />
       </section>
 
@@ -287,35 +303,37 @@ function StepEditor({
       {step.type === 'skill_retrieval' && (
         <SkillRetrievalConfig step={step} bodyOf={bodyOf} edit={edit} />
       )}
-      {(step.type === 'lang_execution' ||
-        step.type === 'lang_recall' ||
-        step.type === 'lang_verification') && (
-        <LanguageStepInspector
-          contextId={def.workflow_id}
-          step={step}
-          bodyOf={bodyOf}
-          edit={edit}
-          refs={refs}
-        />
-      )}
-      {step.type === 'skill_verification' && (
-        <VerificationStepInspector
-          step={step}
-          bodyOf={bodyOf}
-          edit={edit}
-          refs={refs}
-        />
-      )}
-      {step.type === 'skill_execution' && (
-        <SkillStepInspector
-          def={def}
-          step={step}
-          bodyOf={bodyOf}
-          edit={edit}
-          refs={refs}
-          skills={skills.data?.skills ?? []}
-        />
-      )}
+      <Suspense fallback={<p role="status">Loading step settings...</p>}>
+        {(step.type === 'lang_execution' ||
+          step.type === 'lang_recall' ||
+          step.type === 'lang_verification') && (
+          <LanguageStepInspector
+            contextId={def.workflow_id}
+            step={step}
+            bodyOf={bodyOf}
+            edit={edit}
+            refs={refs}
+          />
+        )}
+        {step.type === 'skill_verification' && (
+          <VerificationStepInspector
+            step={step}
+            bodyOf={bodyOf}
+            edit={edit}
+            refs={refs}
+          />
+        )}
+        {step.type === 'skill_execution' && (
+          <SkillStepInspector
+            def={def}
+            step={step}
+            bodyOf={bodyOf}
+            edit={edit}
+            refs={refs}
+            skills={skills.data?.skills ?? []}
+          />
+        )}
+      </Suspense>
       {step.type === 'conditional_routing' && (
         <BranchConfig
           def={def}
@@ -339,35 +357,34 @@ function StepEditor({
       {step.type === 'output_composition' && (
         <MappingEditor
           step={step}
+          bodyOf={bodyOf}
           holder="mapping"
           refs={refs}
           edit={edit}
           title="Result mapping"
         />
       )}
-      {step.type === 'document_generation' && (
-        <DocStepInspector
-          def={def}
-          step={step}
-          bodyOf={bodyOf}
-          edit={edit}
-          refs={refs}
-        />
-      )}
-      {step.type === 'artifact_generation' && (
-        <ArtifactStepInspector
-          def={def}
-          step={step}
-          bodyOf={bodyOf}
-          edit={edit}
-          refs={refs}
-        />
+      {(step.type === 'document_generation' || step.type === 'artifact_generation') && (
+        <p className="status-line">This generator is retired. The workflow keeps its saved settings.</p>
       )}
 
-      <RoutingSection def={def} step={step} bodyOf={bodyOf} edit={edit} />
+      <RoutingSection def={def} step={step} bodyOf={bodyOf} edit={edit} onFollow={onFollowRoute} />
 
       <div className="step-footer">
-        <button type="button" className="btn btn-danger" onClick={remove}>
+        {!canDelete && (
+          <p className="status-line">A workflow needs at least one step.</p>
+        )}
+        {bodyOf === null && canDuplicateStep(step) && (
+          <button type="button" className="btn" onClick={duplicate}>
+            Duplicate after this step
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={!canDelete}
+          onClick={remove}
+        >
           Delete step
         </button>
       </div>
@@ -382,10 +399,12 @@ function InputNameField({
   index,
   value,
   onCommit,
+  errorId,
 }: {
   index: number;
   value: string;
   onCommit: (v: string) => void;
+  errorId?: string;
 }) {
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
@@ -393,15 +412,19 @@ function InputNameField({
     <input
       type="text"
       aria-label={`Input ${index + 1} name`}
+      autoCapitalize="none"
+      spellCheck={false}
+      aria-invalid={errorId ? true : undefined}
+      aria-describedby={errorId}
       value={text}
       onChange={(e) => setText(e.target.value)}
       onBlur={() => {
-        if (text !== value) {
-          onCommit(text.trim());
-        }
+        const trimmed = text.trim();
+        if (trimmed !== text) setText(trimmed);
+        if (trimmed !== value) onCommit(trimmed);
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
           (e.target as HTMLInputElement).blur();
         }
       }}
@@ -410,141 +433,220 @@ function InputNameField({
 }
 
 function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
-  const refs = [
-    ...(def.inputs ?? []).map((i) => ({
-      ref: i.name,
-      label: i.name,
-      detail: `input · ${i.type ?? 'string'}`,
-    })),
-    ...(def.steps ?? []).map((s) => ({
-      ref: s.step_id,
-      label: s.step_id,
-      detail: `output of ${s.name || s.step_id}`,
-    })),
-  ];
+  const stepRefs = availableRefs(def, END_NODE_ID, {
+    includeInputs: false,
+    includeCollectedStepRoots: true,
+  });
   const outputs = (def.outputs ?? {}) as Record<string, { from?: string }>;
+  const sourceRoots = new Set([
+    ...(def.inputs ?? []).map(({ name }) => name),
+    ...(def.steps ?? []).map(({ step_id }) => step_id),
+  ]);
+  const outputRows = Object.entries(outputs).map(([name, binding]) => {
+    const source = typeof binding?.from === 'string' ? binding.from : '';
+    const problem = outputSourceIssue(source, sourceRoots);
+    const error = problem === 'empty' ? 'Choose a source.' :
+      problem === 'missing' ? 'This step or input no longer exists.' : undefined;
+    return { name, source, error };
+  });
   const [newKey, setNewKey] = useState('');
+  const [editingOutput, setEditingOutput] = useState<string | null>(null);
+  const duplicateOutput = editingOutput === null && Object.hasOwn(outputs, newKey.trim());
   const [newFrom, setNewFrom] = useState('');
+  const [stepResult, setStepResult] = useState('');
   const [addingBinding, setAddingBinding] = useState(false);
+  const outputName = useRef<HTMLInputElement>(null);
+  const outputForm = useRef<HTMLFormElement>(null);
+  const composingOutput = useRef(false);
+  const addOutputButton = useRef<HTMLButtonElement>(null);
+  const sourceTrigger = useRef<HTMLButtonElement | null>(null);
+  const restoreOutputFocus = useRef(false);
+  const outputList = useRef<HTMLDivElement>(null);
+  const removedOutputIndex = useRef<number | null>(null);
+  useEffect(() => {
+    const index = removedOutputIndex.current;
+    if (index === null) return;
+    removedOutputIndex.current = null;
+    const buttons = outputList.current?.querySelectorAll<HTMLButtonElement>('[data-remove-output]');
+    const next = buttons?.[index] ?? buttons?.[index - 1] ?? addOutputButton.current;
+    next?.focus();
+  }, [def.outputs]);
+  useEffect(() => {
+    if (addingBinding) {
+      if (editingOutput === null) outputName.current?.focus();
+      else outputForm.current?.querySelector('select')?.focus();
+    } else if (restoreOutputFocus.current) {
+      restoreOutputFocus.current = false;
+      const trigger = sourceTrigger.current;
+      sourceTrigger.current = null;
+      (trigger?.isConnected ? trigger : addOutputButton.current)?.focus();
+    }
+  }, [addingBinding, editingOutput]);
   const [source, setSource] = useState<'step' | 'model'>('step');
   const [modelId, setModelId] = useState('');
   const [fieldName, setFieldName] = useState('');
-  const workspace = useGetDesignerWorkspaceQuery(undefined, {
-    skip: !addingBinding || source !== 'model',
+  const hasModelInputs = def.inputs?.some((input) => Boolean(input.designer));
+  const workspace = useGetDesignerWorkspaceQuery({ include_archived: true }, {
+    skip: !hasModelInputs && (!addingBinding || source !== 'model'),
   });
-  const models = (workspace.data?.types ?? []).filter(
+  const workspaceModels = workspace.data?.types ?? [];
+  const models = workspaceModels.filter(
     (model) => model.status === 'active' && model.version > 0,
   );
-  const model = models.find((candidate) => candidate.type_id === modelId);
+  const refs = [
+    ...(def.inputs ?? []).map((input) => {
+      const binding = input.designer;
+      const boundModel = binding && !binding.workspace
+        ? workspaceModels.find((model) => model.type_id === binding.type || model.name === binding.type)
+        : undefined;
+      const modelName = boundModel?.name ?? binding?.type;
+      const modelStatus = boundModel?.status === 'archived' ? ' · Archived' : '';
+      return {
+        ref: input.name,
+        label: input.name,
+        detail: modelName
+          ? `Data model · ${modelName}${binding?.field ? ` · ${binding.field}` : ''}${modelStatus}`
+          : `Workflow input · ${input.type ?? 'string'}`,
+      };
+    }),
+    ...stepRefs,
+  ];
+  const model = models.find((candidate) => candidate.type_id === modelId)
+    ?? models.find((candidate) => candidate.name === modelId);
   const version = useGetDesignerVersionQuery(
-    { id: modelId, version: model?.version ?? 0 },
+    { id: model?.type_id ?? '', version: model?.version ?? 0 },
     { skip: !model },
   );
   const modelFields = (version.currentData?.spec.fields ?? []).filter(
     (field) => field.status === 'active',
   );
   const modelField = modelFields.find((field) => field.name === fieldName);
+  const currentSource = editingOutput === null ? undefined : outputRows.find(({ name }) => name === editingOutput)?.source;
+  const usesModel = def.inputs?.some(({ name, designer }) => name === currentSource && designer);
+  const currentSourceLabel = usesModel ? refs.find(({ ref }) => ref === currentSource)?.detail : currentSource;
 
   function closeOutputForm() {
+    composingOutput.current = false;
+    setEditingOutput(null);
     setNewKey('');
     setNewFrom('');
+    setStepResult('');
     setSource('step');
     setModelId('');
     setFieldName('');
+    restoreOutputFocus.current = true;
     setAddingBinding(false);
   }
 
-  function addOutput() {
-    const key = newKey.trim();
-    if (!key || (source === 'model' ? !model || !modelField : !newFrom.trim())) {
+  function saveOutput() {
+    const key = editingOutput ?? newKey.trim();
+    if (!key || duplicateOutput || (source === 'model' ? !model || !modelField : !newFrom.trim())) {
       return;
     }
     edit((draft) => {
-      let from = newFrom.trim();
-      if (source === 'model' && model && modelField) {
-        const inputType = modelField.repeated
-          ? 'array'
-          : modelField.ftype === 'integer'
-            ? 'number'
-            : modelField.ftype === 'boolean'
-              ? 'boolean'
-              : 'string';
-        const baseName = `model_${key.replace(/[^A-Za-z0-9_]/g, '_')}`;
-        const takenNames = new Set([
-          ...(draft.inputs ?? []).map((input) => input.name),
-          ...(draft.steps ?? []).map((step) => step.step_id),
-        ]);
-        from = baseName;
-        for (let suffix = 2; takenNames.has(from); suffix++) {
-          from = `${baseName}_${suffix}`;
-        }
-        draft.inputs = [
-          ...(draft.inputs ?? []),
-          {
-            name: from,
-            type: inputType,
-            required: true,
-            designer: { type: model.type_id, mode: 'value', field: modelField.name },
-          },
-        ];
-      }
-      draft.outputs = { ...(draft.outputs ?? {}), [key]: { from } };
+      const exists = Object.hasOwn(draft.outputs ?? {}, key);
+      if (exists !== (editingOutput !== null)) return;
+      const from = source === 'model' && model && modelField
+        ? bindModelField(draft, key, model, modelField)
+        : newFrom.trim();
+      setOutputSource(draft, key, from);
     });
     closeOutputForm();
   }
 
   return (
-    <section
-      className="finish-settings configuration-card"
-      aria-labelledby="finish-bindings-heading"
-    >
-      <h3 id="finish-bindings-heading">Bindings</h3>
-      <div className="settings-outputs" role="group" aria-label="Workflow outputs">
-        <h4>
+    <div className="finish-settings configuration-card">
+      <div ref={outputList} className="settings-outputs" role="group" aria-label="Workflow outputs">
+        <h3>
           Workflow outputs{' '}
-          <span className="count-badge">
-            {Object.values(outputs).filter((v) => v?.from?.trim()).length}{' '}
-            mapped
-          </span>
-        </h4>
-        {Object.entries(outputs).map(([k, v]) => (
-          <div key={k} className="map-row output-binding-row">
+          {outputRows.length > 0 && (
+            <span className="count-badge">{outputRows.filter(({ error }) => !error).length} mapped</span>
+          )}
+        </h3>
+        {outputRows.length === 0 && !addingBinding && (
+          <p className="status-line">Add an output to return a step result or a field from a data model.</p>
+        )}
+        {outputRows.map(({ name: k, source: previousSource, error }, index) => (
+          <div key={k} className="map-row output-binding-row" data-output-name={k}>
             <code className="num">{k}</code>
             <span className="binding-arrow" aria-hidden="true">
               ←
             </span>
-            <DataRefPicker
-              label={`Source for ${k}`}
-              value={v?.from ?? ''}
-              options={refs}
-              onCommit={(from) =>
-                edit((d) => {
-                  d.outputs = { ...(d.outputs ?? {}), [k]: { from } };
-                })
-              }
-            />
+            <div className="finish-binding-source">
+              <DataRefPicker
+                label={`Source for ${k}`}
+                trimOnCommit
+                value={previousSource}
+                error={error}
+                options={refs}
+                onCommit={(from) => edit((draft) => setOutputSource(draft, k, from))}
+              />
+                <button type="button" className="link-button" disabled={addingBinding} aria-label={`Change source for ${k}`} onClick={(event) => {
+                  sourceTrigger.current = event.currentTarget;
+                  setEditingOutput(k);
+                  setNewKey(k);
+                  setNewFrom(previousSource);
+                  setStepResult(stepRefs.some(({ ref }) => ref === previousSource) ? previousSource : previousSource ? '$path' : '');
+                  const binding = def.inputs?.find(({ name }) => name === previousSource)?.designer;
+                  if (binding?.field && !binding.workspace && binding.mode === 'value') {
+                    setSource('model');
+                    setModelId(binding.type);
+                    setFieldName(binding.field);
+                  }
+                  setAddingBinding(true);
+                }}>Change source</button>
+            </div>
             <button
               type="button"
               className="btn"
+              data-remove-output=""
+              disabled={addingBinding}
               aria-label={`Remove output ${k}`}
-              onClick={() =>
+              onClick={() => {
+                removedOutputIndex.current = index;
                 edit((d) => {
                   const o = { ...(d.outputs ?? {}) } as Record<string, unknown>;
                   delete o[k];
                   d.outputs = o;
-                })
-              }
+                  releaseModelInput(d, previousSource);
+                });
+              }}
             >
               ×
             </button>
           </div>
         ))}
         {addingBinding && (
-          <div className="finish-output-form">
+          <form
+            ref={outputForm}
+            className="finish-output-form"
+            onCompositionStart={() => { composingOutput.current = true; }}
+            onCompositionEnd={() => { composingOutput.current = false; }}
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!composingOutput.current) saveOutput();
+            }}
+          >
             <label className="field">
               <span>Output name</span>
-              <input value={newKey} onChange={(event) => setNewKey(event.target.value)} />
+              <input
+                ref={outputName}
+                autoCapitalize="none"
+                spellCheck={false}
+                value={newKey}
+                readOnly={editingOutput !== null}
+                aria-required={editingOutput === null || undefined}
+                aria-invalid={duplicateOutput || undefined}
+                aria-describedby={duplicateOutput ? 'output-name-error' : undefined}
+                onChange={(event) => setNewKey(event.target.value)}
+              />
             </label>
+            {editingOutput !== null && (
+              <p className="status-line">Current source{' '}{currentSourceLabel || 'None'}</p>
+            )}
+            {duplicateOutput && (
+              <p id="output-name-error" className="status-bad">That output name is already in use.</p>
+            )}
             <SelectField
               label="Source type"
               value={source}
@@ -552,25 +654,54 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
                 { value: 'step', label: 'Step' },
                 { value: 'model', label: 'Data model' },
               ]}
-              onChange={(value) => setSource(value === 'model' ? 'model' : 'step')}
+              onChange={(value) => {
+                setSource(value === 'model' ? 'model' : 'step');
+                setStepResult('');
+                setNewFrom('');
+                setModelId('');
+                setFieldName('');
+              }}
             />
             {source === 'step' ? (
-              <DataRefPicker
-                label="Step output"
-                value={newFrom}
-                options={refs}
-                onCommit={setNewFrom}
-                onEdit={setNewFrom}
-                placeholder="step.field"
-              />
+              <>
+                <SelectField
+                  label="Step result"
+                  required
+                  value={stepResult}
+                  options={[
+                    { value: '', label: 'Select a step result' },
+                    ...stepRefs.map((stepRef) => ({ value: stepRef.ref, label: stepRef.label })),
+                    { value: '$path', label: 'Enter a result path' },
+                  ]}
+                  onChange={(picked) => {
+                    setStepResult(picked);
+                    setNewFrom(picked === '$path' ? '' : picked);
+                  }}
+                />
+                {stepResult === '$path' && (
+                  <DataRefPicker
+                    label="Step output"
+                    trimOnCommit
+                    autoFocus
+                    description="Enter the step ID and field separated by a dot."
+                    required
+                    value={newFrom}
+                    options={stepRefs}
+                    onCommit={setNewFrom}
+                    onEdit={setNewFrom}
+                    placeholder="step.field"
+                  />
+                )}
+              </>
             ) : (
               <>
                 <SelectField
                   label="Data model"
-                  value={modelId}
+                  required
+                  value={model?.type_id ?? ''}
                   options={[
                     { value: '', label: 'Select a published model' },
-                    ...models.map((item) => ({ value: item.type_id, label: item.name })),
+                    ...models.map((item) => ({ value: item.type_id, label: `${item.name} (v${item.version})` })),
                   ]}
                   onChange={(value) => {
                     setModelId(value);
@@ -580,6 +711,7 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
                 {model && (
                   <SelectField
                     label="Model field"
+                    required
                     value={fieldName}
                     options={[
                       { value: '', label: 'Select a field' },
@@ -591,32 +723,50 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
                 {workspace.isFetching || version.isFetching ? (
                   <p role="status">Loading model data…</p>
                 ) : workspace.error || version.error ? (
-                  <p role="alert">Could not load model data.</p>
+                  <div>
+                    <p role="alert">{workspace.error ? 'Could not load data models.' : 'Could not load fields for this model.'}</p>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        if (workspace.error) void workspace.refetch();
+                        else if (model) void version.refetch();
+                      }}
+                    >
+                      Retry
+                    </button>
+                  </div>
                 ) : models.length === 0 ? (
                   <p>Publish a model in Data Designer to use its fields here.</p>
-                ) : (
-                  <p>The Runner asks which record to use when the workflow starts.</p>
-                )}
+                ) : model && modelFields.length === 0 ? (
+                  <p>This model has no active fields.</p>
+                ) : model && fieldName && !modelField ? (
+                  <p role="alert">{fieldName} is no longer active in {model.name} v{model.version}. Choose another field.</p>
+                ) : modelId && !model ? (
+                  <p role="alert">{modelId} is unavailable. Choose another data model.</p>
+                ) : model ? (
+                  <p>Choose a record when you run the workflow. Outputs that use the same model field share the selected record.</p>
+                ) : null}
               </>
             )}
             <div className="finish-output-actions">
               <button
-                type="button"
+                type="submit"
                 className="btn btn-primary"
-                disabled={!newKey.trim() || (source === 'step' ? !newFrom.trim() : !model || !modelField)}
-                onClick={addOutput}
+                disabled={!newKey.trim() || duplicateOutput || (source === 'step' ? !newFrom.trim() : !model || !modelField)}
               >
-                Add
+                {editingOutput === null ? 'Add' : 'Apply'}
               </button>
               <button type="button" className="btn" onClick={closeOutputForm}>
                 Cancel
               </button>
             </div>
-          </div>
+          </form>
         )}
         {!addingBinding && (
           <button
             type="button"
+            ref={addOutputButton}
             className="btn add-binding-button"
             onClick={() => setAddingBinding(true)}
           >
@@ -649,15 +799,42 @@ function FinishSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }
           </fieldset>
         ))}
       </details>
-    </section>
+    </div>
   );
 }
 
-function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn }) {
+function WorkflowSettings({ def, edit, saved, requiredSetup }: {
+  def: WorkflowDefinition;
+  edit: EditFn;
+  saved: boolean;
+  requiredSetup: boolean;
+}) {
   const dispatch = useAppDispatch();
+  const errorPrefix = useId();
+  const inputs = def.inputs ?? [];
+  const library = useListWorkflowsQuery(undefined, { skip: saved });
+  const duplicateId = !saved && library.data?.workflows.some(({ workflow_id }) => workflow_id === def.workflow_id);
+  const nameErrors = workflowInputNameErrors(inputs);
   const reduxStore = useStore<RootState>();
   const freshDef = (): WorkflowDefinition =>
     reduxStore.getState().workflowEditor.draft ?? def;
+  const inputsSection = useRef<HTMLElement>(null);
+  const addInputButton = useRef<HTMLButtonElement>(null);
+  const inputToFocus = useRef<number | null>(null);
+  useEffect(() => {
+    const index = inputToFocus.current;
+    if (index === null) return;
+    inputToFocus.current = null;
+    const field = inputsSection.current?.querySelector<HTMLInputElement>(`input[aria-label="Input ${index + 1} name"]`);
+    (field ?? addInputButton.current)?.focus();
+  }, [inputs]);
+
+  function moveInput(index: number, direction: -1 | 1) {
+    const next = moveWorkflowInput(freshDef(), index, direction);
+    if (!next) return;
+    inputToFocus.current = index + direction;
+    dispatch(updateDraft(next));
+  }
   const policy = (def.policy ?? {}) as {
     execution_approval?: string;
     skill_approval?: string;
@@ -670,19 +847,29 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
         </div>
       </div>
       <TextField
+        id="creator-workflow-id"
         label="Workflow id"
-        description="Unique identifier the connected model provider uses to look up and run the workflow."
+        autoFocus={requiredSetup}
+        required={!saved}
+        trimOnCommit
+        autoCapitalize="none"
+        spellCheck={false}
+        error={duplicateId ? 'That workflow ID is already in use.' : undefined}
+        description={saved
+          ? 'This ID is fixed after the first save.'
+          : 'Enter a unique ID. Your connected model provider uses it to look up and run this workflow.'}
         value={def.workflow_id}
+        readOnly={saved}
         onCommit={(v) =>
           edit((d) => {
-            d.workflow_id = v.trim();
+            d.workflow_id = v;
           })
         }
       />
-      <section aria-label="Inputs" className="settings-inputs">
+      <section ref={inputsSection} aria-label="Inputs" className="settings-inputs">
         <h3>
           Inputs{' '}
-          <span className="count-badge">{def.inputs?.length ?? 0} fields</span>
+          <span className="count-badge">{inputs.length} {inputs.length === 1 ? 'field' : 'fields'}</span>
         </h3>
         <div className="input-column-head" aria-hidden="true">
           <span>Field</span>
@@ -690,12 +877,13 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
           <span>Req.</span>
           <span />
         </div>
-        {(def.inputs ?? []).map((inp, i) => (
+        {inputs.map((inp, i) => (
           <div key={i}>
             <div className="map-row settings-input-row">
               <InputNameField
                 index={i}
                 value={inp.name}
+                errorId={nameErrors[i] ? `${errorPrefix}-${i}` : undefined}
                 onCommit={(v) => {
                   const next = renameWorkflowInput(freshDef(), i, v);
                   if (next) {
@@ -715,20 +903,8 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
                   })
                 }
               >
-                {['string', 'number', 'boolean', 'object', 'array'].map((t) => (
-                  <option key={t} value={t}>
-                    {
-                      (
-                        {
-                          string: 'Text',
-                          number: 'Number',
-                          boolean: 'Boolean',
-                          object: 'JSON',
-                          array: 'Array',
-                        } as Record<string, string>
-                      )[t]
-                    }
-                  </option>
+                {Object.entries(INPUT_TYPE_LABELS).map(([type, label]) => (
+                  <option key={type} value={type}>{label}</option>
                 ))}
               </select>
               <label className="check-inline">
@@ -747,29 +923,50 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
                 />
                 <span className="sr-only">Required</span>
               </label>
-              <button
-                type="button"
-                className="btn"
-                aria-label={`Remove input ${inp.name}`}
-                onClick={() => {
-                  const next = removeWorkflowInput(freshDef(), i);
-                  if (next) {
-                    dispatch(updateDraft(next));
-                  }
-                }}
-              >
-                ×
-              </button>
+              <div className="input-row-actions">
+                {inputs.length > 1 && (
+                  <>
+                    <button type="button" className="btn" disabled={i === 0}
+                      aria-label={`Move input ${inp.name} up`} onClick={() => moveInput(i, -1)}>↑</button>
+                    <button type="button" className="btn" disabled={i === inputs.length - 1}
+                      aria-label={`Move input ${inp.name} down`} onClick={() => moveInput(i, 1)}>↓</button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label={`Remove input ${inp.name}`}
+                  onClick={() => {
+                    const next = removeWorkflowInput(freshDef(), i);
+                    if (next) {
+                      inputToFocus.current = Math.min(i, (next.inputs?.length ?? 0) - 1);
+                      dispatch(updateDraft(next));
+                    }
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             </div>
+            {nameErrors[i] && (
+              <p id={`${errorPrefix}-${i}`} className="workflow-input-error status-bad">
+                {nameErrors[i]}
+              </p>
+            )}
           </div>
         ))}
         {(def.inputs ?? []).length === 0 && (
           <p className="status-line">No inputs.</p>
         )}
         <button
+          ref={addInputButton}
           type="button"
           className="btn"
-          onClick={() => dispatch(updateDraft(addWorkflowInput(freshDef())))}
+          onClick={() => {
+            const current = freshDef();
+            inputToFocus.current = current.inputs?.length ?? 0;
+            dispatch(updateDraft(addWorkflowInput(current)));
+          }}
         >
           + Add input
         </button>
@@ -798,12 +995,9 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
         <h3>Policy</h3>
         <SelectField
           label="Execution approval"
+          description="Choose when someone must approve a workflow run before it starts."
           value={policy.execution_approval ?? 'first_run'}
-          options={[
-            { value: 'none', label: 'none' },
-            { value: 'first_run', label: 'first run' },
-            { value: 'always', label: 'always' },
-          ]}
+          options={EXECUTION_APPROVAL_OPTIONS}
           onChange={(v) =>
             edit((d) => {
               d.policy = { ...(d.policy ?? {}), execution_approval: v };
@@ -812,11 +1006,9 @@ function WorkflowSettings({ def, edit }: { def: WorkflowDefinition; edit: EditFn
         />
         <SelectField
           label="Skill approval"
+          description="Choose whether to ask for approval before using a newly drafted skill. The step controls whether it can draft skills."
           value={policy.skill_approval ?? 'new_names'}
-          options={[
-            { value: 'auto', label: 'auto' },
-            { value: 'new_names', label: 'new names' },
-          ]}
+          options={SKILL_APPROVAL_OPTIONS}
           onChange={(v) =>
             edit((d) => {
               d.policy = { ...(d.policy ?? {}), skill_approval: v };

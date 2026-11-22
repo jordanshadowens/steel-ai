@@ -43,4 +43,8 @@ it('deduplicates errors, dismisses after six seconds, and allows a later retry a
   });
   fireEvent.click(screen.getByText('Trigger'));
   expect(screen.getByRole('alert')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByText('Trigger'));
+  expect(screen.getByRole('alert')).toBeTruthy();
 });

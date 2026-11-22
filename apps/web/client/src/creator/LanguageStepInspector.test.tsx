@@ -52,11 +52,11 @@ test('repository selection removes conflicting inputs and persists customer sour
   }
   render(<Form />);
   fireEvent.click(
-    screen.getByLabelText('Load inputs from an authorized repository'),
+    screen.getByLabelText('Load inputs from a repository'),
   );
   for (const [label, value] of [
     ['Repository grant ID', 'customer-source'],
-    ['Exact source commit', 'a'.repeat(40)],
+    ['Source commit', 'a'.repeat(40)],
     ['Repository paths (one per line)', 'src/one.lang\nsrc/two.lang'],
   ]) {
     const field = screen.getByLabelText(label);
@@ -109,7 +109,7 @@ test('customer program and resource edits persist; invalid data is not silently 
     );
   }
   render(<Form />);
-  const field = screen.getByLabelText('Executable .lang program');
+  const field = screen.getByLabelText('.lang program');
   fireEvent.change(field, { target: { value: 'print 42;' } });
   fireEvent.blur(field);
   expect(saved!.steps![0].config!.program).toBe('print 42;');
@@ -169,7 +169,7 @@ test('natural-language draft fills source without replacing independent resource
   const input = screen.getByLabelText('Describe the program');
   fireEvent.change(input, { target: { value: 'Print the answer' } });
   fireEvent.blur(input);
-  fireEvent.click(screen.getByText('Draft executable program'));
+  fireEvent.click(screen.getByText('Draft program'));
   await waitFor(() =>
     expect(saved!.steps![0].config!.program).toBe('print 42;'),
   );
@@ -209,7 +209,7 @@ test('exact recall selector keeps customer hashes and requires verified cases', 
     );
   }
   render(<Form />);
-  fireEvent.click(screen.getByLabelText('Require exact verified candidate'));
+  fireEvent.click(screen.getByLabelText('Require an exact match'));
   for (const [label, value] of [
     ['Candidate source SHA-256', 'a'.repeat(64)],
     ['Verification definition SHA-256', 'b'.repeat(64)],
@@ -225,6 +225,6 @@ test('exact recall selector keeps customer hashes and requires verified cases', 
     definition_sha256: 'b'.repeat(64),
     repository_sha256: 'c'.repeat(64),
   });
-  fireEvent.click(screen.getByLabelText('Require exact verified candidate'));
+  fireEvent.click(screen.getByLabelText('Require an exact match'));
   expect(saved!.steps![0].config!).not.toHaveProperty('match');
 });

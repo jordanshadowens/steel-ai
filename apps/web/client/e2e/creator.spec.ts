@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 // (steel_customer_estimate). The app bundle is served at /app/index.html.
 test.beforeEach(async ({ page }) => {
   await page.goto('/app/index.html');
-  await page.getByRole('button', { name: 'Open library' }).click();
+  await page.getByRole('button', { name: 'Open workflow' }).click();
   await page
     .getByRole('button', { name: 'steel_customer_estimate' })
     .first()
@@ -27,7 +27,7 @@ test('node selection opens the inspector', async ({ page }) => {
   await expect(
     page.getByRole('complementary', { name: /Step:/ }),
   ).toBeVisible();
-  await expect(page.getByLabel(/What should this step do/)).toBeVisible();
+  await expect(page.getByLabel(/Step name/)).toBeVisible();
 });
 
 test('validate reports a quiet valid status', async ({ page }) => {
@@ -37,9 +37,9 @@ test('validate reports a quiet valid status', async ({ page }) => {
 
 test('palette inserts a step with undo', async ({ page }) => {
   const before = await page.locator('.step-node').count();
-  await page.getByRole('button', { name: '+ Step' }).click();
+  await page.getByRole('button', { name: '+ Add step' }).click();
   await page
-    .getByRole('button', { name: /Compose/ })
+    .getByRole('button', { name: /Set results/ })
     .first()
     .click();
   await expect(page.locator('.step-node')).toHaveCount(before + 1);

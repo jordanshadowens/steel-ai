@@ -1,4 +1,4 @@
-import { workflowEditorReducer } from './workflowEditor';
+import { normalizeWorkflowViewport, workflowEditorReducer } from './workflowEditor';
 
 const KEY = 'steel.workflow-draft.local.v1';
 const LEGACY_KEY = 'steel.workflow-draft.v1';
@@ -34,6 +34,7 @@ export function loadWorkflowRecovery(
       openWorkflowId: s.openWorkflowId,
       openVersion: s.openVersion,
       openStatus: s.openStatus,
+      viewport: normalizeWorkflowViewport(s.viewport) ?? normalizeWorkflowViewport(s.draft.ui?.view),
       skillSamples: s.skillSamples ?? {},
       skillModes: s.skillModes ?? {},
     };
@@ -75,6 +76,7 @@ export function saveWorkflowRecovery(
           openWorkflowId: state.openWorkflowId,
           openVersion: state.openVersion,
           openStatus: state.openStatus,
+          viewport: state.viewport,
           skillSamples: state.skillSamples,
           skillModes: state.skillModes,
         }),

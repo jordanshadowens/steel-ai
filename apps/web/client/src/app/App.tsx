@@ -1,18 +1,20 @@
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, useReducedMotion } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useHealthQuery } from '../api/steelApi';
 import { navigate, useRoute } from './router';
 import type { Route } from './router';
 import { CreatorPage } from '../creator/CreatorPage';
-import { RunnerPage } from '../runner/RunnerPage';
-import { TemplatesPage } from '../templates/TemplatesPage';
-import { DesignerPage } from '../designer/DesignerPage';
 import './App.css';
-import { useSyncExternalStore } from 'react';
+import { lazy, Suspense, useSyncExternalStore } from 'react';
 import { AccountGate } from '../auth/AccountGate';
 import { signOutAccount, getSession, subscribeSession } from '../auth/session';
 import { store } from '../store/store';
 import { isDirty } from '../store/workflowEditor';
 import { isSpecDirty } from '../store/templateEditor';
+
+const RunnerPage = lazy(() => import('../runner/RunnerPage').then(({ RunnerPage }) => ({ default: RunnerPage })));
+const TemplatesPage = lazy(() => import('../templates/TemplatesPage').then(({ TemplatesPage }) => ({ default: TemplatesPage })));
+const DesignerPage = lazy(() => import('../designer/DesignerPage').then(({ DesignerPage }) => ({ default: DesignerPage })));
 
 const DESTINATIONS: Array<{ route: Route; label: string }> = [
   { route: 'creator', label: 'Workflow Creator' },
@@ -125,7 +127,7 @@ function WorkspaceApp() {
       )}
       <main className="shell-main">
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
+          <m.div
             key={route}
             className="shell-page"
             initial={reduceMotion ? false : { opacity: 0 }}
@@ -143,10 +145,12 @@ function WorkspaceApp() {
             }
           >
             {route === 'creator' && <CreatorPage />}
-            {route === 'runner' && <RunnerPage />}
-            {route === 'templates' && <TemplatesPage />}
-            {route === 'designer' && <DesignerPage />}
-          </motion.div>
+            <Suspense fallback={<p role="status">Loading page...</p>}>
+              {route === 'runner' && <RunnerPage />}
+              {route === 'templates' && <TemplatesPage />}
+              {route === 'designer' && <DesignerPage />}
+            </Suspense>
+          </m.div>
         </AnimatePresence>
       </main>
     </div>

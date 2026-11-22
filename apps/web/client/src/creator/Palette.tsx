@@ -1,20 +1,21 @@
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectStep, updateDraft } from '../store/workflowEditor';
-import { STEP_TYPES, defaultConfig, definitionToFlow } from './adapter';
+import { STEP_TYPES, defaultConfig, definitionToFlow, insertWorkflowStep, stepNameWithId } from './adapter';
 import type { StepType } from '../api/contracts';
 import { useNotify } from './notices';
 
 // One insertion path shared by click-to-insert and drag-and-drop.
-export function useInsertStep(): (
+export function useInsertStep(onInserted?: (id: string) => void): (
   type: StepType,
   at: { x: number; y: number } | null,
+  afterId?: string | null,
 ) => void {
   const dispatch = useAppDispatch();
   const notify = useNotify();
   const draft = useAppSelector((s) => s.workflowEditor.draft);
-  return (type, at) => {
+  return (type, at, afterId = null) => {
     if (!draft) {
       notify('error', 'Open or create a workflow first.');
       return;
@@ -28,7 +29,10 @@ export function useInsertStep(): (
     const occupied = definitionToFlow(draft, null).nodes.filter(
       (node) => node.type === 'step',
     );
-    const pos = { ...(at ?? { x: 120, y: 120 }) };
+    const predecessor = occupied.find((node) => node.id === afterId);
+    const pos = { ...(at ?? (predecessor
+      ? { x: predecessor.position.x + 420, y: predecessor.position.y + 30 }
+      : { x: 120, y: 120 })) };
     // Keep both click and drop insertion clear of existing node hit targets.
     while (
       occupied.some(
@@ -41,8 +45,8 @@ export function useInsertStep(): (
     }
     const next = {
       ...draft,
-      steps: [
-        ...steps,
+      steps: insertWorkflowStep(
+        steps,
         {
           step_id: id,
           type,
@@ -50,7 +54,8 @@ export function useInsertStep(): (
           config: defaultConfig(type),
           on_success: 'end',
         },
-      ],
+        afterId,
+      ),
       ui: {
         ...(draft.ui ?? {}),
         positions: {
@@ -63,18 +68,38 @@ export function useInsertStep(): (
       },
     };
     dispatch(updateDraft(next));
-    dispatch(selectStep(id));
+    if (onInserted) onInserted(id);
+    else dispatch(selectStep(id));
   };
 }
 
 // Floating step-insertion palette: drag onto the canvas or click to insert
 // at the visible center. Drop coordinates go through screenToFlow so pan
 // and zoom are honored.
-export function Palette() {
+export function Palette({ onInserted }: { onInserted: (id: string) => void }) {
   const { screenToFlowPosition } = useReactFlow();
-  const insert = useInsertStep();
+  const insert = useInsertStep(onInserted);
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const [afterId, setAfterId] = useState('');
+  const button = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const steps = useAppSelector((state) => state.workflowEditor.draft?.steps);
+  const selectedId = useAppSelector((state) => state.workflowEditor.selectedStepId);
+  const selected = steps?.find((step) => step.step_id === selectedId);
+  const ends = steps?.filter((step) => !step.on_success || step.on_success === 'end') ?? [];
+  const defaultAfter = selected ?? (ends.length === 1 ? ends[0] : null);
+
+  useEffect(() => {
+    if (open) searchInput.current?.focus();
+  }, [open]);
+
+  function closePalette(restoreFocus = false) {
+    setOpen(false);
+    setSearch('');
+    if (restoreFocus) button.current?.focus();
+  }
 
   const q = search.trim().toLowerCase();
   const types = STEP_TYPES.filter(
@@ -90,59 +115,100 @@ export function Palette() {
     const rect = el?.getBoundingClientRect();
     const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
     const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2;
-    insert(type, screenToFlowPosition({ x: cx, y: cy }));
-    setOpen(false);
+    insert(type, afterId ? null : screenToFlowPosition({ x: cx, y: cy }), afterId || null);
+    closePalette();
   };
 
   return (
     <div className="palette">
       <button
         type="button"
+        ref={button}
         className="btn btn-primary palette-fab"
         aria-expanded={open}
-        title="Add a step"
-        onClick={() => setOpen(!open)}
+        aria-haspopup="dialog"
+        aria-controls={open ? panelId : undefined}
+        title={open ? 'Close Add step' : 'Add a step'}
+        onClick={() => {
+          if (open) {
+            closePalette(true);
+          } else {
+            setAfterId(defaultAfter?.step_id ?? '');
+            setOpen(true);
+          }
+        }}
       >
-        + Step
+        + Add step
       </button>
       {open && (
-        <div className="palette-pop" role="dialog" aria-label="Step palette">
+        <div
+          id={panelId}
+          className="palette-pop"
+          role="dialog"
+          aria-label="Add step"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              closePalette(true);
+            }
+          }}
+        >
+          <label className="palette-placement">
+            <span>Connect after</span>
+            <select value={afterId} onChange={(event) => setAfterId(event.target.value)}>
+              <option value="">Leave unconnected</option>
+              {(steps ?? []).map((step) => (
+                <option key={step.step_id} value={step.step_id}>
+                  {stepNameWithId(step)}
+                </option>
+              ))}
+            </select>
+          </label>
           <input
+            ref={searchInput}
             type="search"
             aria-label="Search step types"
             placeholder="Search steps…"
             value={search}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' || event.nativeEvent.isComposing || !search.trim() || types.length !== 1) return;
+              event.preventDefault();
+              insertAtCenter(types[0].value);
+            }}
             onChange={(e) => setSearch(e.target.value)}
           />
           <ul className="plain">
             {types.map((t) => (
               <li key={t.value}>
-                <div
+                <button
+                  type="button"
                   className="palette-item"
                   draggable
                   onDragStart={(e) => {
                     e.dataTransfer.setData('application/steel-step', t.value);
+                    if (afterId) e.dataTransfer.setData('application/steel-after', afterId);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
-                  onClick={() => insertAtCenter(t.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      insertAtCenter(t.value);
-                    }
+                  onDragEnd={(event) => {
+                    if (event.dataTransfer.dropEffect === 'copy') closePalette();
                   }}
-                  role="button"
-                  tabIndex={0}
+                  onClick={() => insertAtCenter(t.value)}
                   title={`${t.hint}. Drag onto the canvas or activate to insert.`}
                 >
-                  <span className="list-title">+ {t.label}</span>
+                  <span className="list-title">{t.label}</span>
                   <span className="status-line">{t.hint}</span>
-                </div>
+                </button>
               </li>
             ))}
           </ul>
+          <div role="status">
+            {types.length === 0 && <p className="status-line">No matching steps.</p>}
+          </div>
           {types.length === 0 && (
-            <p className="status-line">No step types match.</p>
+            <button type="button" className="btn" onClick={() => {
+              setSearch('');
+              searchInput.current?.focus();
+            }}>Clear search</button>
           )}
         </div>
       )}
@@ -166,12 +232,14 @@ export function usePaletteDrop(): {
       }
     },
     onDrop: (e) => {
-      const type = e.dataTransfer.getData('application/steel-step') as StepType;
+      const suppliedType = e.dataTransfer.getData('application/steel-step');
+      const type = STEP_TYPES.find(({ value }) => value === suppliedType)?.value;
       if (!type) {
         return;
       }
       e.preventDefault();
-      insert(type, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+      const after = e.dataTransfer.getData('application/steel-after');
+      insert(type, screenToFlowPosition({ x: e.clientX, y: e.clientY }), after || null);
     },
   };
 }

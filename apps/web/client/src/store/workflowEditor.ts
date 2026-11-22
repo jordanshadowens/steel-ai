@@ -16,6 +16,7 @@ export type EditorPanel =
   | 'settings';
 
 interface WorkflowEditorState {
+  openSequence: number;
   openWorkflowId: string | null;
   openVersion: number | null;
   openStatus: string | null;
@@ -43,6 +44,7 @@ interface WorkflowEditorState {
 }
 
 const initialState: WorkflowEditorState = {
+  openSequence: 0,
   openWorkflowId: null,
   openVersion: null,
   openStatus: null,
@@ -63,6 +65,26 @@ function snapshot(draft: WorkflowDefinition): string {
   return JSON.stringify(draft);
 }
 
+function takeHistoryDraft(
+  history: string[],
+  current: WorkflowDefinition,
+  saved: boolean,
+): WorkflowDefinition | null {
+  const currentJson = snapshot(current);
+  while (history.length > 0) {
+    const historical = JSON.parse(history.pop()!) as WorkflowDefinition;
+    if (saved) {
+      historical.workflow_id = current.workflow_id;
+      if (current.version === undefined) delete historical.version;
+      else historical.version = current.version;
+      if (current.status === undefined) delete historical.status;
+      else historical.status = current.status;
+    }
+    if (snapshot(historical) !== currentJson) return historical;
+  }
+  return null;
+}
+
 const slice = createSlice({
   name: 'workflowEditor',
   initialState,
@@ -77,7 +99,9 @@ const slice = createSlice({
       }>,
     ) {
       const { workflowId, version, status, definition } = action.payload;
+      state.openSequence += 1;
       state.openWorkflowId = workflowId;
+      state.viewport = normalizeWorkflowViewport(definition.ui?.view);
       state.openVersion = version;
       state.openStatus = status ?? null;
       state.draft = definition;
@@ -92,7 +116,7 @@ const slice = createSlice({
       state.skillDrafts = {};
     },
     closeDefinition(state) {
-      Object.assign(state, initialState);
+      Object.assign(state, initialState, { openSequence: state.openSequence + 1 });
     },
     updateDraft(state, action: PayloadAction<WorkflowDefinition>) {
       if (!state.draft) {
@@ -106,20 +130,18 @@ const slice = createSlice({
       state.draft = action.payload;
     },
     undo(state) {
-      const prev = state.past.pop();
-      if (!state.draft || prev === undefined) {
-        return;
-      }
+      if (!state.draft) return;
+      const previous = takeHistoryDraft(state.past, state.draft, state.openVersion !== null);
+      if (!previous) return;
       state.future.push(snapshot(state.draft));
-      state.draft = JSON.parse(prev) as WorkflowDefinition;
+      state.draft = previous;
     },
     redo(state) {
-      const next = state.future.pop();
-      if (!state.draft || next === undefined) {
-        return;
-      }
+      if (!state.draft) return;
+      const next = takeHistoryDraft(state.future, state.draft, state.openVersion !== null);
+      if (!next) return;
       state.past.push(snapshot(state.draft));
-      state.draft = JSON.parse(next) as WorkflowDefinition;
+      state.draft = next;
     },
     markSaved(
       state,
@@ -145,8 +167,10 @@ const slice = createSlice({
       if (!state.draft) {
         return;
       }
-      // A save response must never replace edits made while it was in flight.
+      // The first save fixes the ID. Preserve other edits made while the request was in flight.
       state.draft.version = action.payload.version;
+      state.draft.workflow_id = action.payload.definition.workflow_id;
+      state.openWorkflowId = action.payload.definition.workflow_id;
       state.savedJson = snapshot({
         ...action.payload.definition,
         version: action.payload.version,
@@ -238,6 +262,15 @@ export const {
 } = slice.actions;
 
 export const workflowEditorReducer = slice.reducer;
+
+export function normalizeWorkflowViewport(
+  view: { x: number; y: number; zoom?: number } | null | undefined,
+): WorkflowEditorState['viewport'] {
+  if (!view || !Number.isFinite(view.x) || !Number.isFinite(view.y) || typeof view.zoom !== 'number' || !Number.isFinite(view.zoom)) {
+    return null;
+  }
+  return { x: view.x, y: view.y, zoom: Math.min(2, Math.max(0.2, view.zoom)) };
+}
 
 export function isDirty(state: WorkflowEditorState): boolean {
   if (!state.draft || state.savedJson === null) {

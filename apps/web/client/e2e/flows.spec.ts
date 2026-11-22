@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 test('throwaway workflow saves, publishes and approves', async ({ page }) => {
   const id = `e2e-throwaway-${Date.now()}`;
   await page.goto('/app/index.html#/creator');
-  await page.getByRole('button', { name: 'Open library' }).click();
+  await page.getByRole('button', { name: 'Open workflow' }).click();
   await page.getByRole('button', { name: 'New workflow' }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Workflow id', { exact: true }).fill(id);
@@ -22,11 +22,11 @@ test('throwaway workflow saves, publishes and approves', async ({ page }) => {
 
 test('unsaved changes guard navigation', async ({ page }) => {
   await page.goto('/app/index.html#/creator');
-  await page.getByRole('button', { name: 'Open library' }).click();
+  await page.getByRole('button', { name: 'Open workflow' }).click();
   await page.getByRole('button', { name: 'New workflow' }).click();
-  await page.getByRole('button', { name: '+ Step' }).click();
+  await page.getByRole('button', { name: '+ Add step' }).click();
   await page
-    .getByRole('button', { name: /Compose/ })
+    .getByRole('button', { name: /Set results/ })
     .first()
     .click();
   await expect(page.getByText(/unsaved changes/)).toBeVisible();

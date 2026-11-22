@@ -56,7 +56,7 @@ describe('runPreflight', () => {
           e.message.includes('tax_rate'),
       ),
     ).toBe(true);
-    expect(errors.some((e) => e.message.includes('never renamed'))).toBe(true);
+    expect(errors.some((e) => e.message.includes('requires those exact parameter names'))).toBe(true);
   });
 
   it('passes a correctly bound skill', () => {
@@ -87,7 +87,7 @@ describe('runPreflight', () => {
     ).toBe(true);
     expect(
       issues.some(
-        (i) => i.severity === 'warning' && i.message.includes('Shape unknown'),
+        (i) => i.severity === 'warning' && i.message.includes('does not match a workflow input or an earlier step'),
       ),
     ).toBe(true);
   });
@@ -115,7 +115,7 @@ describe('runPreflight', () => {
       {
         stepId: 'b',
         severity: 'warning',
-        message: 'Step "b" is unreachable from the entry step "a".',
+        message: 'No route from "a" reaches "b". Connect it to a reachable step.',
       },
     ]);
   });
@@ -129,4 +129,64 @@ describe('availableRefs', () => {
     expect(refs).toContain('scope.weight_lb');
     expect(refs).not.toContain('calc');
   });
+});
+
+it('sends missing workflow output sources to Finish', () => {
+  const draft = blankDefinition();
+  draft.outputs = {
+    blank: { from: '' },
+    removed: { from: 'deleted.value' },
+    step: { from: 'start.item' },
+    input: { from: 'item' },
+  };
+  const issues = runPreflight(draft, []);
+  expect(issues).toEqual([
+    { stepId: '__end__', outputName: 'blank', severity: 'error', message: 'Output "blank" needs a source.' },
+    { stepId: '__end__', outputName: 'removed', severity: 'error', message: 'Output "removed" uses "deleted.value", which no longer points to a step or input.' },
+  ]);
+});
+
+
+it('links incomplete loop setup to the loop step', () => {
+  const def = blankDefinition();
+  def.steps = [{ step_id: 'repeat', type: 'iteration', config: { body: [] } }];
+  expect(runPreflight(def, [])).toEqual([
+    { stepId: 'repeat', severity: 'error', message: 'Choose a list source for loop "repeat".' },
+    { stepId: 'repeat', severity: 'error', message: 'Add at least one step inside loop "repeat".' },
+  ]);
+});
+
+
+it('identifies a disconnected step inside its loop', () => {
+  const def = blankDefinition();
+  def.steps = [{
+    step_id: 'repeat',
+    type: 'iteration',
+    config: { over: 'item', body: [
+      { step_id: 'entry', type: 'input_collection', on_success: 'end' },
+      { step_id: 'isolated', type: 'output_composition', on_success: 'missing' },
+    ] },
+  }];
+  expect(runPreflight(def, [])).toMatchObject([
+    { stepId: 'repeat', bodyStepId: 'isolated', severity: 'error', message: expect.stringContaining('missing') },
+    { stepId: 'repeat', bodyStepId: 'isolated', severity: 'warning' },
+  ]);
+});
+
+
+it('links loop branch rule errors to the branch inside the loop', () => {
+  const def = blankDefinition();
+  def.steps = [{
+    step_id: 'repeat',
+    type: 'iteration',
+    config: { over: 'item', body: [{
+      step_id: 'branch',
+      type: 'conditional_routing',
+      config: { rules: [{ when: { ref: '', op: 'exists' }, goto: 'missing' }] },
+    }] },
+  }];
+  expect(runPreflight(def, [])).toMatchObject([
+    { stepId: 'repeat', bodyStepId: 'branch', severity: 'error', message: expect.stringContaining('value source') },
+    { stepId: 'repeat', bodyStepId: 'branch', severity: 'error', message: expect.stringContaining('missing') },
+  ]);
 });
