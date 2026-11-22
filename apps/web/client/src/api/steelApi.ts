@@ -447,7 +447,7 @@ export const steelApi = createApi({
       providesTags: ['Document'],
     }),
     listDesignerTypes: build.query<
-      { types: DesignerTypeRow[] },
+      { types: DesignerTypeRow[]; backend?: 'pydantic-postgresql' },
       { include_archived?: boolean } | void
     >({
       query: (args) =>

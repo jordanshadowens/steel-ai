@@ -231,7 +231,7 @@ def field_change(conn, entry, field, body):
 def handle(conn, method, parts, query, body):
     if parts in (["workspace"], ["types"]) and method == "GET":
         rows = conn.execute("SELECT data FROM steel_designer.types ORDER BY name").fetchall()
-        return {"workspace": WORKSPACE, "types": [detail(row["data"]) for row in rows
+        return {"workspace": WORKSPACE, "backend": "pydantic-postgresql", "types": [detail(row["data"]) for row in rows
                 if row["data"]["status"] == "active" or query.get("include_archived") == "1"]}
     if parts == ["types"] and method == "POST":
         name = body.get("name", "").strip()
@@ -245,7 +245,7 @@ def handle(conn, method, parts, query, body):
         entry = get_type(conn, parts[1])
         tail = parts[2:]
         if method == "GET" and not tail:
-            return {"type": detail(entry)}
+            return {"type": detail(entry) | {"json_schema": model_for(entry["fields"]).model_json_schema()}}
         if method == "PATCH" and not tail:
             name = body.get("name", "").strip()
             if not name:
@@ -279,7 +279,7 @@ def handle(conn, method, parts, query, body):
                         for spec in reversed(versions)]}
             for spec in versions:
                 if str(spec["version"]) == tail[1]:
-                    return {"spec": spec}
+                    return {"spec": spec | {"json_schema": model_for(spec["fields"]).model_json_schema()}}
             raise RequestError("Schema version not found.", 404)
         if tail[:1] == ["records"]:
             return records(conn, entry, method, tail[1:], query, body)

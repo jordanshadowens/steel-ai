@@ -3,6 +3,7 @@ import type { DesignerTypeRow } from '../api/contracts';
 
 export interface TypeListProps {
   types: DesignerTypeRow[];
+  backendLabel?: string;
   selectedId: string | null;
   showArchived: boolean;
   busy: boolean;
@@ -26,6 +27,7 @@ export function TypeList(props: TypeListProps) {
   return (
     <div className="section-card">
       <h2>Entity types</h2>
+      {props.backendLabel && <p className="status-line">{props.backendLabel}</p>}
       <form
         className="map-row"
         onSubmit={(e) => {

@@ -304,6 +304,7 @@ export interface DesignerTypeRow {
 }
 
 export interface DesignerTypeDetail extends DesignerTypeRow {
+  json_schema?: Record<string, unknown>;
   fields: DesignerField[];
   relationships: DesignerRelationship[];
   draft_sha256: string;
@@ -372,6 +373,7 @@ export interface DesignerVersionRow {
 }
 
 export interface DesignerSpec {
+  json_schema?: Record<string, unknown>;
   type_id: string;
   workspace_id: string;
   name: string;

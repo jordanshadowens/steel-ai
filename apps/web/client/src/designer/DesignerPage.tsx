@@ -162,10 +162,7 @@ export function DesignerPage() {
     return (
       <div className="section-card" role="alert">
         <h2>Data Designer unavailable</h2>
-        <p>
-          {apiMessage(typesQ.error)} Designer schemas live in the embedded store
-          only.
-        </p>
+        <p>{apiMessage(typesQ.error)}</p>
       </div>
     );
   }
@@ -186,6 +183,13 @@ export function DesignerPage() {
     <div className="designer-page">
       <TypeList
         types={types}
+        backendLabel={
+          typesQ.data?.backend === 'pydantic-postgresql'
+            ? 'Local PostgreSQL · Pydantic validation'
+            : typesQ.data
+              ? 'Hosted runtime'
+              : undefined
+        }
         selectedId={selected}
         showArchived={showArchived}
         busy={busyTypes}
@@ -270,6 +274,19 @@ export function DesignerPage() {
             ))}
           </nav>
 
+          {tab === 'schema' && detail.json_schema && (
+            <details className="section-card">
+              <summary>Pydantic JSON Schema</summary>
+              <h3>Draft schema</h3>
+              <pre>{JSON.stringify(detail.json_schema, null, 2)}</pre>
+              {liveSpec?.json_schema && (
+                <>
+                  <h3>Published schema (v{liveSpec.version})</h3>
+                  <pre>{JSON.stringify(liveSpec.json_schema, null, 2)}</pre>
+                </>
+              )}
+            </details>
+          )}
           {tab === 'schema' && (
             <>
               <FieldEditor
