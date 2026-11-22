@@ -507,7 +507,11 @@ export function CommandBar({
           className="btn"
           aria-disabled={validateState.isLoading}
           title="Check inputs, steps, and connections"
-          onClick={() => { if (!validateState.isLoading) void doValidate(); }}
+          onClick={(event) => {
+            if (validateState.isLoading) return;
+            event.currentTarget.focus({ preventScroll: true });
+            void doValidate();
+          }}
         >
           {validateState.isLoading ? 'Validating…' : 'Validate'}
         </button>
@@ -517,7 +521,11 @@ export function CommandBar({
           aria-disabled={planning}
           aria-busy={planning}
           title="See what would run"
-          onClick={() => { if (!planning) void doPreview(); }}
+          onClick={(event) => {
+            if (planning) return;
+            event.currentTarget.focus({ preventScroll: true });
+            void doPreview();
+          }}
         >
           {planning ? 'Planning…' : 'Preview'}
         </button>
@@ -531,8 +539,9 @@ export function CommandBar({
               ? 'Save the workflow first'
               : 'Review this version for publication'
           }
-          onClick={() => {
+          onClick={(event) => {
             if (editor.openVersion === null) return;
+            event.currentTarget.focus({ preventScroll: true });
             setPublicationReview({
               openSequence: editor.openSequence,
               workflowId: draft.workflow_id,

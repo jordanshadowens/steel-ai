@@ -100,6 +100,7 @@ export function ItemActions({
               }
               disabled={a.disabled}
               onClick={() => {
+                buttonRef.current?.focus({ preventScroll: true });
                 setOpen(false);
                 a.onSelect();
               }}

@@ -3,7 +3,6 @@ import { configureStore } from '@reduxjs/toolkit';
 import { store } from '../store/store';
 import { steelApi } from '../api/steelApi';
 import { openDefinition, updateDraft } from '../store/workflowEditor';
-import { openSpec } from '../store/templateEditor';
 import { acceptAccount, configureRuntime, endAccount } from './session';
 const config = {
   mode: 'account' as const,
@@ -21,7 +20,7 @@ afterEach(() => {
   endAccount();
   vi.unstubAllGlobals();
 });
-it('preserves local recovery while clearing account editors, templates and API cache on signout', async () => {
+it('preserves local recovery while clearing the account editor and API cache on signout', async () => {
   const local = { workflow_id: 'local-work', inputs: [], steps: [] };
   store.dispatch(
     openDefinition({
@@ -47,18 +46,6 @@ it('preserves local recovery while clearing account editors, templates and API c
       definition: { ...local, workflow_id: 'alice-work' },
     }),
   );
-  store.dispatch(
-    openSpec({
-      templateId: 'alice-template',
-      version: null,
-      kind: 'document',
-      spec: {
-        schema: 'steel-doc/1',
-        template_id: 'alice-template',
-        version: 1,
-      } as never,
-    }),
-  );
   vi.stubGlobal(
     'fetch',
     vi
@@ -69,7 +56,6 @@ it('preserves local recovery while clearing account editors, templates and API c
   expect(JSON.stringify(store.getState().steelApi)).toContain('alice-skill');
   endAccount();
   expect(store.getState().workflowEditor.draft).toBeNull();
-  expect(store.getState().templateEditor.spec).toBeNull();
   expect(JSON.stringify(store.getState().steelApi)).not.toContain(
     'alice-skill',
   );

@@ -654,7 +654,10 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
                             type="button"
                             className="btn"
                             aria-label={`Compare v${v.version} with latest`}
-                            onClick={() => setComparison({ id, name: latest.name || id, fromVersion: v.version })}
+                            onClick={(event) => {
+                              event.currentTarget.focus({ preventScroll: true });
+                              setComparison({ id, name: latest.name || id, fromVersion: v.version });
+                            }}
                           >
                             Compare with latest
                           </button>

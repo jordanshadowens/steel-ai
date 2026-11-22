@@ -6,10 +6,10 @@ import { expect, test } from '@playwright/test';
 test('product routes and legacy redirects', async ({ page, request }) => {
   await page.goto('/');
   await expect(
-    page.getByRole('button', { name: 'Workflow Creator' }).first(),
+    page.getByRole('link', { name: 'Workflow Creator' }),
   ).toBeVisible();
   await expect(
-    page.getByText('Open a workflow to edit its steps on the canvas.'),
+    page.getByRole('button', { name: 'Open workflow', exact: true }),
   ).toBeVisible();
 
   await page.goto('/runner');
@@ -22,7 +22,8 @@ test('product routes and legacy redirects', async ({ page, request }) => {
   ).toBeVisible();
 
   await page.goto('/templates');
-  await expect(page.getByRole('heading', { name: 'Templates' })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('link', { name: 'Workflow Creator' })).toHaveAttribute('aria-current', 'page');
 
   await page.goto('/creator.html');
   await expect(page).toHaveURL(/\/creator$/);

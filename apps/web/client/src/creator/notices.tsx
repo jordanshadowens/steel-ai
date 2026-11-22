@@ -69,7 +69,7 @@ export function NoticeProvider({ children, target }: { children: ReactNode; targ
   }
 
   const alerts = (
-    <div className="notices" aria-label="Workflow alerts" aria-live="polite">
+    <div className="notices" aria-live="polite">
       {notices.map((notice) => (
         <div
           key={notice.id}

@@ -1,10 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import type { RefObject } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { selectStep, updateDraft } from '../store/workflowEditor';
 import { STEP_TYPES, defaultConfig, definitionToFlow, insertWorkflowStep, stepNameWithId } from './adapter';
 import type { StepType } from '../api/contracts';
 import { useNotify } from './notices';
+
+export type PaletteDrag = { type: StepType; afterId: string; complete: () => void };
 
 // One insertion path shared by click-to-insert and drag-and-drop.
 export function useInsertStep(onInserted?: (id: string) => void): (
@@ -76,7 +79,10 @@ export function useInsertStep(onInserted?: (id: string) => void): (
 // Floating step-insertion palette: drag onto the canvas or click to insert
 // at the visible center. Drop coordinates go through screenToFlow so pan
 // and zoom are honored.
-export function Palette({ onInserted }: { onInserted: (id: string) => void }) {
+export function Palette({ onInserted, drag }: {
+  onInserted: (id: string) => void;
+  drag: RefObject<PaletteDrag | null>;
+}) {
   const { screenToFlowPosition } = useReactFlow();
   const insert = useInsertStep(onInserted);
   const [search, setSearch] = useState('');
@@ -93,7 +99,8 @@ export function Palette({ onInserted }: { onInserted: (id: string) => void }) {
 
   useEffect(() => {
     if (open) searchInput.current?.focus();
-  }, [open]);
+    return () => { drag.current = null; };
+  }, [drag, open]);
 
   function closePalette(restoreFocus = false) {
     setOpen(false);
@@ -185,11 +192,14 @@ export function Palette({ onInserted }: { onInserted: (id: string) => void }) {
                   className="palette-item"
                   draggable
                   onDragStart={(e) => {
+                    drag.current = { type: t.value, afterId, complete: closePalette };
                     e.dataTransfer.setData('application/steel-step', t.value);
                     if (afterId) e.dataTransfer.setData('application/steel-after', afterId);
+                    e.dataTransfer.setData('text/plain', t.label);
                     e.dataTransfer.effectAllowed = 'copy';
                   }}
                   onDragEnd={(event) => {
+                    drag.current = null;
                     if (event.dataTransfer.dropEffect === 'copy') closePalette();
                   }}
                   onClick={() => insertAtCenter(t.value)}
@@ -218,7 +228,7 @@ export function Palette({ onInserted }: { onInserted: (id: string) => void }) {
 
 // Drop target wiring for the canvas wrapper: converts viewport coordinates
 // and inserts the dragged step type through the same path as clicking.
-export function usePaletteDrop(): {
+export function usePaletteDrop(drag: RefObject<PaletteDrag | null>): {
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
 } {
@@ -226,20 +236,24 @@ export function usePaletteDrop(): {
   const insert = useInsertStep();
   return {
     onDragOver: (e) => {
-      if (e.dataTransfer.types.includes('application/steel-step')) {
+      if (drag.current || e.dataTransfer.types.includes('application/steel-step')) {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }
     },
     onDrop: (e) => {
-      const suppliedType = e.dataTransfer.getData('application/steel-step');
+      // WebKit can strip custom formats even during a drag within this page.
+      const local = drag.current;
+      const suppliedType = local?.type ?? e.dataTransfer.getData('application/steel-step');
       const type = STEP_TYPES.find(({ value }) => value === suppliedType)?.value;
       if (!type) {
         return;
       }
       e.preventDefault();
-      const after = e.dataTransfer.getData('application/steel-after');
+      const after = local?.afterId ?? e.dataTransfer.getData('application/steel-after');
+      drag.current = null;
       insert(type, screenToFlowPosition({ x: e.clientX, y: e.clientY }), after || null);
+      local?.complete();
     },
   };
 }

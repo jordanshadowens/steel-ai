@@ -18,6 +18,7 @@ import { CommandBar } from './CommandBar';
 import type { ValidationReport } from './CommandBar';
 import { GraphCanvas, graphViewPadding } from './GraphCanvas';
 import { Palette, usePaletteDrop } from './Palette';
+import type { PaletteDrag } from './Palette';
 import { Inspector } from './Inspector';
 import { IssueDrawer } from './IssueDrawer';
 import { NoticeProvider } from './notices';
@@ -106,7 +107,8 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
   const [bodySel, setBodySel] = useState<{ loop: string; step: string } | null>(
     null,
   );
-  const drop = usePaletteDrop();
+  const paletteDrag = useRef<PaletteDrag | null>(null);
+  const drop = usePaletteDrop(paletteDrag);
   useEffect(() => () => {
     if (panFrame.current !== null) window.cancelAnimationFrame(panFrame.current);
   }, [openSequence]);
@@ -281,7 +283,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
   function afterInspectorOpens(onFocused?: () => void, fieldSelector?: string) {
     if (panFrame.current !== null) window.cancelAnimationFrame(panFrame.current);
     const previousFocus = document.activeElement;
-    const openedFromDialog = previousFocus?.closest('[aria-modal="true"]');
+    const openedFromDialog = document.querySelector('[aria-modal="true"]');
     panFrame.current = window.requestAnimationFrame(() => {
       panFrame.current = null;
       const focus = document.activeElement;
@@ -358,30 +360,32 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
             />
           )
         ) : (
-          <div className="canvas-empty">
-            <h1>Workflow Creator</h1>
-            <div className="creator-start-actions">
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() =>
-                  dispatch(openDefinition({
-                    workflowId: '',
-                    version: null,
-                    status: 'new',
-                    definition: blankDefinition(),
-                  }))
-                }
-              >
-                New workflow
-              </button>
-              <button type="button" className="btn" onClick={(event) => openLibrary(event.currentTarget)}>
-                Open workflow
-              </button>
+          <div className="canvas-empty creator-start">
+            <div className="creator-start-card">
+              <h1>Workflow Creator</h1>
+              <div className="creator-start-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    dispatch(openDefinition({
+                      workflowId: '',
+                      version: null,
+                      status: 'new',
+                      definition: blankDefinition(),
+                    }))
+                  }
+                >
+                  New workflow
+                </button>
+                <button type="button" className="btn" onClick={(event) => openLibrary(event.currentTarget)}>
+                  Open workflow
+                </button>
+              </div>
             </div>
           </div>
         )}
-        {draft && !needsSetup && <Palette onInserted={goToStep} />}
+        {draft && !needsSetup && <Palette onInserted={goToStep} drag={paletteDrag} />}
         <AnimatePresence>
           {libraryOpen && (
             <Suspense key="lib" fallback={

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffectEvent, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 
 // Focus trap for modal dialogs: focus the first control on open, keep Tab
@@ -11,8 +11,9 @@ export function FocusTrap({
   onEscape: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const escape = useEffectEvent(onEscape);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = ref.current;
     if (!root) {
       return;
@@ -25,7 +26,7 @@ export function FocusTrap({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onEscape();
+        escape();
         return;
       }
       if (e.key !== 'Tab') {
@@ -52,9 +53,9 @@ export function FocusTrap({
     document.addEventListener('keydown', onKey, true);
     return () => {
       document.removeEventListener('keydown', onKey, true);
-      previous?.focus?.();
+      previous?.focus({ preventScroll: true });
     };
-  }, [onEscape]);
+  }, []);
 
   return <div ref={ref}>{children}</div>;
 }

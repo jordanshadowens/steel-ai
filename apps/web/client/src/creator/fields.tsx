@@ -260,7 +260,8 @@ export function DataRefPicker({
   const id = useId();
   const [text, setText] = useState(value);
   useEffect(() => setText(value), [value]);
-  const match = options.find((o) => o.ref === text);
+  const matchingText = trimOnCommit ? text.trim() : text;
+  const match = options.find((o) => o.ref === matchingText);
   const describedBy = [description && `${id}-description`, error ? `${id}-error` : text && match && `${id}-detail`].filter(Boolean).join(' ') || undefined;
   return (
     <div className="field">

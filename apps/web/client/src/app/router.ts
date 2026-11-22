@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'creator' | 'runner' | 'templates' | 'designer';
+export type Route = 'creator' | 'runner' | 'designer';
 
 // History routing in production (/ → Creator). Before the route cutover the
 // bundle is served from /app/, where pathname routing cannot work, so the
@@ -11,9 +11,6 @@ export function parseRoute(): Route {
     if (hash.startsWith('#/runner')) {
       return 'runner';
     }
-    if (hash.startsWith('#/templates')) {
-      return 'templates';
-    }
     if (hash.startsWith('#/designer')) {
       return 'designer';
     }
@@ -22,29 +19,40 @@ export function parseRoute(): Route {
   if (pathname === '/runner' || pathname.startsWith('/runner/')) {
     return 'runner';
   }
-  if (pathname === '/templates' || pathname.startsWith('/templates/')) {
-    return 'templates';
-  }
   if (pathname === '/designer' || pathname.startsWith('/designer/')) {
     return 'designer';
   }
   return 'creator';
 }
 
+export function routeHref(route: Route): string {
+  const path = route === 'creator' ? '/' : `/${route}`;
+  return window.location.pathname.startsWith('/app') ? `#${path}` : path;
+}
+
 export function navigate(route: Route): void {
+  const href = routeHref(route);
   if (window.location.pathname.startsWith('/app')) {
-    window.location.hash = route === 'creator' ? '#/' : `#/${route}`;
+    window.location.hash = href;
     window.dispatchEvent(new PopStateEvent('popstate'));
     return;
   }
-  window.history.pushState(null, '', route === 'creator' ? '/' : `/${route}`);
+  window.history.pushState(null, '', href);
   window.dispatchEvent(new PopStateEvent('popstate'));
 }
 
 export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(parseRoute);
   useEffect(() => {
-    const onChange = () => setRoute(parseRoute());
+    const onChange = () => {
+      const { pathname, hash } = window.location;
+      const path = pathname.startsWith('/app') ? hash.slice(1) : pathname;
+      if (path === '/templates' || path.startsWith('/templates/')) {
+        window.history.replaceState(window.history.state, '', routeHref('creator'));
+      }
+      setRoute(parseRoute());
+    };
+    onChange();
     window.addEventListener('popstate', onChange);
     return () => window.removeEventListener('popstate', onChange);
   }, []);

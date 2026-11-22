@@ -24,6 +24,10 @@ const teamModel = {
   fields: [teamField],
 };
 
+const libraryModule = /\/LibraryPanel(?:\.tsx|-[\w-]+\.js)(?:\?|$)/;
+const skillInspectorModule = /\/SkillStepInspector(?:\.tsx|-[\w-]+\.js)(?:\?|$)/;
+const runPlanModule = /\/RunPlanSteps(?:\.tsx|-[\w-]+\.js)(?:\?|$)/;
+
 async function mockCreator(
   page: Page,
   options: {
@@ -142,7 +146,6 @@ test('open the other workspace pages and return to Creator', async ({ page }) =>
   const nav = page.getByRole('navigation', { name: 'Primary' });
   for (const [label, heading] of [
     ['Workflow Runner', 'Workflow Runner'],
-    ['Templates', 'Templates'],
     ['Data Designer', 'Data models'],
   ]) {
     await nav.getByText(label, { exact: true }).click();
@@ -150,6 +153,76 @@ test('open the other workspace pages and return to Creator', async ({ page }) =>
   }
   await nav.getByText('Workflow Creator', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'New workflow', exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(nav.getByRole('link', { name: 'Data Designer' })).toHaveAttribute('aria-current', 'page');
+  await page.goForward();
+  await expect(nav.getByRole('link', { name: 'Workflow Creator' })).toHaveAttribute('aria-current', 'page');
+});
+
+test('the workspace header fits a phone and the retired Templates link opens Creator', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await mockCreator(page);
+  await page.goto('/app/index.html#/templates');
+  await expect(page).toHaveURL(/#\/$/);
+  const header = page.getByRole('banner');
+  const nav = header.getByRole('navigation', { name: 'Primary' });
+  await expect(header.getByRole('link', { name: 'Steel AI', exact: true })).toBeVisible();
+  await expect(nav.getByRole('link', { name: 'Workflow Creator' })).toHaveAttribute('aria-current', 'page');
+  await expect(nav.getByRole('link', { name: 'Workflow Runner' })).toHaveAttribute('href', '#/runner');
+  await expect(nav.getByRole('link')).toHaveCount(3);
+  expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  for (const [width, height] of [[667, 375], [1024, 768]]) {
+    await page.setViewportSize({ width, height });
+    expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(page.getByRole('button', { name: 'New workflow', exact: true })).toBeInViewport();
+  }
+});
+
+test('a long account name leaves Sign out accessible on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await mockCreator(page);
+  const email = 'a-very-long-workspace-account-name@example.invalid';
+  await page.route('**/api/runtime-config', (route) => route.fulfill({ json: {
+    mode: 'account',
+    authMethod: 'session-cookie',
+    firebase: { apiKey: 'test', projectId: 'test', authDomain: 'example.invalid' },
+  } }));
+  await page.route('**/api/workspace', (route) => route.fulfill({ json: { mode: 'account', skillsScope: 'account' } }));
+  await page.route('**/api/session', (route) => route.fulfill({ json: {
+    uid: 'test-account', email, expiresAt: Date.now() + 60_000, access: { runtimePreviewEligible: true },
+  } }));
+  await page.reload();
+  const header = page.getByRole('banner');
+  await expect(header.getByTitle(email)).toBeVisible();
+  expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await header.getByRole('button', { name: 'Sign out' }).click();
+  await expect(page.getByRole('heading', { name: 'Open your workspace' })).toBeVisible();
+});
+
+test('edit a workflow in landscape without the inspector covering canvas controls', async ({ page }) => {
+  await page.setViewportSize({ width: 667, height: 375 });
+  await mockCreator(page);
+  await createDraft(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Workflow settings' });
+  await expect(inspector.getByLabel('Workflow id', { exact: true })).toBeInViewport();
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas view' });
+  await toolbar.getByRole('button', { name: 'Find step', exact: true }).click({ trial: true });
+  const [panelBounds, toolbarBounds] = await Promise.all([inspector.boundingBox(), toolbar.boundingBox()]);
+  expect(toolbarBounds!.x + toolbarBounds!.width).toBeLessThan(panelBounds!.x);
+});
+
+test('a short phone gives the inspector room to edit workflow settings', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await mockCreator(page);
+  await createDraft(page);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const inspector = page.getByRole('complementary', { name: 'Workflow settings' });
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas view', includeHidden: true });
+  await expect(inspector.getByLabel('Workflow id', { exact: true })).toBeInViewport();
+  await expect(toolbar).toBeHidden();
+  await inspector.getByRole('button', { name: /Close/ }).click();
+  await expect(toolbar).toBeVisible();
 });
 
 test('Trash shows loading and retry before showing an empty list', async ({ page }) => {
@@ -349,7 +422,7 @@ test('export downloads the saved version and imports it as a new draft', async (
 
 test('a failed library download leaves the draft editable', async ({ page }) => {
   const rows = await mockCreator(page);
-  await page.route('**/LibraryPanel.tsx*', (route) => route.abort());
+  await page.route(libraryModule, (route) => route.abort());
   await createDraft(page);
   await page.getByRole('button', { name: '+ Add step', exact: true }).click();
   const stepSearch = page.getByRole('searchbox', { name: 'Search step types' });
@@ -568,8 +641,10 @@ test('drag a step onto the canvas and save its connection', async ({ page }) => 
 });
 
 test('reload restores an unsaved workflow and its canvas view', async ({ page }) => {
-  const rows = await mockCreator(page);
+  const saveErrors: string[] = [];
+  const rows = await mockCreator(page, { saveErrors });
   await createDraft(page);
+  saveErrors.push('Server unavailable.');
   await page.getByRole('button', { name: '+ Add step', exact: true }).click();
   await page.getByRole('button', { name: /Set results/ }).click();
   await expect(page.getByTitle('Canvas zoom')).toHaveText('100%');
@@ -1027,7 +1102,7 @@ test('retry loading data models without losing the output name', async ({ page }
   await expect(path).toHaveAccessibleDescription('Enter the step ID and field separated by a dot.');
   await finish.getByLabel('Output name', { exact: true }).fill('result');
   await path.fill('  start.item  ');
-  await path.press('Enter');
+  await finish.getByRole('button', { name: 'Add', exact: true }).click();
   await expect(finish.getByLabel('Source for result', { exact: true })).toHaveValue('start.item');
 });
 
@@ -1246,6 +1321,7 @@ test('find a workflow by an earlier saved name on a phone', async ({ page }) => 
   await search.fill('Monthly report');
   await expect(page.getByRole('button', { name: 'Billing report', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Actions for Billing report' }).click();
+  await page.getByRole('menuitem', { name: 'Delete', exact: true }).click({ trial: true });
   await page.getByRole('menuitem', { name: 'Versions', exact: true }).click();
   const history = page.getByRole('list', { name: 'Versions of Billing report' });
   await expect(history.getByText('Monthly report', { exact: true })).toBeVisible();
@@ -1698,10 +1774,6 @@ test('add missing mappings for the saved calculation version', async ({ page }) 
 
   await expect(page.getByLabel('Source for price')).toHaveValue('');
   await expect(add).toHaveCount(0);
-  await page.route('**/SkillStepInspector.tsx*', (route) => route.abort());
-  await page.reload();
-  await page.locator('.react-flow__node[data-id="cost"]').click();
-  await expect(page.getByRole('alert')).toContainText('Could not load these step settings.');
   const save = page.getByRole('button', { name: 'Save', exact: true });
   await expect(save).toBeEnabled();
   await save.click();
@@ -1709,6 +1781,26 @@ test('add missing mappings for the saved calculation version', async ({ page }) 
     quantity: { from: 'units' },
     price: { from: '' },
   });
+});
+
+test('a failed calculation inspector download preserves the saved configuration', async ({ page }) => {
+  await page.route(skillInspectorModule, (route) => route.abort());
+  const config = { skill: { name: 'cost', version: 2 }, inputs_mapping: { quantity: { from: 'units' } } };
+  const rows = await mockCreator(page, { saved: [{
+    workflow_id: 'test-flow', name: 'Calculate cost', version: 1, status: 'draft',
+    definition: {
+      workflow_id: 'test-flow', name: 'Calculate cost',
+      inputs: [{ name: 'units', type: 'number' }],
+      steps: [{ step_id: 'cost', type: 'skill_execution', config, on_success: 'end' }],
+    },
+  }] });
+  await page.getByRole('button', { name: 'Open workflow', exact: true }).click();
+  await page.getByRole('button', { name: 'Calculate cost', exact: true }).click();
+  await page.locator('.react-flow__node[data-id="cost"]').click();
+  await expect(page.getByRole('alert')).toContainText('Could not load these step settings.');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => rows[0].version).toBe(2);
+  expect(rows[0].definition.steps?.[0].config).toEqual(config);
 });
 
 test('deleting an output source links to Finish and undo restores it', async ({ page }) => {
@@ -1853,7 +1945,7 @@ test('changing the success route from the keyboard updates the canvas and saved 
   await search.press('Enter');
   await page.locator('.react-flow__node[data-id="start"]').click();
   const route = page.getByLabel('On success', { exact: true });
-  await expect(route).toHaveAccessibleDescription('Choose where the workflow continues when this step succeeds.');
+  await expect(route).toHaveValue('end');
   await route.press('Home');
   await expect(route).toHaveValue('step2');
   await expect(page.locator('.react-flow__edge[data-id="ok:start"]')).toHaveAttribute('aria-label', /start to step2/);
@@ -2001,7 +2093,7 @@ test('an empty Preview step list still shows workflow settings and mappings', as
 });
 
 test('a failed Preview download leaves the workflow editable', async ({ page }) => {
-  await page.route('**/RunPlanSteps.tsx*', (route) => route.abort());
+  await page.route(runPlanModule, (route) => route.abort());
   await mockCreator(page);
   await createDraft(page);
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
@@ -2013,7 +2105,7 @@ test('a failed Preview download leaves the workflow editable', async ({ page }) 
 
 test('a failed Preview download preserves an unsaved workflow', async ({ page }) => {
   const rows = await mockCreator(page);
-  await page.route('**/RunPlanSteps.tsx*', (route) => route.abort());
+  await page.route(runPlanModule, (route) => route.abort());
   await page.getByRole('button', { name: 'New workflow', exact: true }).click();
   const id = page.getByLabel('Workflow id', { exact: true });
   await id.fill('unsaved-workflow');
@@ -2030,13 +2122,13 @@ test('Preview shows progress while the run plan loads', async ({ page }) => {
   const pending = new Promise<void>((resolve) => { release = resolve; });
   let releaseModule!: () => void;
   const moduleDownload = new Promise<void>((resolve) => { releaseModule = resolve; });
-  await page.route('**/RunPlanSteps.tsx*', async (route) => {
+  await page.route(runPlanModule, async (route) => {
     await moduleDownload;
     await route.continue();
   });
   let planDownloads = 0;
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.endsWith('/RunPlanSteps.tsx')) planDownloads++;
+    if (runPlanModule.test(request.url())) planDownloads++;
   });
   await mockCreator(page, { beforePreview: () => pending });
   await createDraft(page);

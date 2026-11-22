@@ -256,7 +256,17 @@ function StepFinder({ onSelect }: { onSelect: (id: string, bodyStep?: string) =>
 
   return (
     <>
-      <button type="button" className="btn" aria-haspopup="dialog" aria-keyshortcuts="/" title="Find step (/)" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className="btn"
+        aria-haspopup="dialog"
+        aria-keyshortcuts="/"
+        title="Find step (/)"
+        onClick={(event) => {
+          event.currentTarget.focus({ preventScroll: true });
+          setOpen(true);
+        }}
+      >
         Find step
       </button>
       {open && (

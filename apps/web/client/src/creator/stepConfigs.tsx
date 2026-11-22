@@ -91,7 +91,6 @@ export function RoutingSection({
         id="creator-route-success"
         label={isBranch ? 'If no rule matches' : 'On success'}
         error={isUnavailable(success) ? 'This destination is unavailable. Choose another step.' : undefined}
-        description={isBranch ? undefined : 'Choose where the workflow continues when this step succeeds.'}
         value={success}
         options={optionsFor(success)}
         onChange={(v) =>
@@ -107,7 +106,6 @@ export function RoutingSection({
         id="creator-route-failure"
         label="On failure"
         error={isUnavailable(failure) ? 'This destination is unavailable. Choose another step or fail the run.' : undefined}
-        description={bodyOf ? 'Choose where the loop continues if this step fails.' : 'Choose where the workflow continues if this step fails.'}
         value={failure}
         options={optionsFor(failure)}
         emptyLabel="Fail the run"
