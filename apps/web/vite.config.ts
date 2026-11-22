@@ -4,6 +4,7 @@ import { parseEnv } from 'node:util';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { resolveRuntimeTarget } from './runtime-target.mts';
+import { localDesigner } from './local-designer.mts';
 import { localAccountSession } from './local-session.mts';
 
 function readFileSyncIfPresent(path: URL) {
@@ -23,6 +24,7 @@ export default defineConfig(() => {
     process.env.STEEL_RUNTIME_URL || process.env.STEEL_RUN_TIME_URL ||
     env.STEEL_RUNTIME_URL || env.STEEL_RUN_TIME_URL,
   );
+  const databaseUrl = (process.env.DATABASE_URL ?? env.DATABASE_URL ?? '').trim();
   return {
     root: fileURLToPath(new URL('./client', import.meta.url)),
     envDir: false as const,
@@ -35,7 +37,7 @@ export default defineConfig(() => {
       ),
     },
     base: '/app/',
-    plugins: [react(), localAccountSession(runtime)],
+    plugins: [react(), localAccountSession(runtime), ...(databaseUrl ? [localDesigner(databaseUrl)] : [])],
     server: {
       port: 5173,
       proxy: {
