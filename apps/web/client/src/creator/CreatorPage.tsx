@@ -21,6 +21,7 @@ import { Palette, usePaletteDrop } from './Palette';
 import type { PaletteDrag } from './Palette';
 import { Inspector } from './Inspector';
 import { IssueDrawer } from './IssueDrawer';
+import { WorkflowAssist } from './WorkflowAssist';
 import { NoticeProvider } from './notices';
 import { useListSkillsQuery } from '../api/steelApi';
 import { findStep } from './stepConfigs';
@@ -386,6 +387,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
           </div>
         )}
         {draft && !needsSetup && <Palette onInserted={goToStep} drag={paletteDrag} />}
+        <WorkflowAssist />
         <AnimatePresence>
           {libraryOpen && (
             <Suspense key="lib" fallback={

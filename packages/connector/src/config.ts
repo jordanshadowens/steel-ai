@@ -34,12 +34,12 @@ export function isLoopbackUrl(raw) {
 //   { "env": "NAME" }          — value comes from the environment
 //   { "file": "relative/path" } — value comes from a file under the
 //                                  connector home (absolute paths refused)
-export function resolveSecret(ref, home) {
+export function resolveSecret(ref, home, env = process.env) {
   if (!ref || typeof ref !== 'object') {
     throw configError('secret ref must be {env} or {file}');
   }
   if (typeof ref.env === 'string') {
-    const v = process.env[ref.env];
+    const v = env[ref.env];
     if (!v) {
       throw configError(`environment variable ${ref.env} is not set`);
     }
@@ -95,9 +95,9 @@ function checkUrl(raw, what, { allowRemote, allowInsecureHttp }) {
 }
 
 // Load + validate config.json. Throws config-error (never logs secrets).
-export function loadConfig(home = configHome()) {
+export function loadConfig(home = configHome(), env = process.env) {
   const path = join(home, CONFIG_FILE);
-  const providerUrl = process.env.STEEL_PROVIDER_URL?.trim();
+  const providerUrl = env.STEEL_PROVIDER_URL?.trim();
   let raw;
   if (existsSync(path)) {
     try {
@@ -117,9 +117,9 @@ export function loadConfig(home = configHome()) {
   }
 
   const serverUrl =
-    process.env.STEEL_RUNTIME_URL?.trim() || process.env.STEEL_RUN_TIME_URL?.trim();
+    env.STEEL_RUNTIME_URL?.trim() || env.STEEL_RUN_TIME_URL?.trim();
   const allowRemoteProvider =
-    process.env.STEEL_ALLOW_REMOTE_PROVIDER === '1' || raw.allow_remote_provider === true;
+    env.STEEL_ALLOW_REMOTE_PROVIDER === '1' || raw.allow_remote_provider === true;
   const serverBase = checkUrl(serverUrl || raw.server_base || 'https://api.steelai.dev', 'server_base', {
     allowRemote: true, // the private Steel Server is normally remote; auth + TLS carry it
     allowInsecureHttp: raw.allow_insecure_http === true,
@@ -128,7 +128,7 @@ export function loadConfig(home = configHome()) {
     allowRemote: allowRemoteProvider,
     allowInsecureHttp: raw.allow_insecure_http === true || !providerUrl,
   });
-  const model = process.env.STEEL_PROVIDER_MODEL?.trim() || raw.provider_model;
+  const model = env.STEEL_PROVIDER_MODEL?.trim() || raw.provider_model;
   if (typeof model !== 'string' || model === '') {
     throw configError('set STEEL_PROVIDER_MODEL to a non-empty model name');
   }
@@ -159,9 +159,9 @@ export function loadConfig(home = configHome()) {
     provider_base: providerBase,
     provider_model: model,
     steel_key_ref:
-      process.env.STEEL_API_KEY || !raw.steel_key ? { env: 'STEEL_API_KEY' } : raw.steel_key,
+      env.STEEL_API_KEY || !raw.steel_key ? { env: 'STEEL_API_KEY' } : raw.steel_key,
     provider_key_ref:
-      process.env.STEEL_PROVIDER_KEY ? { env: 'STEEL_PROVIDER_KEY' } : raw.provider_key ?? null,
+      env.STEEL_PROVIDER_KEY ? { env: 'STEEL_PROVIDER_KEY' } : raw.provider_key ?? null,
     allow_remote_provider: allowRemoteProvider,
     allow_insecure_http: raw.allow_insecure_http === true,
     provider_timeout_ms: timeoutMs,

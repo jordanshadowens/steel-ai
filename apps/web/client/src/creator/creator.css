@@ -58,6 +58,43 @@
 }
 
 .creator-start-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.workflow-assist-orb {
+  position: absolute;
+  inset-inline-start: 16px;
+  bottom: 64px;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+.workflow-assist-orb img {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
+  max-width: none;
+  pointer-events: none;
+}
+.creator-canvas:has(.inspector) .workflow-assist-orb { bottom: 110px; }
+.workflow-assist-form { display: grid; gap: 12px; }
+.workflow-assist-form :is(h2, p) { margin: 0; }
+.workflow-assist-form textarea {
+  width: 100%;
+  min-height: 112px;
+  padding: 8px;
+  resize: vertical;
+  font: inherit;
+  color: inherit;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.workflow-assist-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
 .creator-start {
   padding: 16px;
   background-image: radial-gradient(circle, var(--color-border) 1px, transparent 1px);

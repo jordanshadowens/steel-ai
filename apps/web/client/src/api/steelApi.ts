@@ -72,6 +72,14 @@ export const steelApi = createApi({
     'DesignerRecord',
   ],
   endpoints: (build) => ({
+    draftWorkflow: build.mutation<{ definition: WorkflowDefinition }, { prompt: string }>({
+      query: (body) => ({
+        url: '/workflows/assist',
+        method: 'POST',
+        headers: { 'X-Steel-CSRF': '1' },
+        body,
+      }),
+    }),
     draftLanguage: build.mutation<
       { program: string; status: string; validated: boolean },
       { instruction: string; inputs: string[]; replacements: unknown[] }
@@ -828,6 +836,7 @@ export const steelApi = createApi({
 });
 
 export const {
+  useDraftWorkflowMutation,
   useDraftLanguageMutation,
   useHealthQuery,
   useListWorkflowsQuery,

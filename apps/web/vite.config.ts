@@ -6,6 +6,7 @@ import react from '@vitejs/plugin-react';
 import { resolveRuntimeTarget } from './runtime-target.mts';
 import { localDesigner } from './local-designer.mts';
 import { localAccountSession } from './local-session.mts';
+import { workflowAssist } from './workflow-assist.mts';
 
 function readFileSyncIfPresent(path: URL) {
   try {
@@ -37,7 +38,12 @@ export default defineConfig(() => {
       ),
     },
     base: '/app/',
-    plugins: [react(), localAccountSession(runtime), ...(databaseUrl ? [localDesigner(databaseUrl)] : [])],
+    plugins: [
+      react(),
+      localAccountSession(runtime),
+      workflowAssist(runtime, { ...env, ...process.env }),
+      ...(databaseUrl ? [localDesigner(databaseUrl)] : []),
+    ],
     server: {
       port: 5173,
       proxy: {
