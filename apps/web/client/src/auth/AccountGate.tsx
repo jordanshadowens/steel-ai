@@ -26,7 +26,7 @@ function AccountFrame({ title, children }: { title: string; children: ReactNode 
       <div className="account-card">
         <div className="account-brand">
           <span className="shell-mark" aria-hidden="true"><span /></span>
-          Steel AI
+          {import.meta.env.VITE_STEEL_CLOUD === '1' ? 'Steel Cloud' : 'Steel AI'}
         </div>
         <h1>{title}</h1>
         {children}

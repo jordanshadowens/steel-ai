@@ -34,7 +34,7 @@ export function RunnerPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [visited, setVisited] = useState<string[]>([]);
   const [viewStatus, setViewStatus] = useState<string | null>(null);
-  const [viewingRunId, setViewingRunId] = useState<string | null>(null);
+  const [viewingRunId, setViewingRunId] = useState<string | null>(() => new URLSearchParams(location.hash.split('?')[1] || location.search).get('run'));
   const [runError, setRunError] = useState<string | null>(null);
 
   const published = useListWorkflowsQuery('published');

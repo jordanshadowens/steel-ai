@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { LayoutGroup, motion } from 'motion/react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
+import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import {
   Background,
   Controls,
@@ -7,6 +7,8 @@ import {
   MarkerType,
   Position,
   ReactFlow,
+  useNodesInitialized,
+  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
@@ -65,6 +67,32 @@ function StepNode({ data }: NodeProps<MapNode>) {
 
 const nodeTypes = { workflowStep: StepNode };
 
+function FollowStep({stepId, frame}: {
+  stepId?: string | null;
+  frame: RefObject<HTMLDivElement | null>;
+}) {
+  const flow = useReactFlow<MapNode>();
+  const ready = useNodesInitialized();
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    if (!ready || !stepId) return;
+    const id = requestAnimationFrame(() => {
+      const node = flow.getNode(stepId);
+      const pane = frame.current;
+      if (!node || !pane) return;
+      const cx = node.position.x + (node.measured?.width ?? 185) / 2;
+      const cy = node.position.y + (node.measured?.height ?? 56) / 2;
+      const {x, y, zoom} = flow.getViewport();
+      if (cx * zoom + x < 45 || cx * zoom + x > pane.clientWidth - 45 ||
+          cy * zoom + y < 45 || cy * zoom + y > pane.clientHeight - 45) {
+        void flow.setCenter(cx, cy, {zoom, duration: reduced ? 0 : 350});
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [flow, frame, ready, reduced, stepId]);
+  return null;
+}
+
 export default function WorkflowMap({
   definition,
   current,
@@ -76,6 +104,8 @@ export default function WorkflowMap({
   active?: string | null;
   runId: string;
 }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [following, setFollowing] = useState(true);
   const [compact, setCompact] = useState(
     () => matchMedia('(max-width: 620px)').matches,
   );
@@ -163,7 +193,11 @@ export default function WorkflowMap({
     return <p>No workflow steps available.</p>;
   }
   return (
-    <div className="run-map" role="region" aria-label="Workflow map">
+    <div className="run-map" role="region" aria-label="Workflow map" ref={frame}>
+      <label className="run-map-follow">
+        <input type="checkbox" checked={following} onChange={event => setFollowing(event.target.checked)} />
+        Follow active step
+      </label>
       <LayoutGroup id={runId}>
         <ReactFlow
           key={compact ? 'vertical' : 'horizontal'}
@@ -180,6 +214,7 @@ export default function WorkflowMap({
         >
           <Background gap={18} size={1} />
           <Controls showInteractive={false} />
+          {following && <FollowStep stepId={active} frame={frame} />}
         </ReactFlow>
       </LayoutGroup>
     </div>

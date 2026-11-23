@@ -1,4 +1,4 @@
-import { routeHref } from '../app/router';
+import { navigate, routeHref } from '../app/router';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import './cloud.css';
 import {
@@ -148,7 +148,6 @@ export function Observability() {
     <section id="observability" className="operations">
       <div className="operations-heading">
         <div>
-          <p className="eyebrow">STEEL CLOUD</p>
           <h1 id="observability-title" tabIndex={-1}>
             Observability
           </h1>
@@ -163,6 +162,7 @@ export function Observability() {
               {[...new Set(runs.map(item => item.status))].sort().map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
             </select></label>
             {runs.length > 0 && visibleRuns.length === 0 && <p>No matching runs.</p>}
+            <div className="run-list">
             {visibleRuns.map((item) => (
               <button
                 key={item.run_id}
@@ -176,6 +176,7 @@ export function Observability() {
                 </small>
               </button>
             ))}
+            </div>
             {listError && <p role="status">{listError}</p>}
             {!listLoaded && !listError && <p role="status">Loading runs…</p>}
             {listLoaded && !runs.length && !listError && (
@@ -206,7 +207,14 @@ export function Observability() {
                   }}>Copy run link</button>
                   {linkStatus && <span role="status">{linkStatus}</span>}
                 </div>
-                <h4>Workflow map</h4>
+                <div className="run-map-heading">
+                  <h4>Workflow map</h4>
+                  <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
+                    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    navigate('runner', new URLSearchParams({run: run.run_id}));
+                  }}>Open run details</a>
+                </div>
                 {mapError && <p role="status">{mapError}</p>}
                 {definition && (
                   <Suspense
@@ -228,7 +236,7 @@ export function Observability() {
                   </p>
                 )}
                 <div className="log-heading">
-                  <h4>Run logs <small>{logs.length} entries</small></h4>
+                  <h4>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h4>
                   <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
                     <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
                   </select></label>

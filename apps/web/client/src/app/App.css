@@ -287,3 +287,8 @@ button.list-row:hover {
   color: var(--color-ink-muted);
   white-space: nowrap;
 }
+
+@media (max-width: 760px) {
+  .shell-nav-cloud .shell-link-full { display: none; }
+  .shell-nav-cloud .shell-link-short { display: inline; }
+}

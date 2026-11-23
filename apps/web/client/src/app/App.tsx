@@ -58,7 +58,7 @@ function WorkspaceApp() {
 
   return (
     <div className="shell">
-      <header className="shell-nav">
+      <header className={import.meta.env.VITE_STEEL_CLOUD === '1' ? 'shell-nav shell-nav-cloud' : 'shell-nav'}>
         <div className="shell-identity">
           <a className="shell-brand" href={import.meta.env.VITE_STEEL_CLOUD === '1' ? '/' : routeHref('creator')} onClick={(event) => { if (import.meta.env.VITE_STEEL_CLOUD !== '1') followRoute(event, 'creator'); }}>
             <span className="shell-mark" aria-hidden="true"><span /></span>

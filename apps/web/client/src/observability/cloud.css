@@ -7,8 +7,9 @@
 
 .operations a { color: #b8ddff; text-decoration: underline; text-underline-offset: 4px; }
 .operations-grid { display: grid; grid-template-columns: minmax(170px, .32fr) minmax(0, 1fr); gap: 22px; min-height: 240px; }
-.operations-grid aside { display: grid; align-content: start; gap: 8px; }
-.operations-grid aside button { display: grid; gap: 2px; justify-content: stretch; text-align: left; padding: 10px 12px; background: #19273b; border: 1px solid #334763; overflow-wrap: anywhere; }
+.operations-grid aside, .run-list { display: grid; align-content: start; gap: 8px; }
+.run-list { max-height: 460px; overflow-y: auto; padding: 3px; margin: -3px; }
+.operations-grid aside button { display: grid; gap: 2px; justify-content: stretch; text-align: left; padding: 10px 12px; background: #19273b; border: 1px solid #334763; border-radius: 6px; color: #f4f7fc; overflow-wrap: anywhere; }
 .operations-grid aside button:hover, .operations-grid aside button[aria-pressed=true] { border-color: #91cfff; background: #243955; }
 .operations small, .operations .run-id, .operations aside p { color: #b5c3d7; }
 .operations-detail { min-width: 0; }
@@ -42,7 +43,7 @@
   header { flex-wrap: wrap; gap: 12px; }
   nav { flex-wrap: wrap; }
   .operations-grid { grid-template-columns: 1fr; }
-  .operations-grid aside { max-height: 210px; overflow-y: auto; }
+  .run-list { max-height: 160px; }
   .operations-heading { align-items: start; flex-direction: column; gap: 8px; }
   .run-logs li { grid-template-columns: 1fr 1fr; }
   .run-logs li > :last-child { grid-column: 1 / -1; }
@@ -61,3 +62,10 @@
 .run-status[data-state^=waiting], .run-status[data-state=pending_approval] { color: #ffe0a3; border-color: #a48345; }
 .run-logs { font-variant-numeric: tabular-nums; }
 .log-heading h4 small { padding-inline-start: 4px; font-weight: 500; }
+
+.run-map-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.run-map-heading a { font-size: 13px; }
+
+.run-map { position: relative; }
+.run-map-follow { position: absolute; z-index: 4; top: 8px; right: 8px; display: inline-flex !important; align-items: center; gap: 6px; border: 1px solid #3d5475; background: #131e30; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+.run-map-follow input { margin: 0; accent-color: #b8ddff; }
