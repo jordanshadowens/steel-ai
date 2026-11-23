@@ -2659,3 +2659,13 @@ test('open a saved version from a direct link and keep that version in Runner', 
   await expect(page.getByLabel('request *', {exact:true})).toHaveValue('Use this saved request');
   expect(starts).toBe(0);
 });
+
+test('a failed lazy view keeps workspace navigation available', async ({ page }) => {
+  await mockCreator(page);
+  await page.route(/\/RunnerPage(?:\.tsx|-[\w-]+\.js)(?:\?|$)/, route => route.abort());
+  const nav = page.getByRole('navigation', { name: 'Primary' });
+  await nav.getByRole('link', { name: 'Workflow Runner' }).click();
+  await expect(page.getByRole('heading', { name: 'Couldn’t open this view' })).toBeVisible();
+  await nav.getByRole('link', { name: 'Workflow Creator' }).click();
+  await expect(page.getByRole('button', { name: 'New workflow', exact: true })).toBeVisible();
+});

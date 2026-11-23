@@ -292,3 +292,6 @@ button.list-row:hover {
   .shell-nav-cloud .shell-link-full { display: none; }
   .shell-nav-cloud .shell-link-short { display: inline; }
 }
+
+.shell-view-error { width: min(calc(100% - 32px), 560px); margin: 32px auto; padding: 20px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); }
+.shell-view-error h1 { margin: 0 0 8px; font-size: 20px; }

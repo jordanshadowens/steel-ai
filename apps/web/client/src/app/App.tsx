@@ -5,7 +5,7 @@ import { navigate, routeHref, useRoute } from './router';
 import type { Route } from './router';
 import { CreatorPage } from '../creator/CreatorPage';
 import './App.css';
-import { lazy, Suspense, useSyncExternalStore } from 'react';
+import { Component, lazy, Suspense, useSyncExternalStore, type ReactNode } from 'react';
 import type { MouseEvent } from 'react';
 import { AccountGate } from '../auth/AccountGate';
 import { signOutAccount, getSession, subscribeSession } from '../auth/session';
@@ -28,6 +28,23 @@ function followRoute(event: MouseEvent<HTMLAnchorElement>, route: Route) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   navigate(route);
+}
+
+class WorkspaceViewBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
+  state = {failed: false};
+
+  static getDerivedStateFromError() {
+    return {failed: true};
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return <section className="shell-view-error" role="alert">
+      <h1>Couldn’t open this view</h1>
+      <p>Reload the workspace to try again.</p>
+      <button type="button" className="btn" onClick={() => location.reload()}>Reload workspace</button>
+    </section>;
+  }
 }
 
 export function App() {
@@ -134,6 +151,7 @@ function WorkspaceApp() {
                   : route === 'observability' ? 'Observability' : route === 'api-keys' ? 'API keys' : 'Data Designer'
             }
           >
+            <WorkspaceViewBoundary>
             {route === 'creator' && <CreatorPage />}
             <Suspense fallback={<p role="status">Loading page...</p>}>
               {route === 'runner' && <RunnerPage />}
@@ -141,6 +159,7 @@ function WorkspaceApp() {
               {route === 'observability' && <Observability />}
               {route === 'api-keys' && import.meta.env.VITE_STEEL_CLOUD === '1' && <ApiKeys />}
             </Suspense>
+            </WorkspaceViewBoundary>
           </m.div>
         </AnimatePresence>
       </main>
