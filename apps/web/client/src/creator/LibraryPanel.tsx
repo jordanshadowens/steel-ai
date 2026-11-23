@@ -18,6 +18,7 @@ import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { isDirty, openDefinition } from '../store/workflowEditor';
 import type { WorkflowDefinition, WorkflowLibraryRow } from '../api/contracts';
 import { blankDefinition } from './adapter';
+import metaRadarExample from './metaRadarExample.json';
 import { useNotify } from './notices';
 import { WorkflowVersionCompare } from './WorkflowVersionCompare';
 import { useFloatingPanel } from './useFloatingPanel';
@@ -447,6 +448,12 @@ export function LibraryPanel({ onClose, initialTarget }: {
           <p>
             Choose a JSON file or paste a workflow definition. Use an unused workflow ID before saving.
           </p>
+          {import.meta.env.VITE_STEEL_CLOUD && (
+            <button type="button" className="btn" disabled={importState.isLoading || readingImportFile} onClick={() => {
+              setImportText(JSON.stringify(metaRadarExample, null, 2));
+              setImportError('');
+            }}>Load Meta briefing example</button>
+          )}
           <label className="workflow-import-file">
             <span>JSON file</span>
             <input

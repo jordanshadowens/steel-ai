@@ -1,0 +1,38 @@
+{
+  "workflow_id": "meta-briefing-agent",
+  "name": "Meta briefing agent",
+  "objective": "Deliver a one-sentence maintenance briefing",
+  "version": 1,
+  "status": "draft",
+  "policy": { "execution_approval": "none", "skill_approval": "new_names", "four_eyes": false },
+  "inputs": [{ "name": "update", "type": "string", "required": true }],
+  "steps": [
+    {
+      "step_id": "collect",
+      "name": "Receive update",
+      "type": "input_collection",
+      "config": { "fields": ["update"] },
+      "on_success": "brief"
+    },
+    {
+      "step_id": "brief",
+      "name": "Draft briefing with Meta",
+      "type": "model_reasoning",
+      "config": {
+        "goal": "Summarize the supplied maintenance update in one concise sentence. Use only the facts in the update.",
+        "tools_allowed": [],
+        "max_rounds": 1
+      },
+      "on_success": "deliver"
+    },
+    {
+      "step_id": "deliver",
+      "name": "Deliver briefing",
+      "type": "output_composition",
+      "config": { "mapping": { "briefing": { "from": "brief.conclusion" } } },
+      "on_success": "end"
+    }
+  ],
+  "limits": { "max_rounds": 10, "max_iterations": 10 },
+  "outputs": { "briefing": { "from": "deliver.briefing" } }
+}

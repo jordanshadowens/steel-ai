@@ -20,6 +20,8 @@ export type Step = {
   config?: { rules?: Array<{ goto?: string }> };
 };
 export type Definition = {
+  objective?: string;
+  name?: string;
   steps?: Step[];
   ui?: { positions?: Record<string, { x: number; y: number }> };
 };
@@ -27,7 +29,9 @@ export type Entry = {
   id: string | number;
   at?: string;
   level: 'info' | 'error';
-  kind?: 'run' | 'tool';
+  kind?: 'run' | 'tool' | 'provider';
+  step_id?: string | null;
+  status?: string;
   message: string;
 };
 

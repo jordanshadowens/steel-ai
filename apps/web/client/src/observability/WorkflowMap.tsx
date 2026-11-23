@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { LayoutGroup, motion, useReducedMotion } from 'motion/react';
 import {
-  Background,
   Controls,
   Handle,
   MarkerType,
@@ -13,7 +12,7 @@ import {
   type Node,
   type NodeProps,
 } from '@xyflow/react';
-import type { Definition } from './cloud';
+import type { Definition, Entry } from './cloud';
 import '@xyflow/react/dist/style.css';
 
 type MapNode = Node<
@@ -23,14 +22,18 @@ type MapNode = Node<
     compact: boolean;
     current?: boolean;
     active?: boolean;
+    status?: string;
+    selected?: boolean;
+    inspect?: () => void;
   },
   'workflowStep'
 >;
 const finish = '__steel_workflow_finish__';
 
 function StepNode({ data }: NodeProps<MapNode>) {
+  const reduced = useReducedMotion();
   return (
-    <div className="map-step" aria-current={data.current ? 'step' : undefined}>
+    <div className="map-step" data-state={data.status} aria-current={data.current ? 'step' : undefined}>
       <Handle
         type="target"
         position={data.compact ? Position.Top : Position.Left}
@@ -43,14 +46,18 @@ function StepNode({ data }: NodeProps<MapNode>) {
       />
       {data.active && (
         <motion.span
-          layoutId="run-beacon"
+          layoutId={reduced ? undefined : 'run-beacon'}
           className="run-beacon"
           aria-hidden="true"
           transition={{ type: 'spring', stiffness: 300, damping: 28 }}
         />
       )}
-      <strong>{data.name}</strong>
-      <small>{data.kind.replaceAll('_', ' ')}</small>
+      {data.inspect ? (
+        <button className="nodrag nopan map-step-target" type="button" aria-pressed={!!data.selected} onClick={data.inspect}>
+          <strong>{data.name}</strong>
+          <small>{data.status}</small>
+        </button>
+      ) : <><strong>{data.name}</strong><small>{data.kind}</small></>}
       <Handle
         type="source"
         position={data.compact ? Position.Bottom : Position.Right}
@@ -98,14 +105,22 @@ export default function WorkflowMap({
   current,
   active,
   runId,
+  events,
+  selected,
+  onSelect,
 }: {
   definition: Definition;
   current?: string | null;
   active?: string | null;
   runId: string;
+  events?: Entry[];
+  selected?: string;
+  onSelect: (step?: string) => void;
 }) {
   const frame = useRef<HTMLDivElement>(null);
+  const reduced = useReducedMotion();
   const [following, setFollowing] = useState(true);
+  const [replayIndex, setReplayIndex] = useState<number>();
   const [compact, setCompact] = useState(
     () => matchMedia('(max-width: 620px)').matches,
   );
@@ -116,6 +131,33 @@ export default function WorkflowMap({
     return () => screen.removeEventListener('change', onChange);
   }, []);
   const steps = definition.steps ?? [];
+  const recordedSteps = (events ?? [])
+    .filter(entry => entry.kind === 'run' && entry.status === 'running' && entry.step_id)
+    .map(entry => entry.step_id!);
+  const replayCount = recordedSteps.length;
+  const replay = replayIndex === undefined ? undefined : recordedSteps[replayIndex];
+  const beaconStep = replay ?? active;
+  useEffect(() => {
+    if (replayIndex === undefined) return;
+    const timer = window.setTimeout(() => {
+      setReplayIndex(replayIndex + 1 < replayCount ? replayIndex + 1 : undefined);
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [replayIndex, replayCount]);
+  const stepStatus = new Map<string, string>();
+  const traversed = new Set<string>();
+  let lastStep: string | null = null;
+  for (const entry of events ?? []) {
+    if (entry.kind !== 'run') continue;
+    if (entry.status === 'running' && entry.step_id !== lastStep) {
+      if (lastStep && entry.step_id) traversed.add(JSON.stringify([lastStep, entry.step_id]));
+      if (entry.step_id) lastStep = entry.step_id;
+    }
+    if (entry.status === 'sealed' && lastStep) traversed.add(JSON.stringify([lastStep, 'end']));
+    if (!entry.step_id || !entry.status) continue;
+    if (entry.status === 'step_completed') stepStatus.set(entry.step_id, 'Completed');
+    if (entry.status === 'step_failed') stepStatus.set(entry.step_id, 'Failed');
+  }
   const nodes: MapNode[] = steps.map((step, index) => ({
     id: step.step_id,
     type: 'workflowStep',
@@ -127,8 +169,11 @@ export default function WorkflowMap({
       name: step.name || step.step_id,
       kind: step.type,
       compact,
-      current: step.step_id === current,
-      active: step.step_id === active,
+      current: step.step_id === (replay ?? current),
+      active: step.step_id === beaconStep,
+      status: step.step_id === beaconStep ? (replay ? 'Replay' : 'Live') : (stepStatus.get(step.step_id) ?? (step.step_id === current ? 'Current' : 'Pending')),
+      selected: step.step_id === selected,
+      inspect: () => onSelect(step.step_id === selected ? undefined : step.step_id),
     },
   }));
   const known = new Set(steps.map((step) => step.step_id));
@@ -163,18 +208,22 @@ export default function WorkflowMap({
       }
     }
     for (const [target, labels] of labelsByTarget) {
-      const color = labels.includes('Failure') ? '#f5a7a5' : '#94c5af';
+      const edgeId = JSON.stringify([step.step_id, target]);
+      const visited = traversed.has(edgeId);
+      const color = labels.includes('Failure') ? '#f5a7a5' : visited ? '#83fbc0' : '#72968e';
       const label = labels.join(' / ');
       const branch = target !== routes[0].target;
+      const fromLive = target === beaconStep && visited;
       edges.push({
-        id: JSON.stringify([step.step_id, target]),
+        id: edgeId,
         source: step.step_id,
         target: target === 'end' ? finish : target,
         sourceHandle: branch ? 'branch-out' : undefined,
         targetHandle: branch ? 'branch-in' : undefined,
         label: label === 'Success' ? undefined : label,
         ariaLabel: label + ' from ' + step.step_id + ' to ' + target,
-        style: { stroke: color },
+        animated: fromLive && !reduced,
+        style: { stroke: color, strokeWidth: visited ? 2.5 : 1.4 },
         markerEnd: { type: MarkerType.ArrowClosed, color },
       });
     }
@@ -186,7 +235,7 @@ export default function WorkflowMap({
       position: compact
         ? { x: 0, y: steps.length * 112 }
         : { x: Math.max(...nodes.map((node) => node.position.x)) + 255, y: 0 },
-      data: { name: 'Finish', kind: 'End', compact },
+      data: { name: 'Objective', kind: definition.objective || definition.name || 'Workflow finish', compact, status: 'Objective' },
     });
   }
   if (!nodes.length) {
@@ -194,10 +243,17 @@ export default function WorkflowMap({
   }
   return (
     <div className="run-map" role="region" aria-label="Workflow map" ref={frame}>
-      <label className="run-map-follow">
-        <input type="checkbox" checked={following} onChange={event => setFollowing(event.target.checked)} />
-        Follow active step
-      </label>
+      <div className="run-map-toolbar">
+        {!active && replayCount > 0 && (
+          <button type="button" className="run-link" onClick={() => setReplayIndex(replayIndex === undefined ? 0 : undefined)}>
+            {replayIndex === undefined ? 'Replay route' : 'Stop replay'}
+          </button>
+        )}
+        <label className="run-map-follow">
+          <input type="checkbox" checked={following} onChange={event => setFollowing(event.target.checked)} />
+          Follow beacon
+        </label>
+      </div>
       <LayoutGroup id={runId}>
         <ReactFlow
           key={compact ? 'vertical' : 'horizontal'}
@@ -212,9 +268,8 @@ export default function WorkflowMap({
           colorMode="dark"
           fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
         >
-          <Background gap={18} size={1} />
           <Controls showInteractive={false} />
-          {following && <FollowStep stepId={active} frame={frame} />}
+          {following && <FollowStep stepId={beaconStep} frame={frame} />}
         </ReactFlow>
       </LayoutGroup>
     </div>

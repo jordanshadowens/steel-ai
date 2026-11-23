@@ -67,8 +67,47 @@
 .run-map-heading a { font-size: 13px; }
 
 .run-map { position: relative; }
-.operations .run-map-follow { position: absolute; z-index: 4; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid #3d5475; background: #131e30; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
+.run-map-toolbar { position: absolute; z-index: 4; top: 8px; right: 8px; display: flex; gap: 6px; }
+.operations .run-map-follow { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #3d5475; background: #131e30; padding: 5px 8px; border-radius: 5px; cursor: pointer; }
 .run-map-follow input { margin: 0; accent-color: #b8ddff; }
 
 .operations-grid h2 { font-size: 17px; }
 .operations-grid h3 { font-size: 15px; }
+
+.run-map {
+  isolation: isolate;
+  background-color: #081b21;
+  background-image:
+    repeating-radial-gradient(circle at 50% 50%, transparent 0 48px, #316e6255 49px 50px),
+    linear-gradient(#24504944 1px, transparent 1px),
+    linear-gradient(90deg, #24504944 1px, transparent 1px);
+  background-size: auto, 20px 20px, 20px 20px;
+  border-color: #3c736c;
+}
+.run-map .react-flow { --xy-background-color: transparent; }
+.map-step {
+  background: #102932;
+  border: 1px solid #4a786f;
+  color: #ebfff9;
+  padding: 0;
+}
+.map-step-target {
+  width: 100%;
+  display: grid;
+  text-align: left;
+  padding: 11px 12px 11px 27px;
+  background: transparent;
+  color: inherit;
+  border: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+.map-step-target:hover, .map-step-target[aria-pressed=true] { background: #285047; }
+.map-step:is([data-state=Live], [data-state=Replay]) { border-color: #83fbc0; box-shadow: 0 0 20px #54ed9e55; }
+.map-step[data-state=Completed] small { color: #a8edce; }
+.map-step[data-state=Failed] { border-color: #ef9695; }
+.map-step[data-state=Failed] small { color: #ffc0bd; }
+.map-step[data-state=Objective] { border: 1px dashed #83fbc0; padding: 11px 14px; }
+.run-beacon { z-index: 1; pointer-events: none; top: 15px; }
+.run-beacon::before { position: absolute; inset: -6px; content: ''; border: 1px solid #83fbc0; border-radius: 50%; animation: beacon 1.55s .25s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .run-beacon::before { animation: none; } }

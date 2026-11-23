@@ -134,11 +134,14 @@ export function Observability() {
   }, [selected]);
 
   const displayed = detail?.run.run_id === selected ? detail : undefined;
+  const [logSelection, setLogSelection] = useState<{ runId: string; step: string }>();
   const run = displayed?.run;
+  const logStep = logSelection?.runId === run?.run_id ? logSelection?.step : undefined;
   const active = run && activeStep(run);
   const logs = run
     ? runEntries(run, displayed?.logs).filter(
         (entry) =>
+          (!logStep || entry.step_id === logStep) &&
           (!errorsOnly || entry.level === 'error') &&
           entry.message.toLowerCase().includes(filter.trim().toLowerCase()),
       )
@@ -231,6 +234,9 @@ export function Observability() {
                       current={run.current_step}
                       active={active}
                       runId={run.run_id}
+                      events={displayed.logs}
+                      selected={logStep}
+                      onSelect={step => setLogSelection(step ? { runId: run.run_id, step } : undefined)}
                     />
                   </Suspense>
                 )}
@@ -242,6 +248,7 @@ export function Observability() {
                 )}
                 <div className="log-heading">
                   <h3>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
+                  {logStep && <button type="button" className="run-link" onClick={() => setLogSelection(undefined)}>Show all steps</button>}
                   <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
                     <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
                   </select></label>
@@ -270,7 +277,7 @@ export function Observability() {
                           : '—'}
                       </time>
                       <span data-level={entry.level}>{entry.level}</span>
-                      <span>{entry.message}</span>
+                      <span>{entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}</span>
                     </li>
                   ))}
                   {!logs.length && <li>No matching log entries.</li>}
