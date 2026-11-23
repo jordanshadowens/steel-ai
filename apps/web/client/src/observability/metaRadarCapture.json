@@ -1,0 +1,121 @@
+{
+  "logs": [
+    {
+      "id": 1,
+      "kind": "run",
+      "at": "2026-11-23T23:25:50.422Z",
+      "step_id": "collect",
+      "status": "running",
+      "level": "info",
+      "message": "running · collect"
+    },
+    {
+      "id": 2,
+      "kind": "run",
+      "at": "2026-11-23T23:25:50.427Z",
+      "step_id": "collect",
+      "status": "step_started",
+      "level": "info",
+      "message": "step started · collect"
+    },
+    {
+      "id": 3,
+      "kind": "run",
+      "at": "2026-11-23T23:25:50.428Z",
+      "step_id": "collect",
+      "status": "step_completed",
+      "level": "info",
+      "message": "step completed · collect · 1 ms"
+    },
+    {
+      "id": 4,
+      "kind": "run",
+      "at": "2026-11-23T23:25:50.429Z",
+      "step_id": "brief",
+      "status": "running",
+      "level": "info",
+      "message": "running · brief"
+    },
+    {
+      "id": 5,
+      "kind": "run",
+      "at": "2026-11-23T23:25:50.431Z",
+      "step_id": "brief",
+      "status": "step_started",
+      "level": "info",
+      "message": "step started · brief"
+    },
+    {
+      "id": 6,
+      "kind": "provider",
+      "at": "2026-11-23T23:25:50.432Z",
+      "step_id": "brief",
+      "status": "provider_requested",
+      "level": "info",
+      "message": "Meta · provider requested · brief · round 1"
+    },
+    {
+      "id": 7,
+      "kind": "provider",
+      "at": "2026-11-23T23:25:53.878Z",
+      "step_id": "brief",
+      "status": "provider_completed",
+      "level": "info",
+      "message": "Meta · provider completed · brief · round 1 · 3446 ms · 464 tokens"
+    },
+    {
+      "id": 8,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.883Z",
+      "step_id": "brief",
+      "status": "step_completed",
+      "level": "info",
+      "message": "step completed · brief · 3452 ms"
+    },
+    {
+      "id": 9,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.883Z",
+      "step_id": "deliver",
+      "status": "running",
+      "level": "info",
+      "message": "running · deliver"
+    },
+    {
+      "id": 10,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.885Z",
+      "step_id": "deliver",
+      "status": "step_started",
+      "level": "info",
+      "message": "step started · deliver"
+    },
+    {
+      "id": 11,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.886Z",
+      "step_id": "deliver",
+      "status": "step_completed",
+      "level": "info",
+      "message": "step completed · deliver · 1 ms"
+    },
+    {
+      "id": 12,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.887Z",
+      "step_id": null,
+      "status": "running",
+      "level": "info",
+      "message": "running"
+    },
+    {
+      "id": 13,
+      "kind": "run",
+      "at": "2026-11-23T23:25:53.890Z",
+      "step_id": null,
+      "status": "sealed",
+      "level": "info",
+      "message": "sealed"
+    }
+  ]
+}

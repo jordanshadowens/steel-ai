@@ -17,7 +17,7 @@ export type Step = {
   type: string;
   on_success?: string;
   on_failure?: string;
-  config?: { rules?: Array<{ goto?: string }> };
+  config?: { rules?: Array<{ goto?: string }>; [key: string]: unknown };
 };
 export type Definition = {
   objective?: string;

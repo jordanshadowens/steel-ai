@@ -1,5 +1,7 @@
 import { navigate, routeHref, routeSearch } from '../app/router';
 import { lazy, Suspense, useEffect, useState } from 'react';
+import demoDefinition from '../creator/metaRadarExample.json';
+import demoCapture from './metaRadarCapture.json';
 import './cloud.css';
 import {
   activeStep,
@@ -15,6 +17,11 @@ const WorkflowMap = lazy(() => import('./WorkflowMap'));
 
 type RunDetail = { run: Run; logs?: Entry[] };
 type Version = { version: number; definition: Definition };
+const demoId = 'meta-briefing-example';
+const demoRun: RunDetail = {
+  run: { run_id: demoId, workflow_id: demoDefinition.workflow_id, version: 1, status: 'sealed' },
+  logs: demoCapture.logs as Entry[],
+};
 export function Observability() {
   const initialRun = routeSearch().get('run') || '';
   const [runs, setRuns] = useState<Run[]>([]);
@@ -56,7 +63,7 @@ export function Observability() {
         setRuns(result.runs);
         setListLoaded(true);
         setListError('');
-        select((id) => id || result.runs[0]?.run_id || '');
+        select((id) => id || result.runs[0]?.run_id || demoId);
       } catch (cause) {
         if (!request.signal.aborted)
           setListError(
@@ -74,7 +81,7 @@ export function Observability() {
   }, []);
 
   useEffect(() => {
-    if (!selected) return;
+    if (!selected || selected === demoId) return;
     const request = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     let versionLoaded = false;
@@ -133,9 +140,11 @@ export function Observability() {
     };
   }, [selected]);
 
-  const displayed = detail?.run.run_id === selected ? detail : undefined;
+  const demo = selected === demoId;
+  const displayed = demo ? demoRun : detail?.run.run_id === selected ? detail : undefined;
   const [logSelection, setLogSelection] = useState<{ runId: string; step: string }>();
   const run = displayed?.run;
+  const displayedDefinition = demo ? demoDefinition : definition;
   const logStep = logSelection?.runId === run?.run_id ? logSelection?.step : undefined;
   const active = run && activeStep(run);
   const logs = run
@@ -185,9 +194,13 @@ export function Observability() {
             {listLoaded && !runs.length && !listError && (
               <p>No recent runs. Start a published workflow in the Creator.</p>
             )}
+            <button type="button" aria-pressed={demo} onClick={() => chooseRun(demoId)}>
+              <strong>Meta briefing example</strong>
+              <small>Recorded run</small>
+            </button>
           </aside>
           <div className="operations-detail">
-            {error && <p role="status">{error}</p>}
+            {!demo && error && <p role="status">{error}</p>}
             {selected && !run && !error && <p role="status">Loading run…</p>}
             {run && (
               <>
@@ -201,7 +214,7 @@ export function Observability() {
                   </span>
                 </div>
                 <div className="run-meta">
-                  <p className="run-id">{run.run_id}</p>
+                  <p className="run-id">{demo ? 'Recorded with Meta using a sample maintenance update' : run.run_id}</p>
                   <button type="button" className="run-link" onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(new URL(routeHref('observability', new URLSearchParams({run: run.run_id})), location.href).href);
@@ -212,25 +225,25 @@ export function Observability() {
                 </div>
                 <div className="run-map-heading">
                   <h3>Workflow map</h3>
-                  <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
+                  {!demo && <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
                     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
                     navigate('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}));
-                  }}>Inspect version in Creator</a>
-                  <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
+                  }}>Inspect version in Creator</a>}
+                  {!demo && <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
                     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
                     navigate('runner', new URLSearchParams({run: run.run_id}));
-                  }}>Open run details</a>
+                  }}>Open run details</a>}
                 </div>
-                {mapError && <p role="status">{mapError}</p>}
-                {definition && (
+                {!demo && mapError && <p role="status">{mapError}</p>}
+                {displayedDefinition && (
                   <Suspense
                     fallback={<p role="status">Loading workflow map…</p>}
                   >
                     <WorkflowMap
                       key={run.run_id}
-                      definition={definition}
+                      definition={displayedDefinition}
                       current={run.current_step}
                       active={active}
                       runId={run.run_id}
