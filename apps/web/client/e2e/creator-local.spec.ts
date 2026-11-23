@@ -32,6 +32,7 @@ async function mockCreator(
   page: Page,
   options: {
     errors?: string[];
+    openPath?: string;
     saveErrors?: string[];
     previewErrors?: string[];
     omitPreviewPlan?: boolean;
@@ -138,7 +139,8 @@ async function mockCreator(
     } else if (path === '/api/workflows') data = { workflows: rows };
     else if (method === 'GET' && /^\/api\/workflows\/[^/]+$/.test(path)) {
       const id = decodeURIComponent(path.split('/').at(-1)!);
-      data = { versions: rows.filter(({ workflow_id }) => workflow_id === id) };
+      const version = Number(requestUrl.searchParams.get('version')) || null;
+      data = { versions: rows.filter(row => row.workflow_id === id && (version === null || row.version === version)) };
     }
     else {
       await route.fulfill({ status: 404, json: { error: 'Unexpected test request' } });
@@ -146,7 +148,7 @@ async function mockCreator(
     }
     await route.fulfill({ json: data });
   });
-  await page.goto('/app/');
+  await page.goto(options.openPath ?? '/app/');
   return rows;
 }
 
@@ -2616,4 +2618,44 @@ test('preview separates the default path from a failure destination', async ({ p
   await expect(page.getByRole('button', { name: /Check item.*In repeat/ })).toBeVisible();
   await search.press('Enter');
   await expect(page.getByRole('complementary', { name: 'Body step: Check item' })).toBeVisible();
+});
+
+
+test('open a saved version from a direct link and keep that version in Runner', async ({ page }) => {
+  const workflow_id = 'versioned-review';
+  const version = (n: number): WorkflowVersionRow => ({
+    workflow_id,
+    name: 'Versioned review',
+    version: n,
+    status: 'published',
+    definition: {
+      workflow_id,
+      name: 'Versioned review',
+      version: n,
+      status: 'published',
+      inputs: [{ name: 'request', type: 'string', required: true }],
+      steps: [{ step_id: 'collect', name: 'Collect request', type: 'input_collection', config: { fields: ['request'] }, on_success: 'end' }],
+      outputs: {},
+    },
+  });
+  await mockCreator(page, { saved: [version(2), version(1)], openPath: '/app/#/?workflow=versioned-review&version=1' });
+  await expect(page.getByRole('toolbar', { name: 'Workflow commands' })).toContainText('published v1');
+  await page.getByRole('link', { name: 'Run saved v1', exact: true }).click();
+  await expect(page.getByLabel('Workflow', { exact: true })).toHaveValue(workflow_id);
+  await expect(page.getByLabel('Published version')).toHaveValue('1');
+  let starts = 0;
+  await page.route('**/api/runs', async route => {
+    if (route.request().method() === 'POST') starts++;
+    await route.fulfill({json:{runs:[]}});
+  });
+  await page.route('**/api/runs/history-proof', route => route.fulfill({json:{run:{
+    run_id: 'history-proof', workflow_id, version: 1, status: 'sealed',
+    snapshot: {inputs:{request:'Use this saved request'}, outputs:{}},
+  }}}));
+  await page.goto('/app/#/runner?run=history-proof');
+  await page.reload();
+  await page.getByRole('button', {name:'Review saved inputs for a new run'}).click();
+  await expect(page.getByLabel('Published version')).toHaveValue('1');
+  await expect(page.getByLabel('request *', {exact:true})).toHaveValue('Use this saved request');
+  expect(starts).toBe(0);
 });

@@ -209,6 +209,11 @@ export function Observability() {
                 </div>
                 <div className="run-map-heading">
                   <h3>Workflow map</h3>
+                  <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
+                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    navigate('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}));
+                  }}>Inspect version in Creator</a>
                   <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
                     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();

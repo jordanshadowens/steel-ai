@@ -69,7 +69,7 @@ function WorkspaceApp() {
           )}
         </div>
         <nav aria-label="Primary">
-          {DESTINATIONS.map((d) => (
+          {DESTINATIONS.filter(d => d.route !== 'observability' || import.meta.env.VITE_STEEL_CLOUD === '1').map((d) => (
             <a
               key={d.route}
               href={routeHref(d.route)}

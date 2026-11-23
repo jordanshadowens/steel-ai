@@ -19,8 +19,8 @@ import './runner.css';
 const TERMINAL = new Set(['sealed', 'failed']);
 
 // Guided sequence: select → inputs → review → execution → results →
-// document, with history and approvals alongside. Viewing history never
-// reruns a workflow or regenerates a document.
+// document, with history and approvals alongside. Reusing inputs opens a
+// new review and requires the user to start execution.
 export function RunnerPage() {
   const [workflowId, setWorkflowId] = useState(() => routeSearch().get('workflow') ?? '');
   const [version, setVersion] = useState<number | null>(() => {
@@ -62,6 +62,13 @@ export function RunnerPage() {
     setSubmitted(null);
     setInputValues({});
     setRunError(null);
+  };
+
+  const prepareAgain = (run: RunRow, values: Record<string, unknown>) => {
+    pickWorkflow(run.workflow_id);
+    setVersion(run.version);
+    setInputValues(values);
+    setVisited([]);
   };
 
   const review = () => {
@@ -290,7 +297,7 @@ export function RunnerPage() {
           {viewing.data && (
             <ViewingRun
               run={viewing.data.run}
-              onActive={() => liveRun.refetch()}
+              onPrepare={prepareAgain}
             />
           )}
         </section>
@@ -316,14 +323,27 @@ export function RunnerPage() {
   );
 }
 
-function ViewingRun({ run, onActive }: { run: RunRow; onActive: () => void }) {
-  void onActive;
+function savedInputs(run: RunRow): Record<string, unknown> | undefined {
+  const inputs = run.snapshot?.inputs ?? run.inputs;
+  return inputs && typeof inputs === 'object' && !Array.isArray(inputs)
+    ? inputs as Record<string, unknown>
+    : undefined;
+}
+
+function ViewingRun({ run, onPrepare }: {
+  run: RunRow;
+  onPrepare: (run: RunRow, values: Record<string, unknown>) => void;
+}) {
   if (!TERMINAL.has(run.status)) {
     return <RunMonitor runId={run.run_id} onTerminal={() => {}} />;
   }
+  const inputs = savedInputs(run);
   return (
     <>
       <ResultsView run={run} />
+      {inputs && (
+        <button type="button" className="btn" onClick={() => onPrepare(run, inputs)}>Review saved inputs for a new run</button>
+      )}
       <h3>Documents</h3>
       <DocumentsPanel runId={run.run_id} active={false} />
     </>

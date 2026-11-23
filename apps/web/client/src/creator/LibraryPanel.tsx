@@ -37,7 +37,10 @@ const MAX_DEFINITION_BYTES = 256 * 1024;
 // Collapsible library overlay: grouped workflows with search, create,
 // per-workflow actions, and a Trash view with Restore. Closed unless
 // requested.
-export function LibraryPanel({ onClose }: { onClose: () => void }) {
+export function LibraryPanel({ onClose, initialTarget }: {
+  onClose: () => void;
+  initialTarget?: {id: string; version: number};
+}) {
   const dispatch = useAppDispatch();
   const isPresent = useIsPresent();
   const store = useStore<RootState>();
@@ -195,9 +198,9 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
     });
   };
 
-  async function getVersions(workflowId: string, latest: boolean) {
+  async function getVersions(workflowId: string, latest: boolean, version?: number) {
     const { versions } = await dispatch(
-      steelApi.endpoints.getWorkflowVersions.initiate(workflowId, {
+      steelApi.endpoints.getWorkflowVersions.initiate(version === undefined ? workflowId : {id: workflowId, version}, {
         subscribe: false,
         forceRefetch: latest,
       }),
@@ -237,16 +240,22 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
-  function load(workflowId: string, version: number | null) {
+  function load(workflowId: string, version: number | null, precise = false) {
     if (version !== null && workflowId === openId && version === openVersion) {
       closeLibrary();
       return;
     }
     const request = ++openRequest.current;
-    void openWorkflow(request, workflowId, version);
+    void openWorkflow(request, workflowId, version, precise);
   }
 
-  async function openWorkflow(request: number, workflowId: string, version: number | null) {
+  useEffect(() => {
+    if (!initialTarget || !isPresent) return;
+    const frame = window.requestAnimationFrame(() => load(initialTarget.id, initialTarget.version, true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialTarget, isPresent]);
+
+  async function openWorkflow(request: number, workflowId: string, version: number | null, precise: boolean) {
     const sequence = store.getState().workflowEditor.openSequence;
     const name = groups.get(workflowId)?.[0]?.name || workflowId;
     const requestedVersion = version === null ? name : `${name} v${version}`;
@@ -260,7 +269,7 @@ export function LibraryPanel({ onClose }: { onClose: () => void }) {
     }
     setOpening(requestedVersion);
     try {
-      const versions = await getVersions(workflowId, version === null);
+      const versions = await getVersions(workflowId, version === null, precise ? version ?? undefined : undefined);
       if (openRequest.current !== request) return;
       const row =
         version === null

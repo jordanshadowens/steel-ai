@@ -111,10 +111,12 @@ export const steelApi = createApi({
     }),
     getWorkflowVersions: build.query<
       { versions: WorkflowVersionRow[] },
-      string
+      string | { id: string; version: number }
     >({
-      query: (id) => `/workflows/${encodeURIComponent(id)}`,
-      providesTags: (_r, _e, id) => [{ type: 'WorkflowVersion', id }],
+      query: (value) => typeof value === 'string'
+        ? `/workflows/${encodeURIComponent(value)}`
+        : `/workflows/${encodeURIComponent(value.id)}?version=${value.version}`,
+      providesTags: (_r, _e, value) => [{ type: 'WorkflowVersion', id: typeof value === 'string' ? value : value.id }],
     }),
     getWorkflowDependencies: build.query<
       { workflow_id: string; deleted: boolean } & DependenciesResult,

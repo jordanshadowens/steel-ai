@@ -1,3 +1,4 @@
+import { routeSearch } from '../app/router';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 import type { RootState } from '../store/store';
@@ -81,11 +82,20 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
   const openVersion = useAppSelector((s) => s.workflowEditor.openVersion);
   const needsSetup = !!draft && openVersion === null;
   const wasSettingUp = useRef(false);
-  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [openTarget, setOpenTarget] = useState(() => {
+    const params = routeSearch();
+    const id = params.get('workflow');
+    const version = Number(params.get('version'));
+    return id && /^[a-zA-Z0-9_-]+$/.test(id) && Number.isSafeInteger(version) && version > 0
+      ? { id, version }
+      : undefined;
+  });
+  const [libraryOpen, setLibraryOpen] = useState(() => Boolean(openTarget));
   const [assistDock, setAssistDock] = useState<HTMLDivElement | null>(null);
   const libraryTrigger = useRef<HTMLButtonElement>(null);
   const closeLibrary = useCallback(() => {
     setLibraryOpen(false);
+    setOpenTarget(undefined);
     libraryTrigger.current?.focus({ preventScroll: true });
     window.requestAnimationFrame(() => {
       if (document.activeElement?.closest('.workflow-library')) {
@@ -396,7 +406,7 @@ function CreatorWorkspace({ setNoticeTarget }: { setNoticeTarget: (target: HTMLD
             <Suspense key="lib" fallback={
               <LibraryStatus onClose={closeLibrary}>Loading workflows…</LibraryStatus>
             }>
-              <LibraryPanel onClose={closeLibrary} />
+              <LibraryPanel onClose={closeLibrary} initialTarget={openTarget} />
             </Suspense>
           )}
           {(inspectorVisible || needsSetup) && draft && (
