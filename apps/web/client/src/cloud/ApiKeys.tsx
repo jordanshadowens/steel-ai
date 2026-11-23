@@ -64,7 +64,11 @@ export function ApiKeys() {
 
   return <section className="workspace-keys">
     <div className="workspace-keys-title">
-      <div><h1>API keys</h1><p>Manage credentials for this workspace and scope developer access to specific workflows.</p></div>
+      <div>
+        <h1>API keys</h1>
+        <p>Manage credentials for this workspace and scope developer access to specific workflows.</p>
+        <a className="workspace-api-guide" href="/docs#workflow-execution">Developer API guide</a>
+      </div>
       <button type="button" className="btn" disabled={busy} onClick={() => void perform(() => load())}>Refresh</button>
     </div>
     {error && <p className="workspace-keys-error" role="alert">{error}</p>}
