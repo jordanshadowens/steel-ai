@@ -101,6 +101,7 @@
   border: 0;
   border-radius: inherit;
   cursor: pointer;
+  pointer-events: auto;
 }
 .map-step-target:hover, .map-step-target[aria-pressed=true] { background: #285047; }
 .map-step:is([data-state=Live], [data-state=Replay]) { border-color: #83fbc0; box-shadow: 0 0 20px #54ed9e55; }
@@ -108,6 +109,8 @@
 .map-step[data-state=Failed] { border-color: #ef9695; }
 .map-step[data-state=Failed] small { color: #ffc0bd; }
 .map-step[data-state=Objective] { border: 1px dashed #83fbc0; padding: 11px 14px; }
+.map-step[data-state=Objective][aria-current=step] { padding-inline-start: 27px; box-shadow: 0 0 20px #54ed9e55; }
 .run-beacon { z-index: 1; pointer-events: none; top: 15px; }
 .run-beacon::before { position: absolute; inset: -6px; content: ''; border: 1px solid #83fbc0; border-radius: 50%; animation: beacon 1.55s .25s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) { .run-beacon::before { animation: none; } }
+@media (max-width: 620px) { .run-map { height: 440px; } }

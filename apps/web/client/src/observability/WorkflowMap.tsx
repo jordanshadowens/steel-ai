@@ -134,8 +134,10 @@ export default function WorkflowMap({
   const recordedSteps = (events ?? [])
     .filter(entry => entry.kind === 'run' && entry.status === 'running' && entry.step_id)
     .map(entry => entry.step_id!);
-  const replayCount = recordedSteps.length;
-  const replay = replayIndex === undefined ? undefined : recordedSteps[replayIndex];
+  const reachedObjective = (events ?? []).some(entry => entry.kind === 'run' && entry.status === 'sealed');
+  const replayRoute = reachedObjective ? [...recordedSteps, finish] : recordedSteps;
+  const replayCount = replayRoute.length;
+  const replay = replayIndex === undefined ? undefined : replayRoute[replayIndex];
   const beaconStep = replay ?? active;
   useEffect(() => {
     if (replayIndex === undefined) return;
@@ -146,6 +148,12 @@ export default function WorkflowMap({
   }, [replayIndex, replayCount]);
   const stepStatus = new Map<string, string>();
   const traversed = new Set<string>();
+  const replayed = new Set<string>();
+  if (replayIndex !== undefined) {
+    for (let index = 1; index <= replayIndex; index++) {
+      replayed.add(JSON.stringify([replayRoute[index - 1], replayRoute[index] === finish ? 'end' : replayRoute[index]]));
+    }
+  }
   let lastStep: string | null = null;
   for (const entry of events ?? []) {
     if (entry.kind !== 'run') continue;
@@ -209,11 +217,11 @@ export default function WorkflowMap({
     }
     for (const [target, labels] of labelsByTarget) {
       const edgeId = JSON.stringify([step.step_id, target]);
-      const visited = traversed.has(edgeId);
+      const visited = (replay ? replayed : traversed).has(edgeId);
       const color = labels.includes('Failure') ? '#f5a7a5' : visited ? '#83fbc0' : '#72968e';
       const label = labels.join(' / ');
       const branch = target !== routes[0].target;
-      const fromLive = target === beaconStep && visited;
+      const fromLive = (target === 'end' ? finish : target) === beaconStep && visited;
       edges.push({
         id: edgeId,
         source: step.step_id,
@@ -235,7 +243,14 @@ export default function WorkflowMap({
       position: compact
         ? { x: 0, y: steps.length * 112 }
         : { x: Math.max(...nodes.map((node) => node.position.x)) + 255, y: 0 },
-      data: { name: 'Objective', kind: definition.objective || definition.name || 'Workflow finish', compact, status: 'Objective' },
+      data: {
+        name: 'Objective',
+        kind: definition.objective || definition.name || 'Workflow finish',
+        compact,
+        status: 'Objective',
+        current: beaconStep === finish,
+        active: beaconStep === finish,
+      },
     });
   }
   if (!nodes.length) {
@@ -244,7 +259,7 @@ export default function WorkflowMap({
   return (
     <div className="run-map" role="region" aria-label="Workflow map" ref={frame}>
       <div className="run-map-toolbar">
-        {!active && replayCount > 0 && (
+        {!active && recordedSteps.length > 0 && (
           <button type="button" className="run-link" onClick={() => setReplayIndex(replayIndex === undefined ? 0 : undefined)}>
             {replayIndex === undefined ? 'Replay route' : 'Stop replay'}
           </button>
