@@ -1,5 +1,5 @@
-import { navigate, routeHref } from '../app/router';
-import { useEffect, useState } from 'react';
+import { navigate, routeHref, routeSearch } from '../app/router';
+import { useState } from 'react';
 import type { RunRow } from '../api/contracts';
 import {
   useCreateRunMutation,
@@ -22,10 +22,11 @@ const TERMINAL = new Set(['sealed', 'failed']);
 // document, with history and approvals alongside. Viewing history never
 // reruns a workflow or regenerates a document.
 export function RunnerPage() {
-  const preselect =
-    new URLSearchParams(window.location.search).get('workflow') ?? '';
-  const [workflowId, setWorkflowId] = useState(preselect);
-  const [version, setVersion] = useState<number | null>(null);
+  const [workflowId, setWorkflowId] = useState(() => routeSearch().get('workflow') ?? '');
+  const [version, setVersion] = useState<number | null>(() => {
+    const value = Number(routeSearch().get('version'));
+    return Number.isSafeInteger(value) && value > 0 ? value : null;
+  });
   const [inputValues, setInputValues] = useState<Record<string, unknown>>({});
   const [inputErrors, setInputErrors] = useState<Record<string, string>>({});
   const [submitted, setSubmitted] = useState<Record<string, unknown> | null>(
@@ -34,7 +35,7 @@ export function RunnerPage() {
   const [runId, setRunId] = useState<string | null>(null);
   const [visited, setVisited] = useState<string[]>([]);
   const [viewStatus, setViewStatus] = useState<string | null>(null);
-  const [viewingRunId, setViewingRunId] = useState<string | null>(() => new URLSearchParams(location.hash.split('?')[1] || location.search).get('run'));
+  const [viewingRunId, setViewingRunId] = useState<string | null>(() => routeSearch().get('run'));
   const [runError, setRunError] = useState<string | null>(null);
 
   const published = useListWorkflowsQuery('published');
@@ -51,14 +52,10 @@ export function RunnerPage() {
   const liveRun = useGetRunQuery(runId ?? '', { skip: !runId });
   const viewing = useGetRunQuery(viewingRunId ?? '', { skip: !viewingRunId });
 
-  useEffect(() => {
-    setVersion(null);
-    setSubmitted(null);
-    setInputErrors({});
-  }, [workflowId]);
-
   const pickWorkflow = (id: string) => {
     setWorkflowId(id);
+    setVersion(null);
+    setInputErrors({});
     setRunId(null);
     setViewingRunId(null);
     setViewStatus(null);
@@ -145,6 +142,12 @@ export function RunnerPage() {
             ))}
           </select>
         </div>
+        {version !== null && versions.isSuccess && !def && (
+          <div className="status-line" role="alert">
+            Version {version} is not available to run.
+            {pubVersions.length > 0 && <button type="button" className="btn" onClick={() => setVersion(null)}>Use latest published version</button>}
+          </div>
+        )}
         {def && (
           <>
             <div className="field">

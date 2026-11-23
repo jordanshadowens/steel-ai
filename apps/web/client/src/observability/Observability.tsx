@@ -1,4 +1,4 @@
-import { navigate, routeHref } from '../app/router';
+import { navigate, routeHref, routeSearch } from '../app/router';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import './cloud.css';
 import {
@@ -16,7 +16,7 @@ const WorkflowMap = lazy(() => import('./WorkflowMap'));
 type RunDetail = { run: Run; logs?: Entry[] };
 type Version = { version: number; definition: Definition };
 export function Observability() {
-  const initialRun = new URLSearchParams(location.hash.split('?')[1] || location.search).get('run') || '';
+  const initialRun = routeSearch().get('run') || '';
   const [runs, setRuns] = useState<Run[]>([]);
   const [selected, select] = useState(initialRun);
   const [detail, setDetail] = useState<RunDetail>();
@@ -155,7 +155,7 @@ export function Observability() {
       </div>
         <div className="operations-grid">
           <aside aria-label="Recent runs">
-            <h3>Recent runs</h3>
+            <h2>Recent runs</h2>
             <label>Find a run<input value={runFilter} placeholder="Workflow or run ID" onChange={event => setRunFilter(event.target.value)} /></label>
             <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
@@ -189,9 +189,9 @@ export function Observability() {
             {run && (
               <>
                 <div className="run-heading">
-                  <h3>
+                  <h2>
                     {run.workflow_id} <small>v{run.version}</small>
-                  </h3>
+                  </h2>
                   <span className="run-status" role="status" data-state={run.status}>
                     {run.status.replaceAll('_', ' ')}
                     {run.current_step ? ' · ' + run.current_step : ''}
@@ -208,7 +208,7 @@ export function Observability() {
                   {linkStatus && <span role="status">{linkStatus}</span>}
                 </div>
                 <div className="run-map-heading">
-                  <h4>Workflow map</h4>
+                  <h3>Workflow map</h3>
                   <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
                     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                     event.preventDefault();
@@ -236,7 +236,7 @@ export function Observability() {
                   </p>
                 )}
                 <div className="log-heading">
-                  <h4>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h4>
+                  <h3>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
                   <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
                     <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
                   </select></label>

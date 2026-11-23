@@ -8,7 +8,7 @@
 .workspace-keys-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .workspace-keys-forms form, .workspace-key-list, .workspace-keys-secret { display: grid; gap: 12px; align-content: start; padding: 18px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
 .workspace-keys form label { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
-.workspace-keys form input { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; width: 100%; background: var(--color-surface-raised); color: inherit; }
+.workspace-keys form :is(input, select) { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; width: 100%; background: var(--color-surface-raised); color: inherit; }
 .workspace-keys form button { justify-self: start; }
 .workspace-key-list, .workspace-keys-secret { margin-top: 14px; }
 .workspace-keys-secret { background: #eaf4ff; }

@@ -29,6 +29,11 @@ export function parseRoute(): Route {
   return 'creator';
 }
 
+export function routeSearch(): URLSearchParams {
+  const {pathname, hash, search} = window.location;
+  return new URLSearchParams(pathname.startsWith('/app') ? hash.split('?')[1] ?? search : search);
+}
+
 export function routeHref(route: Route, query?: URLSearchParams): string {
   const path = route === 'creator' ? '/' : `/${route}`;
   const suffix = query?.size ? `?${query}` : '';

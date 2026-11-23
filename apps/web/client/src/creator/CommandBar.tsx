@@ -1,3 +1,4 @@
+import { navigate, routeHref } from '../app/router';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 import type { WorkflowDefinition } from '../api/contracts';
@@ -167,6 +168,9 @@ export function CommandBar({
   }, []);
 
   if (!draft) return null;
+  const savedRunQuery = editor.openStatus === 'published' && editor.openWorkflowId && editor.openVersion !== null
+    ? new URLSearchParams({workflow: editor.openWorkflowId, version: String(editor.openVersion)})
+    : null;
   const canPublish =
     editor.openVersion !== null &&
     editor.openStatus !== 'published' &&
@@ -561,6 +565,13 @@ export function CommandBar({
           {publishState.isLoading ? 'Requesting approval…' : 'Publish'}
         </button>
 
+        {savedRunQuery && (
+          <a className="btn" href={routeHref('runner', savedRunQuery)} title="Open this saved version in Runner" onClick={event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate('runner', savedRunQuery);
+          }}>Run saved v{editor.openVersion}</a>
+        )}
         {pendingApproval && !approvalOpen && (
           <button type="button" className="btn command-approval" onClick={() => setApprovalOpen(true)}>
             Review approval for v{pendingApproval.version}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useListWorkflowsQuery } from '../api/steelApi';
 import { getSession, sessionIsCurrent } from '../auth/session';
 import './api-keys.css';
 
@@ -36,6 +37,8 @@ export function ApiKeys() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const versions = useListWorkflowsQuery('published');
+  const workflows = [...new Map((versions.data?.workflows ?? []).map(item => [item.workflow_id, item.name || item.workflow_id])).entries()];
 
   async function load(signal?: AbortSignal) {
     const value = await keyRequest<{keys: Key[]}>('', 'GET', undefined, undefined, signal);
@@ -95,6 +98,10 @@ export function ApiKeys() {
       }}>
         <h2>Issue a developer key</h2>
         <label>Account API key<input type="password" autoComplete="off" value={parent} required onChange={event => setParent(event.target.value)} /></label>
+        {workflows.length > 0 && <label>Add published workflow<select value="" onChange={event => {
+          const id = event.target.value;
+          if (id) setScope(current => [...new Set([...current.split(',').map(item => item.trim()).filter(Boolean), id])].join(', '));
+        }}><option value="">Choose a workflow…</option>{workflows.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>}
         <label>Workflow IDs<input value={scope} required onChange={event => setScope(event.target.value)} placeholder="purchase-review, monthly-report" /></label>
         <button className="btn btn-primary" disabled={busy || Boolean(issued)}>Create developer key</button>
       </form>
