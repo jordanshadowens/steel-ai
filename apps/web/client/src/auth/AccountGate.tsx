@@ -6,7 +6,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode } from 'react';
-import { workspaceApiPath } from './session';
+import { fetchWorkspaceBoot, workspaceApiPath } from './session';
 import {
   acceptAccount,
   acceptCookieAccount,
@@ -412,7 +412,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
         configureRuntime(config);
         if (config.mode === 'account' && config.authMethod === 'cloud-session' && !(attempt === 0 && returnCode)) {
           const epoch = getSession().epoch;
-          const restored = await fetch(workspaceApiPath('/api/session'), {
+          const restored = await fetchWorkspaceBoot(workspaceApiPath('/api/session'), {
             credentials: 'same-origin',
             cache: 'no-store',
             redirect: 'error',

@@ -259,16 +259,43 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
       : {}),
   };
 }
+export async function fetchWorkspaceBoot(
+  url: string,
+  options: RequestInit,
+  fetchFn: typeof fetch = fetch,
+): Promise<Response> {
+  for (const delay of [0, 250, 650]) {
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    options.signal?.throwIfAborted();
+    const timeout = AbortSignal.timeout(8000);
+    try {
+      const response = await fetchFn(url, {
+        ...options,
+        signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
+      });
+      if (![500, 502, 503, 504].includes(response.status) || delay === 650) return response;
+      await response.body?.cancel().catch(() => {});
+    } catch (error) {
+      if (options.signal?.aborted || delay === 650) throw error;
+    }
+  }
+  throw new Error('Workspace connection unavailable.');
+}
+
 export async function loadRuntimeConfig(
   signal?: AbortSignal,
   fetchFn: typeof fetch = fetch,
 ) {
-  const response = await fetchFn(workspaceApiPath('/api/runtime-config'), {
+  const path = workspaceApiPath('/api/runtime-config');
+  const options: RequestInit = {
     cache: 'no-store',
     credentials: 'omit',
     redirect: 'error',
     signal,
-  });
+  };
+  const response = import.meta.env.VITE_STEEL_CLOUD === '1'
+    ? await fetchWorkspaceBoot(path, options, fetchFn)
+    : await fetchFn(path, options);
   if (!response.ok) {
     throw new Error('Runtime configuration unavailable');
   }

@@ -193,3 +193,17 @@ it('cookie logout drops local state even if server logout fails and gives a usef
   expect(getSession().message).toContain('could not be confirmed');
   await expect(authenticatedFetch('/api/skills')).rejects.toThrow('Sign in');
 });
+
+it('retries a transient workspace boot without retrying authentication responses', async () => {
+  const { fetchWorkspaceBoot } = await import('./session');
+  const fetcher = vi.fn().mockResolvedValueOnce(new Response('', {status:503}))
+    .mockRejectedValueOnce(new TypeError('Network request failed'))
+    .mockResolvedValue(new Response('', {status:401}));
+  const result = fetchWorkspaceBoot('/cloud-runtime/api/session', {}, fetcher);
+  await vi.advanceTimersByTimeAsync(950);
+  expect((await result).status).toBe(401);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  const unauthorized = vi.fn().mockResolvedValue(new Response('', {status:401}));
+  await fetchWorkspaceBoot('/cloud-runtime/api/session', {}, unauthorized);
+  expect(unauthorized).toHaveBeenCalledTimes(1);
+});
