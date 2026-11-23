@@ -36,9 +36,9 @@ export type Entry = {
 };
 
 export const terminal = (status: string) =>
-  ['sealed', 'failed', 'cancelled'].includes(status);
+  ['sealed', 'failed', 'cancelled', 'local_completed', 'local_failed'].includes(status);
 export const activeStep = (run: Run) =>
-  run.status === 'running' ? run.current_step : null;
+  ['running', 'local_running'].includes(run.status) ? run.current_step : null;
 
 export function runEntries(run: Run, calls: Entry[] = []): Entry[] {
   const status = run.status.replaceAll('_', ' ');

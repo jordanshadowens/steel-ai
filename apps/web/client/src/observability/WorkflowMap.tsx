@@ -132,9 +132,9 @@ export default function WorkflowMap({
   }, []);
   const steps = definition.steps ?? [];
   const recordedSteps = (events ?? [])
-    .filter(entry => entry.kind === 'run' && entry.status === 'running' && entry.step_id)
+    .filter(entry => entry.kind === 'run' && ['running','local_running'].includes(entry.status ?? '') && entry.step_id)
     .map(entry => entry.step_id!);
-  const reachedObjective = (events ?? []).some(entry => entry.kind === 'run' && entry.status === 'sealed');
+  const reachedObjective = (events ?? []).some(entry => entry.kind === 'run' && ['sealed','local_completed'].includes(entry.status ?? ''));
   const replayRoute = reachedObjective ? [...recordedSteps, finish] : recordedSteps;
   const replayCount = replayRoute.length;
   const replay = replayIndex === undefined ? undefined : replayRoute[replayIndex];
@@ -157,11 +157,11 @@ export default function WorkflowMap({
   let lastStep: string | null = null;
   for (const entry of events ?? []) {
     if (entry.kind !== 'run') continue;
-    if (entry.status === 'running' && entry.step_id !== lastStep) {
+    if (['running','local_running'].includes(entry.status ?? '') && entry.step_id !== lastStep) {
       if (lastStep && entry.step_id) traversed.add(JSON.stringify([lastStep, entry.step_id]));
       if (entry.step_id) lastStep = entry.step_id;
     }
-    if (entry.status === 'sealed' && lastStep) traversed.add(JSON.stringify([lastStep, 'end']));
+    if (['sealed','local_completed'].includes(entry.status ?? '') && lastStep) traversed.add(JSON.stringify([lastStep, 'end']));
     if (!entry.step_id || !entry.status) continue;
     if (entry.status === 'step_completed') stepStatus.set(entry.step_id, 'Completed');
     if (entry.status === 'step_failed') stepStatus.set(entry.step_id, 'Failed');
