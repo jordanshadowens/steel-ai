@@ -7,15 +7,16 @@ type Issued = Key & {key: string};
 
 async function keyRequest<T>(path: string, method = 'GET', body?: unknown, parent?: string, signal?: AbortSignal): Promise<T> {
   const session = getSession();
-  if (!session.idToken) throw new Error('Sign in to the cloud workspace before managing keys.');
-  const response = await fetch(parent ? '/api/dev-keys' : '/cloud-keys/api/account/keys' + path, {
+  if (!session.idToken && !session.cookieAuthenticated) throw new Error('Sign in to the cloud workspace before managing keys.');
+  const response = await fetch(parent ? '/cloud-keys/api/dev-keys' : '/cloud-keys/api/account/keys' + path, {
     method,
     cache: 'no-store',
-    credentials: 'omit',
+    credentials: session.cookieAuthenticated ? 'same-origin' : 'omit',
     redirect: 'error',
     signal,
     headers: {
-      Authorization: 'Bearer ' + (parent || session.idToken),
+      ...(parent || session.idToken ? {Authorization: 'Bearer ' + (parent || session.idToken)} : {}),
+      ...(method !== 'GET' && session.cookieAuthenticated ? {'X-Steel-CSRF': '1'} : {}),
       ...(body ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,

@@ -152,6 +152,23 @@ export async function authorizeAccount(value: {
   if (!value.idToken || !value.localId || !value.email) {
     throw new Error('Sign-in response was incomplete. Request a fresh link.');
   }
+  const config = getSession().config;
+  if (config?.mode === 'account' && config.authMethod === 'cloud-session') {
+    const established = await fetch(workspaceApiPath('/api/session'), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${value.idToken}`, 'X-Steel-CSRF': '1' },
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+    });
+    if (!established.ok) throw new Error('Unable to open this private workspace. Check that your email is approved.');
+    const account = await established.json();
+    if (!sessionIsCurrent(epoch) || account.uid !== value.localId || account.email !== value.email) {
+      throw new Error('The session changed. Sign in again.');
+    }
+    acceptCookieAccount(account);
+    return;
+  }
   const response = await fetch(workspaceApiPath('/api/workspace'), {
     headers: { Authorization: `Bearer ${value.idToken}` },
     cache: 'no-store',
@@ -393,6 +410,21 @@ export function AccountGate({ children }: { children: ReactNode }) {
           return;
         }
         configureRuntime(config);
+        if (config.mode === 'account' && config.authMethod === 'cloud-session' && !(attempt === 0 && returnCode)) {
+          const epoch = getSession().epoch;
+          const restored = await fetch(workspaceApiPath('/api/session'), {
+            credentials: 'same-origin',
+            cache: 'no-store',
+            redirect: 'error',
+            signal: controller.signal,
+          });
+          if (restored.ok) {
+            const account = await restored.json();
+            if (!cancelled && sessionIsCurrent(epoch)) acceptCookieAccount(account);
+          } else if (restored.status !== 401 && restored.status !== 403) {
+            throw new Error('Unable to restore your workspace session.');
+          }
+        }
         if (
           config.mode === 'account' &&
           config.authMethod === 'session-cookie'

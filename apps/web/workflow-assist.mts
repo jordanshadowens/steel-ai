@@ -75,11 +75,12 @@ function parseClarifications(value: unknown) {
 export async function handleWorkflowAssist(
   req: IncomingMessage,
   res: ServerResponse,
-  {runtime, origin, env, requireBearer = false, complete = completeWithConfiguredProvider}: {
+  {runtime, origin, env, requireBearer = false, authorization: forwardedAuthorization, complete = completeWithConfiguredProvider}: {
     runtime: string;
     origin: string | undefined;
     env: NodeJS.ProcessEnv;
     requireBearer?: boolean;
+    authorization?: string;
     complete?: typeof completeWithConfiguredProvider;
   },
 ) {
@@ -95,8 +96,8 @@ export async function handleWorkflowAssist(
     req.headers['x-steel-csrf'] !== '1' || req.headers['sec-fetch-site'] === 'cross-site') {
     return reply(403, { error: 'Open Workflow Creator on this Steel Cloud origin to use AI Assist.' });
   }
-  const authorization = req.headers.authorization;
-  if (requireBearer && (req.headersDistinct.authorization?.length !== 1 || !/^Bearer \S+$/.test(authorization || ''))) {
+  const authorization = forwardedAuthorization ?? req.headers.authorization;
+  if (requireBearer && ((!forwardedAuthorization && req.headersDistinct.authorization?.length !== 1) || !/^Bearer \S+$/.test(authorization || ''))) {
     return reply(401, { error: 'Sign in to your Steel workspace to use AI Assist.' });
   }
   try {

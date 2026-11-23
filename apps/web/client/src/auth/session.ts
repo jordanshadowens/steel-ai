@@ -13,7 +13,7 @@ export type RuntimeConfig =
       mode: 'account';
       firebase: FirebaseConfig;
       emailLinkContinueUrl?: string;
-      authMethod?: 'session-cookie';
+      authMethod?: 'session-cookie' | 'cloud-session';
     };
 export type ShadowAuthSession = {
   authenticated: boolean;
@@ -155,7 +155,7 @@ export function acceptCookieAccount(value: {
 }) {
   if (
     state.config?.mode !== 'account' ||
-    state.config.authMethod !== 'session-cookie'
+    !['session-cookie', 'cloud-session'].includes(state.config.authMethod || '')
   ) {
     throw new Error('Website session is unavailable on this runtime.');
   }
@@ -184,7 +184,7 @@ export function acceptCookieAccount(value: {
 export async function signOutAccount() {
   if (
     state.config?.mode === 'account' &&
-    state.config.authMethod === 'session-cookie'
+    ['session-cookie', 'cloud-session'].includes(state.config.authMethod || '')
   ) {
     // Clear local state immediately, including when the server cannot be reached.
     endAccount('Signing out...');
@@ -243,7 +243,7 @@ export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   ) {
     throw new Error('Runtime configuration unavailable');
   }
-  if (v.authMethod !== undefined && v.authMethod !== 'session-cookie') {
+  if (v.authMethod !== undefined && !['session-cookie', 'cloud-session'].includes(v.authMethod)) {
     throw new Error('Runtime configuration unavailable');
   }
   return {
