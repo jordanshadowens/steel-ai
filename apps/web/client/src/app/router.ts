@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'creator' | 'runner' | 'designer';
+export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-keys';
 
 // History routing in production (/ → Creator). Before the route cutover the
 // bundle is served from /app/, where pathname routing cannot work, so the
@@ -11,11 +11,15 @@ export function parseRoute(): Route {
     if (hash.startsWith('#/runner')) {
       return 'runner';
     }
+    if (hash.startsWith('#/api-keys')) return 'api-keys';
+    if (hash.startsWith('#/observability')) return 'observability';
     if (hash.startsWith('#/designer')) {
       return 'designer';
     }
     return 'creator';
   }
+  if (pathname === '/api-keys') return 'api-keys';
+  if (pathname === '/observability') return 'observability';
   if (pathname === '/runner' || pathname.startsWith('/runner/')) {
     return 'runner';
   }
@@ -25,13 +29,14 @@ export function parseRoute(): Route {
   return 'creator';
 }
 
-export function routeHref(route: Route): string {
+export function routeHref(route: Route, query?: URLSearchParams): string {
   const path = route === 'creator' ? '/' : `/${route}`;
-  return window.location.pathname.startsWith('/app') ? `#${path}` : path;
+  const suffix = query?.size ? `?${query}` : '';
+  return (window.location.pathname.startsWith('/app') ? '#' : '') + path + suffix;
 }
 
-export function navigate(route: Route): void {
-  const href = routeHref(route);
+export function navigate(route: Route, query?: URLSearchParams): void {
+  const href = routeHref(route, query);
   if (window.location.pathname.startsWith('/app')) {
     window.location.hash = href;
     window.dispatchEvent(new PopStateEvent('popstate'));

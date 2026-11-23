@@ -1,3 +1,5 @@
+export const workspaceApiPath = (path: string) => import.meta.env.VITE_STEEL_CLOUD === '1' ? '/cloud-runtime' + path : path;
+
 // Bearer credentials never enter Redux, browser storage, URLs, logs or recovery files.
 // Hosted sessions use a server-issued HttpOnly cookie that JavaScript cannot read.
 export type FirebaseConfig = {
@@ -187,7 +189,7 @@ export async function signOutAccount() {
     // Clear local state immediately, including when the server cannot be reached.
     endAccount('Signing out...');
     try {
-      const response = await fetch('/api/session', {
+      const response = await fetch(workspaceApiPath('/api/session'), {
         method: 'DELETE',
         credentials: 'same-origin',
         headers: { 'X-Steel-CSRF': '1' },
@@ -261,7 +263,7 @@ export async function loadRuntimeConfig(
   signal?: AbortSignal,
   fetchFn: typeof fetch = fetch,
 ) {
-  const response = await fetchFn('/api/runtime-config', {
+  const response = await fetchFn(workspaceApiPath('/api/runtime-config'), {
     cache: 'no-store',
     credentials: 'omit',
     redirect: 'error',
@@ -327,7 +329,11 @@ export async function authenticatedFetch(
   ) {
     headers.set('X-Steel-CSRF', '1');
   }
-  const source = input instanceof Request ? input : url.toString();
+  const target = new URL(workspaceApiPath(url.pathname) + url.search, url.origin);
+  const source = input instanceof Request
+    ? (target.href === input.url ? input : new Request(target, input))
+    : target.toString();
+
   const response = await fetch(source, {
     ...init,
     headers,
@@ -342,7 +348,7 @@ export async function authenticatedFetch(
     // A workspace endpoint can reject a request while the website login is valid.
     const invalid =
       !cookie ||
-      (await fetch('/api/session', {
+      (await fetch(workspaceApiPath('/api/session'), {
         headers: { 'X-Steel-Session-View': 'workspace' },
         credentials: 'same-origin',
         cache: 'no-store',

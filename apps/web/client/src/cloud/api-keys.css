@@ -1,0 +1,25 @@
+.workspace-keys { width: min(calc(100% - 32px), 1080px); margin: 24px auto 42px; color: var(--color-ink); }
+.workspace-keys h1, .workspace-keys h2 { margin: 0; }
+.workspace-keys h1 { font-size: clamp(24px, 4vw, 38px); letter-spacing: -.045em; }
+.workspace-keys h2 { font-size: 17px; }
+.workspace-keys p { color: var(--color-ink-muted); }
+.workspace-keys-title { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.workspace-keys-title p { margin: 4px 0 0; }
+.workspace-keys-forms { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.workspace-keys-forms form, .workspace-key-list, .workspace-keys-secret { display: grid; gap: 12px; align-content: start; padding: 18px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+.workspace-keys form label { display: grid; gap: 5px; font-size: 13px; font-weight: 650; }
+.workspace-keys form input { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; width: 100%; background: var(--color-surface-raised); color: inherit; }
+.workspace-keys form button { justify-self: start; }
+.workspace-key-list, .workspace-keys-secret { margin-top: 14px; }
+.workspace-keys-secret { background: #eaf4ff; }
+.workspace-keys-secret code, .workspace-key-row { overflow-wrap: anywhere; }
+.workspace-keys-secret button + button { margin-inline-start: 8px; }
+.workspace-key-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border); }
+.workspace-key-row small { display: block; color: var(--color-ink-muted); }
+.workspace-keys .workspace-keys-error { color: #982e35; background: #fff0f0; border-radius: 8px; padding: 12px; }
+@media (max-width: 620px) {
+  .workspace-keys-forms { grid-template-columns: 1fr; }
+  .workspace-key-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .workspace-key-row > span:nth-child(2) { grid-column: 1; }
+  .workspace-key-row > button { grid-column: 2; grid-row: 1; }
+}

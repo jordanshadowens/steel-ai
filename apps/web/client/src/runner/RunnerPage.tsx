@@ -1,3 +1,4 @@
+import { navigate, routeHref } from '../app/router';
 import { useEffect, useState } from 'react';
 import type { RunRow } from '../api/contracts';
 import {
@@ -229,6 +230,7 @@ export function RunnerPage() {
       {runId && !viewingRunId && (
         <section aria-label="Execution" className="section-card">
           <h2>4. Execution</h2>
+          <ObserveRunLink runId={runId} />
           {(viewStatus === 'pending_approval' ||
             liveStatus === 'pending_approval') &&
             !terminal && (
@@ -273,6 +275,7 @@ export function RunnerPage() {
       {viewingRunId && (
         <section aria-label="Historical run" className="section-card">
           <h2>Run from history (read-only)</h2>
+          <ObserveRunLink runId={viewingRunId} />
           <button
             type="button"
             className="btn"
@@ -322,4 +325,13 @@ function ViewingRun({ run, onActive }: { run: RunRow; onActive: () => void }) {
       <DocumentsPanel runId={run.run_id} active={false} />
     </>
   );
+}
+
+function ObserveRunLink({ runId }: { runId: string }) {
+  const query = new URLSearchParams({ run: runId });
+  return <a className="btn" href={routeHref('observability', query)} onClick={(event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    navigate('observability', query);
+  }}>Inspect in Observability</a>;
 }

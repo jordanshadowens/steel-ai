@@ -1,3 +1,4 @@
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { completeWithConfiguredProvider } from './assist-provider.mjs';
 
@@ -71,92 +72,111 @@ function parseClarifications(value: unknown) {
   }).flat();
 }
 
+export async function handleWorkflowAssist(
+  req: IncomingMessage,
+  res: ServerResponse,
+  {runtime, origin, env, requireBearer = false, complete = completeWithConfiguredProvider}: {
+    runtime: string;
+    origin: string | undefined;
+    env: NodeJS.ProcessEnv;
+    requireBearer?: boolean;
+    complete?: typeof completeWithConfiguredProvider;
+  },
+) {
+  const request = new AbortController();
+  res.once('close', () => request.abort());
+  const reply = (status: number, body: object) => {
+    if (res.destroyed) return;
+    res.writeHead(status, { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  };
+  if (req.method !== 'POST') return reply(405, { error: 'Use POST to create a draft.' });
+  if (!origin || req.headers.origin !== origin ||
+    req.headers['x-steel-csrf'] !== '1' || req.headers['sec-fetch-site'] === 'cross-site') {
+    return reply(403, { error: 'Open Workflow Creator on this Steel Cloud origin to use AI Assist.' });
+  }
+  const authorization = req.headers.authorization;
+  if (requireBearer && (req.headersDistinct.authorization?.length !== 1 || !/^Bearer \S+$/.test(authorization || ''))) {
+    return reply(401, { error: 'Sign in to your Steel workspace to use AI Assist.' });
+  }
+  try {
+    const workspace = await fetch(new URL('/api/workspace', runtime), {
+      headers: authorization ? { Authorization: authorization } : {},
+      redirect: 'error',
+      signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
+    });
+    if (workspace.status === 401 || workspace.status === 403) {
+      return reply(workspace.status, { error: 'Sign in to your Steel workspace to use AI Assist.' });
+    }
+    if (!workspace.ok) throw new Error('Workspace unavailable.');
+    await workspace.body?.cancel();
+  } catch {
+    if (request.signal.aborted) return;
+    return reply(502, { error: 'Unable to verify access to the Steel workspace.' });
+  }
+  let prompt: string;
+  let previous: ReturnType<typeof parseWorkflowDraft> | undefined;
+  let clarifications: ReturnType<typeof parseClarifications>;
+  try {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+      size += chunk.length;
+      if (size > 131072) return reply(413, { error: 'This request is too large to revise in AI Assist.' });
+      chunks.push(chunk);
+    }
+    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
+    if (!prompt || prompt.length > 4000) throw new Error('Invalid prompt.');
+    if (body.previous !== undefined && !isObject(body.previous)) throw new Error('Invalid previous draft.');
+    if (body.previous) previous = parseWorkflowDraft(body.previous);
+    clarifications = parseClarifications(body.clarifications);
+  } catch {
+    return reply(400, { error: 'The message or draft context is invalid. Messages must be 1–4,000 characters.' });
+  }
+  if (request.signal.aborted) return;
+  const result = await complete(env, [
+    { role: 'system', content: instructions },
+    ...(previous ? [{
+      role: 'user' as const, content: 'Revise this existing draft in my next message.',
+    }, {
+      role: 'assistant' as const, content: JSON.stringify(previous),
+    }] : []),
+    ...clarifications,
+    { role: 'user', content: prompt },
+  ], request.signal);
+  if (request.signal.aborted) return;
+  if (result.kind === 'config-error') {
+    return reply(503, { error: 'Check the model provider URL, model and key in your Steel configuration.' });
+  }
+  if (result.kind === 'provider-error') {
+    return reply(502, { error: 'The configured model provider did not return a completion. Check its availability and try again.' });
+  }
+  try {
+    const resultObject = parseModelObject(result.text);
+    if (Object.keys(resultObject).length === 1 && typeof resultObject.message === 'string' &&
+      resultObject.message.trim() && resultObject.message.length <= 2000) {
+      return reply(200, { message: resultObject.message.trim() });
+    }
+    const definition = parseWorkflowDraft(resultObject);
+    if (previous) definition.workflow_id = previous.workflow_id;
+    return reply(200, { definition });
+  } catch {
+    return reply(502, { error: 'The model returned an invalid workflow. Try rephrasing the description.' });
+  }
+}
+
 export function workflowAssist(runtime: string, env: NodeJS.ProcessEnv): Plugin {
   return {
     name: 'steel-workflow-assist',
     configureServer(server) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         if (req.url?.split('?')[0] !== '/api/workflows/assist') return next();
-        const request = new AbortController();
-        res.once('close', () => request.abort());
-        const reply = (status: number, body: object) => {
-          if (res.destroyed) return;
-          res.writeHead(status, { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(body));
-        };
-        if (req.method !== 'POST') return reply(405, { error: 'Use POST to create a draft.' });
         const host = req.headers.host ?? '';
         const protocol = server.config.server.https ? 'https' : 'http';
-        if (!/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host) ||
-          req.headers.origin !== `${protocol}://${host}` ||
-          req.headers['x-steel-csrf'] !== '1' || req.headers['sec-fetch-site'] === 'cross-site') {
-          return reply(403, { error: 'Open Workflow Creator on localhost to use AI Assist.' });
-        }
-        const authorization = req.headers.authorization;
-        try {
-          const workspace = await fetch(new URL('/api/workspace', runtime), {
-            headers: authorization ? { Authorization: authorization } : {},
-            redirect: 'error',
-            signal: AbortSignal.any([request.signal, AbortSignal.timeout(10000)]),
-          });
-          if (workspace.status === 401 || workspace.status === 403) {
-            return reply(workspace.status, { error: 'Sign in to your Steel workspace to use AI Assist.' });
-          }
-          if (!workspace.ok) throw new Error('Workspace unavailable.');
-        } catch {
-          if (request.signal.aborted) return;
-          return reply(502, { error: 'Unable to verify access to the Steel workspace.' });
-        }
-        let prompt: string;
-        let previous: ReturnType<typeof parseWorkflowDraft> | undefined;
-        let clarifications: ReturnType<typeof parseClarifications>;
-        try {
-          const chunks: Buffer[] = [];
-          let size = 0;
-          for await (const chunk of req.iterator({ destroyOnReturn: false })) {
-            size += chunk.length;
-            if (size > 131072) return reply(413, { error: 'This request is too large to revise in AI Assist.' });
-            chunks.push(chunk);
-          }
-          const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-          prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
-          if (!prompt || prompt.length > 4000) throw new Error('Invalid prompt.');
-          if (body.previous !== undefined && !isObject(body.previous)) throw new Error('Invalid previous draft.');
-          if (body.previous) previous = parseWorkflowDraft(body.previous);
-          clarifications = parseClarifications(body.clarifications);
-        } catch {
-          return reply(400, { error: 'The message or draft context is invalid. Messages must be 1–4,000 characters.' });
-        }
-        if (request.signal.aborted) return;
-        const result = await completeWithConfiguredProvider(env, [
-          { role: 'system', content: instructions },
-          ...(previous ? [{
-            role: 'user' as const, content: 'Revise this existing draft in my next message.',
-          }, {
-            role: 'assistant' as const, content: JSON.stringify(previous),
-          }] : []),
-          ...clarifications,
-          { role: 'user', content: prompt },
-        ], request.signal);
-        if (request.signal.aborted) return;
-        if (result.kind === 'config-error') {
-          return reply(503, { error: 'Check the model provider URL, model and key in your Steel configuration.' });
-        }
-        if (result.kind === 'provider-error') {
-          return reply(502, { error: 'The configured model provider did not return a completion. Check its availability and try again.' });
-        }
-        try {
-          const resultObject = parseModelObject(result.text);
-          if (Object.keys(resultObject).length === 1 && typeof resultObject.message === 'string' &&
-            resultObject.message.trim() && resultObject.message.length <= 2000) {
-            return reply(200, { message: resultObject.message.trim() });
-          }
-          const definition = parseWorkflowDraft(resultObject);
-          if (previous) definition.workflow_id = previous.workflow_id;
-          return reply(200, { definition });
-        } catch {
-          return reply(502, { error: 'The model returned an invalid workflow. Try rephrasing the description.' });
-        }
+        const origin = /^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(host)
+          ? `${protocol}://${host}` : undefined;
+        return handleWorkflowAssist(req, res, { runtime, origin, env });
       });
     },
   };

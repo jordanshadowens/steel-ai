@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
 } from 'react';
 import type { ReactNode } from 'react';
+import { workspaceApiPath } from './session';
 import {
   acceptAccount,
   acceptCookieAccount,
@@ -151,7 +152,7 @@ export async function authorizeAccount(value: {
   if (!value.idToken || !value.localId || !value.email) {
     throw new Error('Sign-in response was incomplete. Request a fresh link.');
   }
-  const response = await fetch('/api/workspace', {
+  const response = await fetch(workspaceApiPath('/api/workspace'), {
     headers: { Authorization: `Bearer ${value.idToken}` },
     cache: 'no-store',
     credentials: 'omit',
@@ -251,6 +252,7 @@ function SignIn() {
           'The runtime sign-in return URL is invalid. Contact the server owner.',
         );
       }
+      if (import.meta.env.VITE_STEEL_CLOUD === '1') url.hash = window.location.hash;
       await accountIdentity('sendOobCode', {
         requestType: 'EMAIL_SIGNIN',
         email: normalized,
@@ -364,7 +366,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
     event.preventDefault();
     setSendingLink(true);
     try {
-      const response = await fetch('/api/session/email/request', {
+      const response = await fetch(workspaceApiPath('/api/session/email/request'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Steel-CSRF': '1' },
         body: JSON.stringify({ email }),
@@ -398,7 +400,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
           const epoch = getSession().epoch;
           if (attempt === 0 && returnCode) {
             removeSignInReturn();
-            startup.current ??= fetch('/api/session/email/complete', {
+            startup.current ??= fetch(workspaceApiPath('/api/session/email/complete'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'X-Steel-CSRF': '1' },
               body: JSON.stringify({ code: returnCode }),
@@ -417,7 +419,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
             channel?.postMessage(null);
             channel?.close();
           }
-          const response = await fetch('/api/session', {
+          const response = await fetch(workspaceApiPath('/api/session'), {
             headers: { 'X-Steel-Session-View': 'workspace' },
             credentials: 'same-origin',
             cache: 'no-store',
@@ -434,7 +436,7 @@ export function AccountGate({ children }: { children: ReactNode }) {
                 'This account has waitlist access. Runtime preview is available only to the owner.',
               );
             }
-            const workspaceResponse = await fetch('/api/workspace', {
+            const workspaceResponse = await fetch(workspaceApiPath('/api/workspace'), {
               credentials: 'same-origin',
               cache: 'no-store',
               redirect: 'error',

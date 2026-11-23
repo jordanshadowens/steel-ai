@@ -13,12 +13,15 @@ import { store } from '../store/store';
 import { isDirty } from '../store/workflowEditor';
 
 const RunnerPage = lazy(() => import('../runner/RunnerPage').then(({ RunnerPage }) => ({ default: RunnerPage })));
+const ApiKeys = lazy(() => import('../cloud/ApiKeys').then(({ ApiKeys }) => ({ default: ApiKeys })));
+const Observability = lazy(() => import('../observability/Observability').then(({ Observability }) => ({ default: Observability })));
 const DesignerPage = lazy(() => import('../designer/DesignerPage').then(({ DesignerPage }) => ({ default: DesignerPage })));
 
 const DESTINATIONS: Array<{ route: Route; label: string; compact?: string }> = [
   { route: 'creator', label: 'Workflow Creator', compact: 'Creator' },
   { route: 'runner', label: 'Workflow Runner', compact: 'Runner' },
-  { route: 'designer', label: 'Data Designer' },
+  { route: 'designer', label: 'Data Designer', compact: 'Data' },
+  { route: 'observability', label: 'Observability', compact: 'Runs' },
 ];
 
 function followRoute(event: MouseEvent<HTMLAnchorElement>, route: Route) {
@@ -57,9 +60,9 @@ function WorkspaceApp() {
     <div className="shell">
       <header className="shell-nav">
         <div className="shell-identity">
-          <a className="shell-brand" href={routeHref('creator')} onClick={(event) => followRoute(event, 'creator')}>
+          <a className="shell-brand" href={import.meta.env.VITE_STEEL_CLOUD === '1' ? '/' : routeHref('creator')} onClick={(event) => { if (import.meta.env.VITE_STEEL_CLOUD !== '1') followRoute(event, 'creator'); }}>
             <span className="shell-mark" aria-hidden="true"><span /></span>
-            Steel AI
+            {import.meta.env.VITE_STEEL_CLOUD === '1' ? 'Steel Cloud' : 'Steel AI'}
           </a>
           {import.meta.env.VITE_STEEL_ENVIRONMENT === 'staging' && (
             <span className="shell-environment" title="Temporary test data">Staging</span>
@@ -87,6 +90,7 @@ function WorkspaceApp() {
               ) : d.label}
             </a>
           ))}
+          {import.meta.env.VITE_STEEL_CLOUD === '1' && <a className={route === 'api-keys' ? 'shell-link shell-link-active' : 'shell-link'} href={routeHref('api-keys')} aria-current={route === 'api-keys' ? 'page' : undefined} onClick={(event) => followRoute(event, 'api-keys')}>API keys</a>}
         </nav>
         <div className="shell-user">
           {session.mode === 'account' ? (
@@ -127,13 +131,15 @@ function WorkspaceApp() {
                 ? 'Workflow Creator'
                 : route === 'runner'
                   ? 'Workflow Runner'
-                  : 'Data Designer'
+                  : route === 'observability' ? 'Observability' : route === 'api-keys' ? 'API keys' : 'Data Designer'
             }
           >
             {route === 'creator' && <CreatorPage />}
             <Suspense fallback={<p role="status">Loading page...</p>}>
               {route === 'runner' && <RunnerPage />}
               {route === 'designer' && <DesignerPage />}
+              {route === 'observability' && <Observability />}
+              {route === 'api-keys' && import.meta.env.VITE_STEEL_CLOUD === '1' && <ApiKeys />}
             </Suspense>
           </m.div>
         </AnimatePresence>

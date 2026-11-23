@@ -30,6 +30,7 @@ export default defineConfig(() => {
     root: fileURLToPath(new URL('./client', import.meta.url)),
     envDir: false as const,
     define: {
+      'import.meta.env.VITE_STEEL_CLOUD': JSON.stringify(process.env.VITE_STEEL_CLOUD === '1' ? '1' : ''),
       'import.meta.env.VITE_STEEL_ENVIRONMENT': JSON.stringify(
         process.env.VITE_STEEL_ENVIRONMENT ?? env.VITE_STEEL_ENVIRONMENT ?? '',
       ),
