@@ -9,6 +9,7 @@ type Issued = Key & { key: string };
 const tokenMetadata = ({ key: _secret, ...record }: Issued): Key => record;
 const date = (seconds: number) => new Date(seconds * 1000).toLocaleDateString();
 const status = (key: Key) => key.revoked ? 'Revoked' : key.expiresAt * 1000 <= Date.now() ? 'Expired' : 'Active';
+const workflowLabel = (id: string) => id.replace(/[-_]+/g, ' ').replace(/(^| )([a-z])/g, (_, start: string, letter: string) => start + letter.toUpperCase());
 
 async function keyRequest<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const session = getSession();
@@ -37,6 +38,7 @@ export function ApiKeys() {
   const [name, setName] = useState('');
   const [days, setDays] = useState(30);
   const [selected, setSelected] = useState<string[]>([]);
+  const [scopeSearch, setScopeSearch] = useState('');
   const [filter, setFilter] = useState('active');
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,7 +46,8 @@ export function ApiKeys() {
   const [error, setError] = useState('');
   const [action, setAction] = useState<{ key: Key; kind: 'rotate' | 'revoke' }>();
   const versions = useListWorkflowsQuery('published');
-  const workflows = [...new Map((versions.data?.workflows ?? []).map(item => [item.workflow_id, item.name || item.workflow_id])).entries()];
+  const workflows = [...new Map((versions.data?.workflows ?? []).map(item => [item.workflow_id, item.name || workflowLabel(item.workflow_id)])).entries()];
+  const filteredWorkflows = workflows.filter(([id,name]) => (id + ' ' + name).toLowerCase().includes(scopeSearch.trim().toLowerCase()));
   const visible = keys?.filter(key => (filter === 'all' || (filter === 'active' ? status(key) === 'Active' : status(key) !== 'Active')) &&
     [key.name, ...key.workflowIds ?? []].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
@@ -91,6 +94,7 @@ export function ApiKeys() {
         setKeys(current => [tokenMetadata(token), ...(current ?? [])]);
         setCreating(false);
         setSelected([]);
+        setScopeSearch('');
         setName('');
         await load();
       });
@@ -105,7 +109,12 @@ export function ApiKeys() {
         {versions.isLoading && <p role="status">Loading published workflows…</p>}
         {versions.isError && <button type="button" className="btn" onClick={() => void versions.refetch()}>Retry loading workflows</button>}
         {versions.isSuccess && workflows.length === 0 && <p>Publish a workflow in Creator to make it available here.</p>}
-        <div className="workspace-token-scopes">{workflows.map(([id, name]) => <label key={id}>
+        {workflows.length > 8 && <label className="workspace-scope-search">Find published workflows
+          <input type="search" value={scopeSearch} onChange={event => setScopeSearch(event.target.value)} placeholder="Workflow name or ID" />
+          <small>{selected.length} selected</small>
+        </label>}
+        {scopeSearch && !filteredWorkflows.length && <p>No published workflows match your search.</p>}
+        <div className="workspace-token-scopes">{filteredWorkflows.map(([id, name]) => <label key={id}>
           <input type="checkbox" checked={selected.includes(id)} disabled={!selected.includes(id) && selected.length >= 32}
             onChange={event => setSelected(current => event.target.checked ? [...current, id] : current.filter(scope => scope !== id))} />
           <span><strong>{name}</strong>{name !== id && <small>{id}</small>}</span>

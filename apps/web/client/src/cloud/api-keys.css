@@ -14,6 +14,7 @@
 .workspace-token-form > button { justify-self: start; }
 .workspace-token-form fieldset { margin: 0; padding: 10px 12px 12px; border: 1px solid var(--color-border); border-radius: 8px; min-width: 0; }
 .workspace-token-form legend { padding: 0 5px; font-weight: 650; }
+.workspace-scope-search { margin: 8px 0; }
 .workspace-token-scopes { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 220px),1fr)); gap: 8px; max-height: 230px; overflow-y: auto; padding: 3px; }
 .workspace-token-scopes label { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 9px; padding: 9px; border: 1px solid var(--color-border); border-radius: 6px; overflow-wrap: anywhere; }
 .workspace-token-scopes label:has(:checked) { border-color: var(--color-accent); background: var(--color-surface-raised); }
