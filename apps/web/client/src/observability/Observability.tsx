@@ -24,7 +24,8 @@ const demoRun: RunDetail = {
   logs: demoCapture.logs as Entry[],
 };
 export function Observability() {
-  const initialRun = routeSearch().get('run') || '';
+  const initialSearch = routeSearch();
+  const initialRun = initialSearch.get('run') || '';
   const [runs, setRuns] = useState<Run[]>([]);
   const [selected, select] = useState(initialRun);
   const [detail, setDetail] = useState<RunDetail>();
@@ -38,11 +39,12 @@ export function Observability() {
   const [runFilter, setRunFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [linkStatus, setLinkStatus] = useState('');
+  const [eventLinkStatus, setEventLinkStatus] = useState('');
   const [oldestFirst, setOldestFirst] = useState(false);
   const [kind, setKind] = useState('all');
   const [timeRange, setTimeRange] = useState('all');
   const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
-  const [inspectedLog, setInspectedLog] = useState<string | number>();
+  const [inspectedLog, setInspectedLog] = useState(() => initialSearch.get('event') ?? undefined);
   const [refreshedAt, setRefreshedAt] = useState<number>();
   const [split, setSplit] = useState(false);
   const visibleRuns = runs.filter(run => {
@@ -171,7 +173,8 @@ export function Observability() {
     (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
     [entry.message, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
   );
-  const logDetail = logs.find(entry => entry.id === inspectedLog);
+  const logDetail = logs.find(entry => String(entry.id) === inspectedLog);
+  const sourceCount = (type: Entry['kind']) => source.filter(entry => (entry.kind ?? 'run') === type).length;
   const errors = entries.filter(entry => entry.level === 'error').length;
   const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
   const usage = entries.filter(entry => entry.status === 'provider_completed')
@@ -324,7 +327,10 @@ export function Observability() {
                 </div>
                 <div className="log-heading run-explorer-filters">
                   <label>Source <select value={kind} onChange={event => setKind(event.target.value)}>
-                    <option value="all">All sources</option><option value="run">Run events</option><option value="provider">Provider</option><option value="tool">Tools</option>
+                    <option value="all">All sources</option>
+                    <option value="run">Run events ({sourceCount('run')})</option>
+                    <option value="provider">Provider ({sourceCount('provider')})</option>
+                    <option value="tool">Tools ({sourceCount('tool')})</option>
                   </select></label>
                   <label>Time window <select value={timeRange} onChange={event => setTimeRange(event.target.value)}>
                     <option value="all">Entire run</option><option value="5">Last 5 minutes</option><option value="15">Last 15 minutes</option><option value="60">Last hour</option>
@@ -360,7 +366,10 @@ export function Observability() {
                           : '—'}
                       </time>
                       <span data-level={entry.level}>{entry.level}</span>
-                      <button type="button" className="run-log-inspect" aria-expanded={entry.id === inspectedLog} onClick={() => setInspectedLog(entry.id === inspectedLog ? undefined : entry.id)}>
+                      <button type="button" className="run-log-inspect" aria-expanded={String(entry.id) === inspectedLog} onClick={() => {
+                        setEventLinkStatus('');
+                        setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));
+                      }}>
                         {entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}
                       </button>
                     </li>
@@ -368,7 +377,17 @@ export function Observability() {
                   {!logs.length && <li>No matching log entries.</li>}
                 </ul>
                 {logDetail && <section className="run-log-detail" aria-label="Selected log event">
-                  <div><h3>Log event</h3><button type="button" className="run-link" onClick={() => setInspectedLog(undefined)}>Close detail</button></div>
+                  <div><h3>Log event</h3><span className="run-log-detail-actions">
+                    <button type="button" className="run-link" onClick={async () => {
+                      try {
+                        const params = new URLSearchParams({run:run.run_id, event:String(logDetail.id)});
+                        await navigator.clipboard.writeText(new URL(routeHref('observability', params), location.href).href);
+                        setEventLinkStatus('Event link copied.');
+                      } catch { setEventLinkStatus('Could not copy the event link.'); }
+                    }}>Copy event link</button>
+                    <button type="button" className="run-link" onClick={() => setInspectedLog(undefined)}>Close detail</button>
+                  </span></div>
+                  {eventLinkStatus && <small role="status">{eventLinkStatus}</small>}
                   <p>{logDetail.message}</p>
                   <dl><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
                   {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
