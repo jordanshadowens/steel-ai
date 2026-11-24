@@ -391,7 +391,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
             )}
             {messages.map((message, index) => (
               <div key={index}
-                className={`assist-message assist-message-enter assist-message-${message.kind === 'prompt' ? 'user' : 'assistant'}`}>
+                className={`assist-message assist-message-${message.kind === 'prompt' ? 'user' : 'assistant'}`}>
                 {message.kind === 'draft' ? (
                   <DraftMessage row={message.row} opened={message.opened} loading={openingDraft}
                     onOpen={workflowId === message.row.workflow_id && workflowVersion === message.row.version

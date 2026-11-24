@@ -86,11 +86,9 @@
   border: 1px solid #c1cbea;
   border-radius: 20px;
   overflow: hidden;
-  transform-origin: bottom left;
   background: #f7f9ff;
   color: #17233e;
   box-shadow: 0 20px 52px #24355d35, 0 0 24px #5679ed2e;
-  animation: assist-open 220ms ease-out both;
 }
 
 .assist-header {
@@ -173,7 +171,6 @@
 }
 
 .assist-message-assistant { align-self: start; }
-.assist-message-enter { animation: assist-message-in 160ms ease-out both; }
 .assist-starters { display: grid; align-self: start; gap: 7px; }
 
 .assist-starters button {
@@ -293,16 +290,6 @@
   50% { transform: scale(1.15, 1.35); opacity: 1; }
 }
 
-@keyframes assist-open {
-  from { opacity: 0; transform: translateY(10px) scale(0.98); }
-  to { opacity: 1; transform: none; }
-}
-
-@keyframes assist-message-in {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: none; }
-}
-
 @media (min-width: 901px) {
   .creator-canvas:has(.palette):has(.inspector) .workflow-assist { --assist-bottom: 114px; }
 }
@@ -350,7 +337,7 @@
 @media (prefers-reduced-motion: reduce) {
   .assist-launcher { transition: none; }
   .assist-launcher:hover { transform: none; }
-  .assist-launcher::before, .assist-progress-dot, .assist-chat, .assist-message-enter { animation: none; }
+  .assist-launcher::before, .assist-progress-dot { animation: none; }
 }
 
 @media (forced-colors: active) {
