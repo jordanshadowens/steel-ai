@@ -38,6 +38,11 @@ export function Observability() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [linkStatus, setLinkStatus] = useState('');
   const [oldestFirst, setOldestFirst] = useState(false);
+  const [kind, setKind] = useState('all');
+  const [timeRange, setTimeRange] = useState('all');
+  const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
+  const [inspectedLog, setInspectedLog] = useState<string | number>();
+  const [refreshedAt, setRefreshedAt] = useState<number>();
   const visibleRuns = runs.filter(run => {
     const search = runFilter.trim().toLowerCase();
     return (statusFilter === 'all' || run.status === statusFilter) &&
@@ -46,6 +51,8 @@ export function Observability() {
 
   function chooseRun(id: string) {
     setLinkStatus('');
+    setLogViewPaused(undefined);
+    setInspectedLog(undefined);
     select(id);
     history.replaceState(history.state, '', routeHref('observability', new URLSearchParams({run: id})));
   }
@@ -97,6 +104,7 @@ export function Observability() {
         );
         if (request.signal.aborted) return;
         setDetail(result);
+        setRefreshedAt(Date.now());
         setError('');
         finished = terminal(result.run.status);
         if (!versionLoaded) {
@@ -147,14 +155,22 @@ export function Observability() {
   const displayedDefinition = demo ? demoDefinition : definition;
   const logStep = logSelection?.runId === run?.run_id ? logSelection?.step : undefined;
   const active = run && activeStep(run);
-  const logs = run
-    ? runEntries(run, displayed?.logs).filter(
-        (entry) =>
-          (!logStep || entry.step_id === logStep) &&
-          (!errorsOnly || entry.level === 'error') &&
-          entry.message.toLowerCase().includes(filter.trim().toLowerCase()),
-      )
-    : [];
+  const entries = run ? runEntries(run, displayed?.logs) : [];
+  const paused = logViewPaused?.runId === run?.run_id ? logViewPaused : undefined;
+  const source = paused?.entries ?? entries;
+  const end = Date.parse(run?.updated_at || entries.at(-1)?.at || '') || Date.now();
+  const timeframe = timeRange === 'all' ? 0 : end - Number(timeRange) * 60_000;
+  const logs = source.filter(entry =>
+    (!logStep || entry.step_id === logStep) &&
+    (!errorsOnly || entry.level === 'error') &&
+    (kind === 'all' || (entry.kind ?? 'run') === kind) &&
+    (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
+    [entry.message, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
+  );
+  const logDetail = logs.find(entry => entry.id === inspectedLog);
+  const errors = entries.filter(entry => entry.level === 'error').length;
+  const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
+  const observedSteps = new Set(entries.filter(entry => entry.status === 'step_completed').map(entry => entry.step_id)).size;
 
   return (
     <section id="observability" className="operations">
@@ -223,6 +239,13 @@ export function Observability() {
                   }}>Copy run link</button>
                   {linkStatus && <span role="status">{linkStatus}</span>}
                 </div>
+                <div className="run-summary" aria-label="Run summary">
+                  <div><small>Completed steps</small><strong>{observedSteps}{displayedDefinition?.steps?.length ? ' / ' + displayedDefinition.steps.length : ''}</strong></div>
+                  <div><small>Provider calls</small><strong>{providerCalls}</strong></div>
+                  <div><small>Error events</small><strong>{errors}</strong></div>
+                  <div><small>Updates</small><strong>{demo ? 'Recorded' : terminal(run.status) ? 'Finished' : error ? 'Reconnecting' : 'Live'}</strong>
+                    {!demo && refreshedAt && <small>{new Date(refreshedAt).toLocaleTimeString()}</small>}</div>
+                </div>
                 <div className="run-map-heading">
                   <h3>Workflow map</h3>
                   {!demo && <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
@@ -259,9 +282,21 @@ export function Observability() {
                     status.
                   </p>
                 )}
-                <div className="log-heading">
+                <div className="log-heading run-explorer-heading">
                   <h3>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
                   {logStep && <button type="button" className="run-link" onClick={() => setLogSelection(undefined)}>Show all steps</button>}
+                  {!demo && (!terminal(run.status) || paused) && <button type="button" className="run-link" onClick={() => setLogViewPaused(paused ? undefined : {runId:run.run_id, entries})}>
+                    {paused ? 'Resume log updates' : 'Pause log updates'}
+                  </button>}
+                  {paused && <small role="status">Log updates paused</small>}
+                </div>
+                <div className="log-heading run-explorer-filters">
+                  <label>Source <select value={kind} onChange={event => setKind(event.target.value)}>
+                    <option value="all">All sources</option><option value="run">Run events</option><option value="provider">Provider</option><option value="tool">Tools</option>
+                  </select></label>
+                  <label>Time window <select value={timeRange} onChange={event => setTimeRange(event.target.value)}>
+                    <option value="all">Entire run</option><option value="5">Last 5 minutes</option><option value="15">Last 15 minutes</option><option value="60">Last hour</option>
+                  </select></label>
                   <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
                     <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
                   </select></label>
@@ -280,6 +315,9 @@ export function Observability() {
                     />{' '}
                     Errors only
                   </label>
+                  {(filter || errorsOnly || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
+                    setFilter(''); setErrorsOnly(false); setKind('all'); setTimeRange('all'); setLogSelection(undefined);
+                  }}>Clear filters</button>}
                 </div>
                 <ul className="run-logs" aria-label="Run logs">
                   {(oldestFirst ? logs : [...logs].reverse()).map((entry) => (
@@ -290,11 +328,21 @@ export function Observability() {
                           : '—'}
                       </time>
                       <span data-level={entry.level}>{entry.level}</span>
-                      <span>{entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}</span>
+                      <button type="button" className="run-log-inspect" aria-expanded={entry.id === inspectedLog} onClick={() => setInspectedLog(entry.id === inspectedLog ? undefined : entry.id)}>
+                        {entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}
+                      </button>
                     </li>
                   ))}
                   {!logs.length && <li>No matching log entries.</li>}
                 </ul>
+                {logDetail && <section className="run-log-detail" aria-label="Selected log event">
+                  <div><h3>Log event</h3><button type="button" className="run-link" onClick={() => setInspectedLog(undefined)}>Close detail</button></div>
+                  <p>{logDetail.message}</p>
+                  <dl><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
+                  {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
+                  {logDetail.step_id && <><dt>Step</dt><dd>{logDetail.step_id}</dd></>}
+                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status}</dd></>}</dl>
+                </section>}
               </>
             )}
           </div>
