@@ -12,9 +12,11 @@ import {
 export function ApprovalsInbox({
   runId,
   onDecided,
+  workspace = false,
 }: {
   runId?: string;
   onDecided?: (view: { run_id?: string }) => void;
+  workspace?: boolean;
 }) {
   const inbox = useListApprovalsQuery(
     runId ? { run_id: runId, pending: true } : { pending: true },
@@ -24,7 +26,8 @@ export function ApprovalsInbox({
     },
   );
   const approvals = inbox.data?.approvals ?? [];
-  return (
+  if (workspace && approvals.length === 0 && !inbox.isError) return null;
+  const content = (
     <div>
       {inbox.isLoading && <p className="status-line">Loading approvals…</p>}
       {inbox.isError && (
@@ -43,6 +46,12 @@ export function ApprovalsInbox({
       ))}
     </div>
   );
+  return workspace ? (
+    <section aria-label="Approvals" className="section-card">
+      <h2>Approvals</h2>
+      {content}
+    </section>
+  ) : content;
 }
 
 export function ApprovalCard({

@@ -25,8 +25,10 @@
 .runner-status:is([data-status=sealed],[data-status=local_completed]) { color: #145b39; background: #e8f7ef; border-color: #a2d2b6; }
 .runner-status:is([data-status=failed],[data-status=local_failed]) { color: #8b2630; background: #fff0f0; border-color: #dfafb4; }
 .runner-workspace-main, .runner-workspace-sidebar { min-width: 0; }
+.runner-workspace-sidebar:empty { display: none; }
+.runner-workflow-empty p { color: var(--color-ink-muted); margin: 0 0 16px; }
 @media (min-width: 900px) {
-  .runner-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(255px, .42fr); gap: 18px; align-items: start; }
+  .runner-workspace:has(.runner-workspace-sidebar:not(:empty)) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(255px, .42fr); gap: 18px; align-items: start; }
 }
 
 .runner-logs .runner-detail-actions { align-items: center; }

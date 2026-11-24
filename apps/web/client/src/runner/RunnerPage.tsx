@@ -39,6 +39,9 @@ export function RunnerPage() {
   const [runError, setRunError] = useState<string | null>(null);
 
   const published = useListWorkflowsQuery('published', { skip: !!viewingRunId });
+  const publishedWorkflows = new Map(
+    (published.data?.workflows ?? []).map((workflow) => [workflow.workflow_id, workflow]),
+  );
   const versions = useGetWorkflowVersionsQuery(workflowId, {
     skip: !workflowId || !!viewingRunId,
   });
@@ -161,30 +164,39 @@ export function RunnerPage() {
       <div className="runner-workspace-main">
       <section aria-label="Select workflow" className="section-card">
         <h2>New run</h2>
-        <div className="field">
-          <span>
-            <label htmlFor="runner-workflow">Workflow</label>
-          </span>
-          <select
-            id="runner-workflow"
-            value={workflowId}
-            onChange={(e) => pickWorkflow(e.target.value)}
-          >
-            <option value="">Select…</option>
-            {[
-              ...new Map(
-                (published.data?.workflows ?? []).map((w) => [
-                  w.workflow_id,
-                  w,
-                ]),
-              ).values(),
-            ].map((w) => (
-              <option key={w.workflow_id} value={w.workflow_id}>
-                {w.name || w.workflow_id}
-              </option>
-            ))}
-          </select>
-        </div>
+        {published.isLoading && <p role="status">Loading published workflows…</p>}
+        {published.isError && (
+          <p role="alert">Could not load published workflows. <button type="button" className="btn" onClick={published.refetch}>Retry</button></p>
+        )}
+        {published.isSuccess && publishedWorkflows.size === 0 && (
+          <div className="runner-workflow-empty">
+            <p>Publish a workflow in Creator to start a run.</p>
+            <a className="btn btn-primary" href={routeHref('creator')} onClick={(event) => {
+              if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              navigate('creator');
+            }}>Open Creator</a>
+          </div>
+        )}
+        {publishedWorkflows.size > 0 && (
+          <div className="field">
+            <span>
+              <label htmlFor="runner-workflow">Workflow</label>
+            </span>
+            <select
+              id="runner-workflow"
+              value={workflowId}
+              onChange={(e) => pickWorkflow(e.target.value)}
+            >
+              <option value="">Select…</option>
+              {[...publishedWorkflows.values()].map((workflow) => (
+                <option key={workflow.workflow_id} value={workflow.workflow_id}>
+                  {workflow.name || workflow.workflow_id}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {version !== null && versions.isSuccess && !def && (
           <div className="status-line" role="alert">
             Version {version} is not available to run.
@@ -334,10 +346,7 @@ export function RunnerPage() {
         />
       </section>}
 
-      <section aria-label="Approvals" className="section-card">
-        <h2>Approvals</h2>
-        <ApprovalsInbox />
-      </section>
+      <ApprovalsInbox workspace />
       </aside>
       </div>
     </div>

@@ -1,16 +1,18 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
+import { navigate, routeSearch } from '../app/router';
+import { useListWorkflowsQuery } from '../api/steelApi';
 import { RunnerPage } from './RunnerPage';
 
 vi.mock('../app/router', () => ({
-  routeSearch: () => new URLSearchParams('run=local-fixture'),
+  routeSearch: vi.fn(() => new URLSearchParams('run=local-fixture')),
   routeHref: (route: string, query: URLSearchParams) => '/app/#/' + route + '?' + query,
   navigate: vi.fn(),
 }));
 vi.mock('../api/steelApi', () => ({
   useCreateRunMutation: () => [vi.fn(), {}],
   useGetWorkflowVersionsQuery: () => ({}),
-  useListWorkflowsQuery: () => ({}),
+  useListWorkflowsQuery: vi.fn(() => ({})),
   useGetRunQuery: () => ({
     currentData:{run:{run_id:'local-fixture',workflow_id:'meta-briefing-agent',version:1,status:'local_completed'}},
   }),
@@ -27,4 +29,19 @@ test('opens a completed local run as a focused read-only detail', () => {
   expect(screen.queryByLabelText('Workflow')).toBeNull();
   expect(screen.queryByText('Running…')).toBeNull();
   expect(screen.queryByText('Documents panel')).toBeNull();
+});
+
+test('points an empty workspace to Creator instead of showing an empty workflow selector', () => {
+  vi.mocked(routeSearch).mockReturnValue(new URLSearchParams());
+  vi.mocked(useListWorkflowsQuery).mockReturnValue({
+    isSuccess: true,
+    data: { workflows: [] },
+    refetch: vi.fn(),
+  } as ReturnType<typeof useListWorkflowsQuery>);
+
+  render(<RunnerPage />);
+  expect(screen.getByText('Publish a workflow in Creator to start a run.')).toBeTruthy();
+  expect(screen.queryByLabelText('Workflow')).toBeNull();
+  fireEvent.click(screen.getByRole('link', { name: 'Open Creator' }));
+  expect(navigate).toHaveBeenCalledWith('creator');
 });
