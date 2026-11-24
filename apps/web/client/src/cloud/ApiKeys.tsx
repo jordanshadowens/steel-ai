@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useListWorkflowsQuery } from '../api/steelApi';
 import { getSession, sessionIsCurrent } from '../auth/session';
 import { ModalDialog } from '../app/FocusTrap';
@@ -6,6 +6,7 @@ import './api-keys.css';
 
 type Key = { id: string; kind: string; personal?: boolean; name?: string; expiresAt: number; lastUsedAt?: number; revoked?: boolean; workflowIds?: string[] };
 type Issued = Key & { key: string };
+const tokenMetadata = ({ key: _secret, ...record }: Issued): Key => record;
 const date = (seconds: number) => new Date(seconds * 1000).toLocaleDateString();
 const status = (key: Key) => key.revoked ? 'Revoked' : key.expiresAt * 1000 <= Date.now() ? 'Expired' : 'Active';
 
@@ -29,6 +30,8 @@ async function keyRequest<T>(path = '', method = 'GET', body?: unknown, signal?:
 
 export function ApiKeys() {
   const [keys, setKeys] = useState<Key[]>();
+  const loadOrder = useRef(0);
+  const changing = useRef(false);
   const [issued, setIssued] = useState<Issued>();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
@@ -46,8 +49,9 @@ export function ApiKeys() {
     [key.name, ...key.workflowIds ?? []].join(' ').toLowerCase().includes(search.trim().toLowerCase()));
 
   async function load(signal?: AbortSignal) {
+    const request = ++loadOrder.current;
     const { keys } = await keyRequest<{keys: Key[]}>('', 'GET', undefined, signal);
-    if (!signal?.aborted) setKeys(keys);
+    if (!signal?.aborted && request === loadOrder.current) setKeys(keys);
   }
   useEffect(() => {
     const request = new AbortController();
@@ -55,13 +59,14 @@ export function ApiKeys() {
     return () => request.abort();
   }, []);
   async function perform(task: () => Promise<void>) {
-    if (busy) return;
+    if (changing.current) return;
+    changing.current = true;
     setBusy(true);
     setError('');
     setNotice('');
     try { await task(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'The request failed.'); }
-    finally { setBusy(false); }
+    finally { changing.current = false; setBusy(false); }
   }
   const label = (key: Key) => key.name || (key.kind === 'developer' ? 'Developer key' : 'Account key');
   return <section className="workspace-keys">
@@ -81,7 +86,9 @@ export function ApiKeys() {
     {creating && <form className="workspace-token-form" onSubmit={event => {
       event.preventDefault();
       void perform(async () => {
-        setIssued(await keyRequest<Issued>('', 'POST', { name: name.trim(), workflowIds: selected, expiresInDays: days }));
+        const token = await keyRequest<Issued>('', 'POST', { name: name.trim(), workflowIds: selected, expiresInDays: days });
+        setIssued(token);
+        setKeys(current => [tokenMetadata(token), ...(current ?? [])]);
         setCreating(false);
         setSelected([]);
         setName('');
@@ -133,8 +140,16 @@ export function ApiKeys() {
         const {key, kind} = action;
         setAction(undefined);
         void perform(async () => {
-          if (kind === 'rotate') setIssued(await keyRequest<Issued>('/' + key.id + '/rotate', 'POST'));
-          else {await keyRequest('/' + key.id, 'DELETE'); setNotice('Token revoked.');}
+          const replacement = kind === 'rotate'
+            ? await keyRequest<Issued>('/' + key.id + '/rotate', 'POST')
+            : await keyRequest<undefined>('/' + key.id, 'DELETE');
+          const currentToken = replacement ? tokenMetadata(replacement) : undefined;
+          setKeys(current => {
+            const rows = (current ?? []).map(row => row.id === key.id ? {...row, revoked:true} : row);
+            return currentToken ? [currentToken, ...rows] : rows;
+          });
+          if (replacement) setIssued(replacement);
+          else setNotice('Token revoked.');
           await load();
         });
       }}>{action.kind === 'rotate' ? 'Rotate token' : 'Revoke token'}</button>

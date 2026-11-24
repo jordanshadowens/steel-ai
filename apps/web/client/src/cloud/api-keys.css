@@ -22,9 +22,10 @@
 .workspace-keys-secret code, .workspace-key-row { overflow-wrap: anywhere; }
 .workspace-keys-secret code { padding: 10px; background: var(--color-surface-raised); border-radius: 6px; }
 .workspace-keys-secret button + button { margin-inline-start: 8px; }
-.workspace-key-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr) auto; align-items: start; gap: 15px; padding: 14px 0 0; border-top: 1px solid var(--color-border); }
+.workspace-key-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr) 150px; align-items: start; gap: 15px; padding: 14px 0 0; border-top: 1px solid var(--color-border); }
 .workspace-keys small { display: block; color: var(--color-ink-muted); }
 .workspace-token-tags, .workspace-token-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.workspace-token-actions { justify-content: flex-end; }
 .workspace-token-tags code { border-radius: 4px; padding: 2px 5px; background: var(--color-surface-raised); }
 .workspace-token-state { font-size: 12px; }
 .workspace-token-state[data-state=Active] { color: var(--color-accent); }
@@ -36,5 +37,5 @@
   .workspace-token-fields, .workspace-token-tools { grid-template-columns: minmax(0, 1fr); }
   .workspace-token-tools button { justify-self: start; }
   .workspace-key-row { grid-template-columns: minmax(0, 1fr) minmax(95px,.48fr); gap: 9px; }
-  .workspace-token-actions { grid-column: 1 / -1; }
+  .workspace-token-actions { grid-column: 1 / -1; justify-content: flex-start; }
 }

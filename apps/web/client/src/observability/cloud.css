@@ -145,3 +145,14 @@
 .run-timing-track span[data-state=paused] { background: #ffe0a3; }
 .run-timing-track span[data-state=running] { background: #91cfff; }
 @media (max-width: 620px) { .run-timings li { grid-template-columns: minmax(65px,.85fr) minmax(35px,1fr) minmax(92px,.7fr); } }
+
+.run-layout-toolbar { display: none; }
+.run-investigation > div { min-width: 0; }
+@media (min-width: 1120px) {
+  .operations-grid { grid-template-columns: minmax(170px, 230px) minmax(0, 1fr); }
+  .run-layout-toolbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+  .run-layout-toolbar [aria-pressed=true] { background: #285047; border-color: #80c4ae; color: #effff9; }
+  .run-investigation[data-split=true] { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); gap: 14px; }
+  .run-investigation[data-split=true] .run-logs { max-height: 460px; }
+  .run-investigation[data-split=true] .run-logs li { grid-template-columns: auto auto minmax(0,1fr); padding-inline: 8px; }
+}

@@ -44,6 +44,7 @@ export function Observability() {
   const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
   const [inspectedLog, setInspectedLog] = useState<string | number>();
   const [refreshedAt, setRefreshedAt] = useState<number>();
+  const [split, setSplit] = useState(false);
   const visibleRuns = runs.filter(run => {
     const search = runFilter.trim().toLowerCase();
     return (statusFilter === 'all' || run.status === statusFilter) &&
@@ -173,6 +174,8 @@ export function Observability() {
   const logDetail = logs.find(entry => entry.id === inspectedLog);
   const errors = entries.filter(entry => entry.level === 'error').length;
   const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
+  const usage = entries.filter(entry => entry.status === 'provider_completed')
+    .map(entry => / · (\d+) tokens$/.exec(entry.message)?.[1]).filter(Boolean);
   const stepNames = new Map(displayedDefinition?.steps?.map(step => [step.step_id,step.name || step.step_id]));
   const observedSteps = new Set(entries.filter(entry => entry.status === 'step_completed' && (!stepNames.size || stepNames.has(entry.step_id ?? ''))).map(entry => entry.step_id)).size;
   const timings = stepTimings(entries, active ? (refreshedAt ?? end) : end);
@@ -249,11 +252,17 @@ export function Observability() {
                 </div>
                 <div className="run-summary" aria-label="Run summary">
                   <div><small>Completed steps</small><strong>{observedSteps}{displayedDefinition?.steps?.length ? ' / ' + displayedDefinition.steps.length : ''}</strong></div>
-                  <div><small>Provider calls</small><strong>{providerCalls}</strong></div>
+                  <div><small>Provider calls</small><strong>{providerCalls}</strong>
+                    {usage.length > 0 && <small>{usage.reduce((sum, value) => sum + Number(value), 0).toLocaleString()} tokens reported</small>}</div>
                   <div><small>Error events</small><strong>{errors}</strong></div>
                   <div><small>Updates</small><strong>{demo ? 'Recorded' : terminal(run.status) ? 'Finished' : error ? 'Reconnecting' : 'Live'}</strong>
                     {!demo && refreshedAt && <small>{new Date(refreshedAt).toLocaleTimeString()}</small>}</div>
                 </div>
+                <div className="run-layout-toolbar">
+                  <button type="button" className="run-link" aria-pressed={split} onClick={() => setSplit(!split)}>Split view</button>
+                </div>
+                <div className="run-investigation" data-split={split}>
+                <div className="run-investigation-graph">
                 <div className="run-map-heading">
                   <h3>Workflow map</h3>
                   {!demo && <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
@@ -297,6 +306,8 @@ export function Observability() {
                     </li>)}
                   </ol>
                 </details>}
+                </div>
+                <div className="run-investigation-logs">
                 {displayed.logs === undefined && (
                   <p>
                     Tool logs are unavailable on this runtime. Showing run
@@ -364,6 +375,8 @@ export function Observability() {
                   {logDetail.step_id && <><dt>Step</dt><dd>{logDetail.step_id}</dd></>}
                   {logDetail.status && <><dt>Event</dt><dd>{logDetail.status}</dd></>}</dl>
                 </section>}
+                </div>
+                </div>
               </>
             )}
           </div>
