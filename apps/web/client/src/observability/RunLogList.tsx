@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import { logLevels, type Entry } from './cloud';
 import './run-logs.css';
 
-export type MinimumSeverity = typeof logLevels[number];
+export type MinimumSeverity = Exclude<typeof logLevels[number], 'off'>;
 
 export function SeverityFilter({value, onChange}: {value: MinimumSeverity; onChange: (level: MinimumSeverity) => void}) {
   return <label>Minimum severity <select value={value} onChange={event => onChange(event.target.value as MinimumSeverity)}>
-    {logLevels.map((level, rank) => <option key={level} value={level}>
-      {rank} · {level === 'fatal' ? 'FATAL / CRITICAL' : level.toUpperCase()}
+    {logLevels.filter(level => level !== 'off').map(level => <option key={level} value={level}>
+      {level === 'trace' ? 'All levels' : level === 'fatal' ? 'Fatal / Critical' : level.toUpperCase()}
     </option>)}
   </select></label>;
 }
@@ -40,7 +40,7 @@ export function RunLogList({entries, following, newestFirst = false, selected, i
       return <li key={entry.id}>
         <time dateTime={entry.at}>{entry.at ? new Date(entry.at).toLocaleTimeString() : '—'}</time>
         <span data-level={entry.level}>{entry.level.toUpperCase()}</span>
-        {inspect ? <button type="button" className="run-log-inspect" aria-expanded={String(entry.id) === selected}
+        {inspect ? <button type="button" className="run-log-inspect" aria-haspopup="dialog" data-selected={String(entry.id) === selected}
           onClick={() => inspect(entry)}>{message}</button> : <span>{message}</span>}
       </li>;
     })}

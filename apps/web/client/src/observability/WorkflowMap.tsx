@@ -119,8 +119,6 @@ export default function WorkflowMap({
 }) {
   const frame = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
-  const [following, setFollowing] = useState(true);
-  const [replayIndex, setReplayIndex] = useState<number>();
   const [compact, setCompact] = useState(
     () => matchMedia('(max-width: 620px)').matches,
   );
@@ -132,29 +130,9 @@ export default function WorkflowMap({
     return () => observer.disconnect();
   }, [definition.steps?.length]);
   const steps = definition.steps ?? [];
-  const recordedSteps = (events ?? [])
-    .filter(entry => entry.kind === 'run' && ['running','local_running'].includes(entry.status ?? '') && entry.step_id)
-    .map(entry => entry.step_id!);
-  const reachedObjective = (events ?? []).some(entry => entry.kind === 'run' && ['sealed','local_completed'].includes(entry.status ?? ''));
-  const replayRoute = reachedObjective ? [...recordedSteps, finish] : recordedSteps;
-  const replayCount = replayRoute.length;
-  const replay = replayIndex === undefined ? undefined : replayRoute[replayIndex];
-  const beaconStep = replay ?? active;
-  useEffect(() => {
-    if (replayIndex === undefined) return;
-    const timer = window.setTimeout(() => {
-      setReplayIndex(replayIndex + 1 < replayCount ? replayIndex + 1 : undefined);
-    }, 1200);
-    return () => window.clearTimeout(timer);
-  }, [replayIndex, replayCount]);
+  const beaconStep = active;
   const stepStatus = new Map<string, string>();
   const traversed = new Set<string>();
-  const replayed = new Set<string>();
-  if (replayIndex !== undefined) {
-    for (let index = 1; index <= replayIndex; index++) {
-      replayed.add(JSON.stringify([replayRoute[index - 1], replayRoute[index] === finish ? 'end' : replayRoute[index]]));
-    }
-  }
   let lastStep: string | null = null;
   for (const entry of events ?? []) {
     if (entry.kind !== 'run') continue;
@@ -178,9 +156,9 @@ export default function WorkflowMap({
       name: step.name || step.step_id,
       kind: step.type,
       compact,
-      current: step.step_id === (replay ?? current),
+      current: step.step_id === current,
       active: step.step_id === beaconStep,
-      status: step.step_id === beaconStep ? (replay ? 'Replay' : 'Live') : (stepStatus.get(step.step_id) ?? (step.step_id === current ? 'Current' : 'Pending')),
+      status: step.step_id === beaconStep ? 'Live' : (stepStatus.get(step.step_id) ?? (step.step_id === current ? 'Current' : 'Pending')),
       selected: step.step_id === selected,
       inspect: () => onSelect(step.step_id === selected ? undefined : step.step_id),
     },
@@ -218,7 +196,7 @@ export default function WorkflowMap({
     }
     for (const [target, labels] of labelsByTarget) {
       const edgeId = JSON.stringify([step.step_id, target]);
-      const visited = (replay ? replayed : traversed).has(edgeId);
+      const visited = traversed.has(edgeId);
       const color = labels.includes('Failure') ? '#f5a7a5' : visited ? '#83fbc0' : '#72968e';
       const label = labels.join(' / ');
       const branch = target !== routes[0].target;
@@ -259,17 +237,6 @@ export default function WorkflowMap({
   }
   return (
     <div className="run-map" role="region" aria-label="Workflow map" ref={frame}>
-      <div className="run-map-toolbar">
-        {!active && recordedSteps.length > 0 && (
-          <button type="button" className="run-link" onClick={() => setReplayIndex(replayIndex === undefined ? 0 : undefined)}>
-            {replayIndex === undefined ? 'Replay route' : 'Stop replay'}
-          </button>
-        )}
-        <label className="run-map-follow">
-          <input type="checkbox" checked={following} onChange={event => setFollowing(event.target.checked)} />
-          Follow beacon
-        </label>
-      </div>
       <LayoutGroup id={runId}>
         <ReactFlow
           key={compact ? 'vertical' : 'horizontal'}
@@ -285,7 +252,7 @@ export default function WorkflowMap({
           fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
         >
           <Controls showInteractive={false} />
-          {following && <FollowStep stepId={beaconStep} frame={frame} />}
+          <FollowStep stepId={beaconStep} frame={frame} />
         </ReactFlow>
       </LayoutGroup>
     </div>

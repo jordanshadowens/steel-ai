@@ -1,5 +1,5 @@
 import { navigate, routeHref, routeSearch } from '../app/router';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import demoDefinition from '../creator/metaRadarExample.json';
 import demoCapture from './metaRadarCapture.json';
 import './cloud.css';
@@ -49,7 +49,7 @@ export function Observability() {
   const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
   const [inspectedLog, setInspectedLog] = useState(() => initialSearch.get('event') ?? undefined);
   const [refreshedAt, setRefreshedAt] = useState<number>();
-  const [split, setSplit] = useState(false);
+  const eventDialog = useRef<HTMLDialogElement>(null);
   const visibleRuns = runs.filter(run => {
     const search = runFilter.trim().toLowerCase();
     return (statusFilter === 'all' || run.status === statusFilter) &&
@@ -176,10 +176,18 @@ export function Observability() {
     (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
     [entry.message, entry.completion, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
   );
-  const logDetail = logs.find(entry => String(entry.id) === inspectedLog);
+  const logDetail = entries.find(entry => String(entry.id) === inspectedLog);
+  const hasLogDetail = Boolean(logDetail);
+  useEffect(() => {
+    const dialog = eventDialog.current;
+    if (hasLogDetail && dialog && !dialog.open) dialog.showModal();
+  }, [hasLogDetail]);
   const sourceCount = (type: Entry['kind']) => source.filter(entry => (entry.kind ?? 'run') === type).length;
   const errors = entries.filter(entry => matchesSeverity(entry, 'error')).length;
-  const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
+  const providerCalls = Math.max(
+    entries.filter(entry => entry.status === 'provider_requested').length,
+    entries.filter(entry => entry.status === 'provider_completed' || entry.status === 'provider_failed').length,
+  );
   const usage = entries.filter(entry => entry.status === 'provider_completed')
     .map(entry => / · (\d+) tokens$/.exec(entry.message)?.[1]).filter(Boolean);
   const stepNames = new Map(displayedDefinition?.steps?.map(step => [step.step_id,step.name || step.step_id]));
@@ -264,10 +272,7 @@ export function Observability() {
                   <div><small>Updates</small><strong>{demo ? 'Recorded' : terminal(run.status) ? 'Finished' : error ? 'Reconnecting' : 'Live'}</strong>
                     {!demo && refreshedAt && <small>{new Date(refreshedAt).toLocaleTimeString()}</small>}</div>
                 </div>
-                <div className="run-layout-toolbar">
-                  <button type="button" className="run-link" aria-pressed={split} onClick={() => setSplit(!split)}>Split view</button>
-                </div>
-                <div className="run-investigation" data-split={split}>
+                <div className="run-investigation">
                 <div className="run-investigation-graph">
                 <div className="run-map-heading">
                   <h3>Workflow map</h3>
@@ -321,7 +326,7 @@ export function Observability() {
                   </p>
                 )}
                 <div className="log-heading run-explorer-heading">
-                  <h3>Run logs <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
+                  <h3>Run logs {!demo && !terminal(run.status) && <span className="run-log-live" role="status">{paused ? 'Paused' : error ? 'Reconnecting' : 'Live'}</span>} <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
                   {logStep && <button type="button" className="run-link" onClick={() => setLogSelection(undefined)}>Show all steps</button>}
                   {!demo && (!terminal(run.status) || paused) && <button type="button" className="run-link" onClick={() => setLogViewPaused(paused ? undefined : {runId:run.run_id, entries})}>
                     {paused ? 'Resume log updates' : 'Pause log updates'}
@@ -358,8 +363,8 @@ export function Observability() {
                   following={followLogs && !paused && !demo && !terminal(run.status)} newestFirst={!oldestFirst} selected={inspectedLog}
                   onLeaveTail={() => setFollowLogs(false)}
                   inspect={entry => {setEventLinkStatus(''); setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));}} />
-                {logDetail && <section className="run-log-detail" aria-label="Selected log event">
-                  <div><h3>Log event</h3><span className="run-log-detail-actions">
+                {logDetail && <dialog ref={eventDialog} className="run-log-detail" aria-labelledby="log-event-title" onClose={() => setInspectedLog(undefined)}>
+                  <div><h3 id="log-event-title">Log event</h3><span className="run-log-detail-actions">
                     <button type="button" className="run-link" onClick={async () => {
                       try {
                         const params = new URLSearchParams({run:run.run_id, event:String(logDetail.id)});
@@ -367,16 +372,16 @@ export function Observability() {
                         setEventLinkStatus('Event link copied.');
                       } catch { setEventLinkStatus('Could not copy the event link.'); }
                     }}>Copy event link</button>
-                    <button type="button" className="run-link" onClick={() => setInspectedLog(undefined)}>Close detail</button>
+                    <button type="button" className="run-link" autoFocus onClick={() => eventDialog.current?.close()}>Close</button>
                   </span></div>
                   {eventLinkStatus && <small role="status">{eventLinkStatus}</small>}
                   <p>{logDetail.message}</p>
                   {logDetail.completion && <p>{logDetail.completion}</p>}
-                  <dl><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
+                  <dl><dt>Severity</dt><dd>{logDetail.level.toUpperCase()}</dd><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
                   {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
-                  {logDetail.step_id && <><dt>Step</dt><dd>{logDetail.step_id}</dd></>}
-                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status}</dd></>}</dl>
-                </section>}
+                  {logDetail.step_id && <><dt>Step</dt><dd>{stepNames.get(logDetail.step_id) ?? logDetail.step_id}</dd></>}
+                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status.replaceAll('_', ' ')}</dd></>}</dl>
+                </dialog>}
                 </div>
                 </div>
               </>

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RunLogList } from './RunLogList';
+import { RunLogList, SeverityFilter } from './RunLogList';
 import type { Entry } from './cloud';
 
 afterEach(cleanup);
@@ -29,4 +29,10 @@ it('stops following when the reader scrolls away from the live edge', () => {
   list.scrollTop = 240;
   fireEvent.scroll(list);
   expect(leaveTail).toHaveBeenCalledOnce();
+});
+it('offers severity filters without a provider logging toggle', () => {
+  render(<SeverityFilter value="trace" onChange={() => {}} />);
+  expect(screen.getByRole('option', {name:'All levels'})).toBeTruthy();
+  expect(screen.getByRole('option', {name:'INFO'})).toBeTruthy();
+  expect(screen.queryByRole('option', {name:/off/i})).toBeNull();
 });
