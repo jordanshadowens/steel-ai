@@ -349,13 +349,13 @@ export function Observability() {
                       onChange={(event) => setFilter(event.target.value)}
                     />
                   </label>
-                  <label><input type="checkbox" checked={followLogs} onChange={event => setFollowLogs(event.target.checked)} /> Follow logs</label>
+                  {!demo && !terminal(run.status) && <label><input type="checkbox" checked={followLogs} onChange={event => setFollowLogs(event.target.checked)} /> Follow logs</label>}
                   {(filter || severity !== 'trace' || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
                     setFilter(''); setSeverity('trace'); setKind('all'); setTimeRange('all'); setLogSelection(undefined);
                   }}>Clear filters</button>}
                 </div>
                 <RunLogList entries={oldestFirst ? logs : [...logs].reverse()}
-                  following={followLogs && !paused} newestFirst={!oldestFirst} selected={inspectedLog}
+                  following={followLogs && !paused && !demo && !terminal(run.status)} newestFirst={!oldestFirst} selected={inspectedLog}
                   onLeaveTail={() => setFollowLogs(false)}
                   inspect={entry => {setEventLinkStatus(''); setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));}} />
                 {logDetail && <section className="run-log-detail" aria-label="Selected log event">
