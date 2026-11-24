@@ -36,7 +36,8 @@ export function RunLogList({entries, following, newestFirst = false, selected, i
     }}>
     {entries.map(entry => {
       const message = <>{entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}
-        {entry.completion && <small className="run-log-completion">{entry.completion}</small>}</>;
+        {entry.completion && <small className="run-log-completion">{entry.completion}</small>}
+        {entry.result_excerpt && <small className="run-log-completion"><strong>Conclusion</strong> {entry.result_excerpt}</small>}</>;
       return <li key={entry.id}>
         <time dateTime={entry.at}>{entry.at ? new Date(entry.at).toLocaleTimeString() : '—'}</time>
         <span data-level={entry.level}>{entry.level.toUpperCase()}</span>

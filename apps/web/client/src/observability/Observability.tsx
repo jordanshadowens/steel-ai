@@ -175,7 +175,7 @@ export function Observability() {
     matchesSeverity(entry, severity) &&
     (kind === 'all' || (entry.kind ?? 'run') === kind) &&
     (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
-    [entry.message, entry.completion, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
+    [entry.message, entry.completion, entry.result_excerpt, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
   );
   const logDetail = entries.find(entry => String(entry.id) === inspectedLog);
   const hasLogDetail = Boolean(logDetail);
@@ -383,6 +383,7 @@ export function Observability() {
                   {eventLinkStatus && <small role="status">{eventLinkStatus}</small>}
                   <p>{logDetail.message}</p>
                   {logDetail.completion && <p>{logDetail.completion}</p>}
+                  {logDetail.result_excerpt && <><h4>Step conclusion</h4><p>{logDetail.result_excerpt}</p></>}
                   <dl><dt>Severity</dt><dd>{logDetail.level.toUpperCase()}</dd><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
                   {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
                   {logDetail.step_id && <><dt>Step</dt><dd>{stepNames.get(logDetail.step_id) ?? logDetail.step_id}</dd></>}

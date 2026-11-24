@@ -35,6 +35,7 @@ export type Entry = {
   status?: string;
   message: string;
   completion?: string;
+  result_excerpt?: string;
 };
 
 export const logLevels = ['trace','debug','info','warn','error','fatal','off'] as const;

@@ -35,7 +35,7 @@ export function RunnerLogs({ runId }: { runId: string }) {
 
   const query = search.trim().toLowerCase();
   const matches = entries?.filter(entry => matchesSeverity(entry, severity) && (
-    !query || [entry.message, entry.completion, entry.step_id].some(value => value?.toLowerCase().includes(query))
+    !query || [entry.message, entry.completion, entry.result_excerpt, entry.step_id].some(value => value?.toLowerCase().includes(query))
   ));
 
   return <section className="section-card runner-logs" aria-label="Run log viewer">

@@ -363,6 +363,7 @@ export function ReasoningConfig({
     goal?: string;
     tools_allowed?: string[];
     max_rounds?: number;
+    log_conclusion?: boolean;
   };
   const allowed = new Set(cfg.tools_allowed ?? []);
   return (
@@ -374,6 +375,12 @@ export function ReasoningConfig({
         value={cfg.goal ?? ''}
         onCommit={(v) => patchCfg(edit, step.step_id, bodyOf, { goal: v })}
       />
+      <CheckField
+        label="Include the step conclusion in run logs"
+        checked={cfg.log_conclusion === true}
+        onChange={(value) => patchCfg(edit, step.step_id, bodyOf, { log_conclusion: value })}
+      />
+      <p>Stores up to 400 characters of the model’s final answer in Observability. Leave this off for steps that may return sensitive data.</p>
       <fieldset>
         <legend>Allowed tools</legend>
         {REASON_TOOLS.map((t) => (
