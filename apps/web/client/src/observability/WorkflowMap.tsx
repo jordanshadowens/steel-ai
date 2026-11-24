@@ -125,11 +125,12 @@ export default function WorkflowMap({
     () => matchMedia('(max-width: 620px)').matches,
   );
   useEffect(() => {
-    const screen = matchMedia('(max-width: 620px)');
-    const onChange = (event: MediaQueryListEvent) => setCompact(event.matches);
-    screen.addEventListener('change', onChange);
-    return () => screen.removeEventListener('change', onChange);
-  }, []);
+    const container = frame.current;
+    if (!container) return;
+    const observer = new ResizeObserver(([entry]) => setCompact(entry.contentRect.width < 650));
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [definition.steps?.length]);
   const steps = definition.steps ?? [];
   const recordedSteps = (events ?? [])
     .filter(entry => entry.kind === 'run' && ['running','local_running'].includes(entry.status ?? '') && entry.step_id)
