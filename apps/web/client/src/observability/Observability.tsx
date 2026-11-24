@@ -356,6 +356,7 @@ export function Observability() {
                 </div>
                 <RunLogList entries={oldestFirst ? logs : [...logs].reverse()}
                   following={followLogs && !paused} newestFirst={!oldestFirst} selected={inspectedLog}
+                  onLeaveTail={() => setFollowLogs(false)}
                   inspect={entry => {setEventLinkStatus(''); setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));}} />
                 {logDetail && <section className="run-log-detail" aria-label="Selected log event">
                   <div><h3>Log event</h3><span className="run-log-detail-actions">

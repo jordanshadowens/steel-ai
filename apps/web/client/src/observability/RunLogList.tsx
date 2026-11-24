@@ -12,12 +12,13 @@ export function SeverityFilter({value, onChange}: {value: MinimumSeverity; onCha
   </select></label>;
 }
 
-export function RunLogList({entries, following, newestFirst = false, selected, inspect}: {
+export function RunLogList({entries, following, newestFirst = false, selected, inspect, onLeaveTail}: {
   entries: Entry[];
   following: boolean;
   newestFirst?: boolean;
   selected?: string;
   inspect?: (entry: Entry) => void;
+  onLeaveTail?: () => void;
 }) {
   const viewport = useRef<HTMLUListElement>(null);
   const latest = entries.at(newestFirst ? 0 : -1)?.id;
@@ -26,7 +27,13 @@ export function RunLogList({entries, following, newestFirst = false, selected, i
     if (following && list) list.scrollTop = newestFirst ? 0 : list.scrollHeight;
   }, [following, latest, newestFirst, entries.length]);
 
-  return <ul ref={viewport} className="run-logs shared-run-logs" aria-label="Run logs" tabIndex={0}>
+  return <ul ref={viewport} className="run-logs shared-run-logs" aria-label="Run logs" tabIndex={0}
+    onScroll={event => {
+      if (!following || !onLeaveTail) return;
+      const list = event.currentTarget;
+      const distance = newestFirst ? list.scrollTop : list.scrollHeight - list.clientHeight - list.scrollTop;
+      if (distance > 24) onLeaveTail();
+    }}>
     {entries.map(entry => {
       const message = <>{entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}
         {entry.completion && <small className="run-log-completion">{entry.completion}</small>}</>;

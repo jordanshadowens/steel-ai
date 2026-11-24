@@ -38,6 +38,7 @@ export function RunnerLogs({ runId }: { runId: string }) {
     </div>
     {error && <p role="status">Could not refresh logs. <button type="button" className="btn" onClick={() => setRetry(value => value + 1)}>Retry</button></p>}
     {!entries && !error && <p role="status">Loading logs…</p>}
-    {entries && <RunLogList entries={entries.filter(entry => matchesSeverity(entry, severity))} following={following} />}
+    {entries && <RunLogList entries={entries.filter(entry => matchesSeverity(entry, severity))}
+      following={following} onLeaveTail={() => setFollowing(false)} />}
   </section>;
 }
