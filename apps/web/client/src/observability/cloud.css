@@ -131,3 +131,17 @@
 .run-log-detail :is(dt,dd) { margin: 0; }
 .run-log-detail dt { color: #b5c3d7; }
 @media (max-width: 620px) { .run-summary { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+.run-timings { margin: 0 0 16px; padding: 10px 12px; background: #162236; border: 1px solid #344660; border-radius: 8px; }
+.run-timings summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.run-timings summary small { margin-inline-start: 6px; font-weight: 500; }
+.run-timings ol { display: grid; gap: 8px; padding: 0; margin: 12px 0 0; list-style: none; }
+.run-timings li { display: grid; grid-template-columns: minmax(84px,.65fr) minmax(40px,1fr) minmax(110px,.55fr); align-items: center; gap: 8px; font-size: 12px; }
+.run-timings li button { overflow-wrap: anywhere; }
+.run-timings [aria-pressed=true] { color: #9ad7fc; text-decoration: underline; }
+.run-timing-track { position: relative; display: block; height: 10px; border-radius: 4px; background: #0d1522; }
+.run-timing-track span { position: absolute; min-width: 3px; height: 100%; border-radius: 3px; background: #7de8ae; }
+.run-timing-track span[data-state=failed] { background: #ef9695; }
+.run-timing-track span[data-state=paused] { background: #ffe0a3; }
+.run-timing-track span[data-state=running] { background: #91cfff; }
+@media (max-width: 620px) { .run-timings li { grid-template-columns: minmax(65px,.85fr) minmax(35px,1fr) minmax(92px,.7fr); } }

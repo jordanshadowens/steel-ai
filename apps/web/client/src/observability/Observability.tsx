@@ -7,6 +7,7 @@ import {
   activeStep,
   runEntries,
   runtime,
+  stepTimings,
   terminal,
   type Definition,
   type Entry,
@@ -53,6 +54,7 @@ export function Observability() {
     setLinkStatus('');
     setLogViewPaused(undefined);
     setInspectedLog(undefined);
+    setRefreshedAt(undefined);
     select(id);
     history.replaceState(history.state, '', routeHref('observability', new URLSearchParams({run: id})));
   }
@@ -159,7 +161,8 @@ export function Observability() {
   const paused = logViewPaused?.runId === run?.run_id ? logViewPaused : undefined;
   const source = paused?.entries ?? entries;
   const end = Date.parse(run?.updated_at || entries.at(-1)?.at || '') || Date.now();
-  const timeframe = timeRange === 'all' ? 0 : end - Number(timeRange) * 60_000;
+  const logEnd = paused ? (Date.parse(source.at(-1)?.at || '') || end) : end;
+  const timeframe = timeRange === 'all' ? 0 : logEnd - Number(timeRange) * 60_000;
   const logs = source.filter(entry =>
     (!logStep || entry.step_id === logStep) &&
     (!errorsOnly || entry.level === 'error') &&
@@ -170,7 +173,12 @@ export function Observability() {
   const logDetail = logs.find(entry => entry.id === inspectedLog);
   const errors = entries.filter(entry => entry.level === 'error').length;
   const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
-  const observedSteps = new Set(entries.filter(entry => entry.status === 'step_completed').map(entry => entry.step_id)).size;
+  const stepNames = new Map(displayedDefinition?.steps?.map(step => [step.step_id,step.name || step.step_id]));
+  const observedSteps = new Set(entries.filter(entry => entry.status === 'step_completed' && (!stepNames.size || stepNames.has(entry.step_id ?? ''))).map(entry => entry.step_id)).size;
+  const timings = stepTimings(entries, active ? (refreshedAt ?? end) : end);
+  const firstStart = Math.min(...timings.map(timing => timing.start));
+  const lastEnd = Math.max(...timings.map(timing => timing.start + timing.duration));
+  const span = Math.max(1, lastEnd - firstStart);
 
   return (
     <section id="observability" className="operations">
@@ -276,6 +284,19 @@ export function Observability() {
                     />
                   </Suspense>
                 )}
+                {timings.length > 0 && <details className="run-timings">
+                  <summary>Step timing <small>{timings.length} {timings.length === 1 ? 'attempt' : 'attempts'}</small></summary>
+                  <ol aria-label="Step timing">
+                    {timings.map((timing, index) => <li key={timing.step + ':' + index}>
+                      <button type="button" className="run-log-inspect" title={timing.step} aria-pressed={logStep === timing.step}
+                        onClick={() => setLogSelection(logStep === timing.step ? undefined : {runId:run.run_id, step:timing.step})}>{stepNames.get(timing.step) || timing.step}</button>
+                      <span className="run-timing-track" aria-hidden="true">
+                        <span data-state={timing.status} style={{insetInlineStart:(timing.start-firstStart)/span*100+'%',width:timing.duration/span*100+'%'}} />
+                      </span>
+                      <small>{timing.duration >= 1000 ? (timing.duration/1000).toFixed(1) + ' s' : timing.duration + ' ms'} · {timing.status}</small>
+                    </li>)}
+                  </ol>
+                </details>}
                 {displayed.logs === undefined && (
                   <p>
                     Tool logs are unavailable on this runtime. Showing run

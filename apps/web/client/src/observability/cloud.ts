@@ -35,6 +35,24 @@ export type Entry = {
   message: string;
 };
 
+export function stepTimings(entries: Entry[], end: number) {
+  const pending = new Map<string, number>();
+  const rows: { step: string; start: number; duration: number; status: string }[] = [];
+  for (const entry of entries) {
+    if (!entry.step_id || !entry.at) continue;
+    const at = Date.parse(entry.at);
+    if (!Number.isFinite(at)) continue;
+    if (entry.status === 'step_started') pending.set(entry.step_id, at);
+    if (!['step_completed','step_failed','step_paused'].includes(entry.status ?? '')) continue;
+    const start = pending.get(entry.step_id);
+    if (start === undefined) continue;
+    pending.delete(entry.step_id);
+    rows.push({step:entry.step_id, start, duration:Math.max(0,at-start), status:entry.status!.slice(5)});
+  }
+  for (const [step,start] of pending) rows.push({step,start,duration:Math.max(0,end-start),status:'running'});
+  return rows.sort((left, right) => left.start - right.start);
+}
+
 export const terminal = (status: string) =>
   ['sealed', 'failed', 'cancelled', 'local_completed', 'local_failed'].includes(status);
 export const activeStep = (run: Run) =>
