@@ -333,7 +333,6 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
             }
           }}>
           <header className="assist-header">
-            <span className="assist-mark"><Sparkle /></span>
             <div className="assist-heading">
               <h2 id="assist-title">AI Assist</h2>
               {previous && (
@@ -361,19 +360,16 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
             </div>
           </header>
           <div className="assist-transcript" role="log" aria-label="Conversation" tabIndex={0} ref={transcript}>
-            <div className="assist-message assist-message-assistant">
-              <p>What workflow would you like to build?</p>
-              <p>Describe the steps or the outcome you want. I’ll create a draft you can refine here.</p>
-            </div>
             {messages.length === 0 && (
-              <div className="assist-starters">
+              <><p className="assist-intro">Describe what the agent should do, what it receives, and what it should return.</p>
+              <div className="assist-starters" aria-label="Example prompts">
                 {starters.map((starter) => (
                   <button type="button" key={starter} onClick={() => {
                     setPrompt(starter);
                     composer.current?.focus();
-                  }}>{starter} <span aria-hidden="true">↗</span></button>
+                  }}>{starter}</button>
                 ))}
-              </div>
+              </div></>
             )}
             {messages.map((message, index) => (
               <div key={index}

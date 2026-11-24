@@ -9,6 +9,7 @@
   max-height: min(420px, 52vh);
   overflow: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   font: 12px/1.5 ui-monospace, monospace;
 }
 .shared-run-logs li { display: grid; grid-template-columns: 12ch 6ch minmax(0,1fr); padding: 8px 10px; gap: 8px; overflow-wrap: anywhere; }

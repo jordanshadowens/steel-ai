@@ -123,6 +123,11 @@
 .run-explorer-filters { padding: 10px; border: 1px solid #344660; border-radius: 8px; background: #162236; gap: 8px 12px; }
 .run-explorer-filters label:has(input:not([type=checkbox])) { flex: 1 1 150px; }
 .run-explorer-filters label:has(input[type=checkbox]), .run-explorer-filters button { margin-bottom: 5px; }
+@media (max-width: 620px) {
+  .run-explorer-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .run-explorer-filters label:has(input:not([type=checkbox])) { grid-column: 1 / -1; }
+  .run-explorer-filters select { min-width: 0; }
+}
 .run-log-inspect { appearance: none; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
 .run-log-inspect:hover, .run-log-inspect[aria-expanded=true] { color: #b8ddff; text-decoration: underline; }
 .run-log-detail { margin-top: 10px; padding: 12px; border-radius: 8px; border: 1px solid #557097; background: #162236; overflow-wrap: anywhere; }

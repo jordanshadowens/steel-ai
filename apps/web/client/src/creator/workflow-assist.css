@@ -99,7 +99,7 @@
   align-items: center;
   gap: 10px;
   padding: 13px 14px;
-  background: linear-gradient(112deg, #293c68, #222d4b 60%, #392b60);
+  background: #202e4a;
   color: #fff;
 }
 
@@ -107,7 +107,7 @@
   position: absolute;
   inset: auto 0 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, #99beff, #c3abff, transparent);
+  background: #465779;
   content: '';
 }
 
@@ -149,6 +149,7 @@
   font-size: 13px;
   line-height: 1.55;
 }
+.assist-intro { margin: 0; color: #43526b; }
 
 .assist-message {
   flex: none;
@@ -325,8 +326,9 @@
   .assist-command-launcher { --assist-halo: 0 0 9px 2px #537cffc7, 0 0 16px 4px #a37bff94; }
   .workflow-assist[data-docked] .assist-chat {
     position: fixed;
-    inset: auto auto 12px 12px;
-    height: min(510px, calc(100dvh - 120px));
+    inset: auto auto max(12px, env(safe-area-inset-bottom)) 12px;
+    width: min(420px, calc(100vw - 24px));
+    height: min(510px, calc(100dvh - 96px));
   }
   .workflow-assist[data-docked]:has(.assist-chat) { z-index: 12; }
 }
@@ -337,7 +339,7 @@
 }
 
 @media (max-height: 480px) {
-  .assist-chat {
+  .workflow-assist[data-docked] .assist-chat, .assist-chat {
     position: fixed;
     inset: auto auto 12px 12px;
     height: min(315px, calc(100dvh - 78px));

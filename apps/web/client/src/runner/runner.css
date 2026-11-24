@@ -32,3 +32,7 @@
 .runner-logs .runner-detail-actions { align-items: center; }
 .runner-logs .runner-detail-actions h2 { flex: 1 1 140px; margin: 0; }
 .runner-logs label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+@media (max-width: 620px) {
+  .runner-logs .runner-detail-actions h2 { flex-basis: 100%; }
+  .runner-detail-actions .btn { max-width: 100%; white-space: normal; }
+}
