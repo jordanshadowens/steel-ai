@@ -1,6 +1,7 @@
 import { navigate, routeHref, routeSearch } from '../app/router';
 import { useState } from 'react';
 import type { RunRow } from '../api/contracts';
+import { isLocalRun, isTerminalRun, runStatusLabel } from '../api/runStatus';
 import {
   useCreateRunMutation,
   useGetRunQuery,
@@ -15,8 +16,6 @@ import { DocumentsPanel } from './DocumentsPanel';
 import { ApprovalsInbox } from './ApprovalsInbox';
 import { HistoryPanel } from './HistoryPanel';
 import './runner.css';
-
-const TERMINAL = new Set(['sealed', 'failed']);
 
 // Guided sequence: select → inputs → review → execution → results →
 // document, with history and approvals alongside. Reusing inputs opens a
@@ -38,9 +37,9 @@ export function RunnerPage() {
   const [viewingRunId, setViewingRunId] = useState<string | null>(() => routeSearch().get('run'));
   const [runError, setRunError] = useState<string | null>(null);
 
-  const published = useListWorkflowsQuery('published');
+  const published = useListWorkflowsQuery('published', { skip: !!viewingRunId });
   const versions = useGetWorkflowVersionsQuery(workflowId, {
-    skip: !workflowId,
+    skip: !workflowId || !!viewingRunId,
   });
   const pubVersions = (versions.data?.versions ?? []).filter(
     (v) => v.status === 'published',
@@ -112,19 +111,54 @@ export function RunnerPage() {
   };
 
   const liveStatus = liveRun.data?.run.status ?? viewStatus;
-  const terminal = !!liveStatus && TERMINAL.has(liveStatus);
+  const terminal = !!liveStatus && isTerminalRun(liveStatus);
   const policy = (def?.policy ?? {}) as { execution_approval?: string };
+
+  if (viewingRunId) {
+    const run = viewing.currentData?.run;
+    const local = run && isLocalRun(run.status);
+    const startNew = () => {
+      setViewingRunId(null);
+      history.replaceState(history.state, '', routeHref('runner'));
+    };
+    return <div className="page-pad runner runner-detail">
+      <div className="runner-detail-header">
+        <div>
+          <h1>{run?.workflow_id ?? 'Run details'}</h1>
+          <p>{run ? `Version ${run.version} · ${local ? 'Local agent' : 'Cloud runtime'}` : viewingRunId}</p>
+        </div>
+        <div className="runner-detail-actions">
+          <button type="button" className="btn" onClick={startNew}>New run</button>
+          <ObserveRunLink runId={viewingRunId} primary />
+        </div>
+      </div>
+      {viewing.isError && <p role="alert">Could not load this run. <button type="button" className="btn" onClick={viewing.refetch}>Retry</button></p>}
+      {!run && !viewing.isError && <p role="status">Loading run…</p>}
+      {run && <section aria-label="Run details" className="section-card runner-run-summary">
+        <div className="runner-run-heading">
+          <h2>Execution</h2>
+          <span className="runner-status" data-status={run.status}>{runStatusLabel(run.status)}</span>
+        </div>
+        <dl>
+          <dt>Run ID</dt><dd>{run.run_id}</dd>
+          {run.updated_at && <><dt>Last update</dt><dd>{new Date(run.updated_at).toLocaleString()}</dd></>}
+        </dl>
+        {local && <p>Step events and provider logs are available in Observability.</p>}
+        {!local && <ViewingRun run={run} onPrepare={(saved, values) => {startNew(); prepareAgain(saved, values);}} />}
+        {local && !isTerminalRun(run.status) && <RunMonitor key={run.run_id} runId={run.run_id} onTerminal={() => viewing.refetch()} />}
+      </section>}
+    </div>;
+  }
 
   return (
     <div className="page-pad runner">
       <h1>Workflow Runner</h1>
-      <p className="page-sub">
-        Run a published workflow, review its results, and release its exact
-        customer document.
-      </p>
+      <p className="page-sub">Start a published workflow or review a previous run.</p>
 
+      <div className="runner-workspace">
+      <div className="runner-workspace-main">
       <section aria-label="Select workflow" className="section-card">
-        <h2>1. Select a published workflow</h2>
+        <h2>New run</h2>
         <div className="field">
           <span>
             <label htmlFor="runner-workflow">Workflow</label>
@@ -185,7 +219,7 @@ export function RunnerPage() {
 
       {def && !viewingRunId && (
         <section aria-label="Project inputs" className="section-card">
-          <h2>2. Enter project information</h2>
+          <h2>Inputs</h2>
           <InputForm
             def={def}
             values={inputValues}
@@ -204,7 +238,7 @@ export function RunnerPage() {
 
       {def && submitted && !viewingRunId && (
         <section aria-label="Review inputs" className="section-card">
-          <h2>3. Review and start</h2>
+          <h2>Review and start</h2>
           <table className="grid">
             <thead>
               <tr>
@@ -239,7 +273,7 @@ export function RunnerPage() {
 
       {runId && !viewingRunId && (
         <section aria-label="Execution" className="section-card">
-          <h2>4. Execution</h2>
+          <h2>Execution</h2>
           <ObserveRunLink runId={runId} />
           {(viewStatus === 'pending_approval' ||
             liveStatus === 'pending_approval') &&
@@ -272,38 +306,19 @@ export function RunnerPage() {
       {runId && terminal && liveRun.data && !viewingRunId && (
         <>
           <section aria-label="Results" className="section-card">
-            <h2>5. Results</h2>
+            <h2>Results</h2>
             <ResultsView run={liveRun.data.run} visited={visited} />
           </section>
           <section aria-label="Document" className="section-card">
-            <h2>6. Customer document</h2>
+            <h2>Customer document</h2>
             <DocumentsPanel runId={runId} active={false} />
           </section>
         </>
       )}
 
-      {viewingRunId && (
-        <section aria-label="Historical run" className="section-card">
-          <h2>Run from history (read-only)</h2>
-          <ObserveRunLink runId={viewingRunId} />
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setViewingRunId(null)}
-          >
-            ← Back to new run
-          </button>
-          {viewing.isLoading && <p className="status-line">Loading run…</p>}
-          {viewing.data && (
-            <ViewingRun
-              run={viewing.data.run}
-              onPrepare={prepareAgain}
-            />
-          )}
-        </section>
-      )}
-
-      <section aria-label="Run history" className="section-card">
+      </div>
+      <aside className="runner-workspace-sidebar">
+      {workflowId && <section aria-label="Run history" className="section-card">
         <h2>Run history</h2>
         <HistoryPanel
           workflowId={workflowId}
@@ -311,14 +326,17 @@ export function RunnerPage() {
           onSelect={(id) => {
             setViewingRunId(id);
             setRunId(null);
+            history.replaceState(history.state, '', routeHref('runner', new URLSearchParams({run:id})));
           }}
         />
-      </section>
+      </section>}
 
       <section aria-label="Approvals" className="section-card">
         <h2>Approvals</h2>
         <ApprovalsInbox />
       </section>
+      </aside>
+      </div>
     </div>
   );
 }
@@ -334,7 +352,7 @@ function ViewingRun({ run, onPrepare }: {
   run: RunRow;
   onPrepare: (run: RunRow, values: Record<string, unknown>) => void;
 }) {
-  if (!TERMINAL.has(run.status)) {
+  if (!isTerminalRun(run.status)) {
     return <RunMonitor runId={run.run_id} onTerminal={() => {}} />;
   }
   const inputs = savedInputs(run);
@@ -350,9 +368,9 @@ function ViewingRun({ run, onPrepare }: {
   );
 }
 
-function ObserveRunLink({ runId }: { runId: string }) {
+function ObserveRunLink({ runId, primary = false }: { runId: string; primary?: boolean }) {
   const query = new URLSearchParams({ run: runId });
-  return <a className="btn" href={routeHref('observability', query)} onClick={(event) => {
+  return <a className={primary ? 'btn btn-primary' : 'btn'} href={routeHref('observability', query)} onClick={(event) => {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     event.preventDefault();
     navigate('observability', query);

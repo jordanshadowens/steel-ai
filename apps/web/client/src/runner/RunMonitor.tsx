@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useGetRunQuery } from '../api/steelApi';
+import { isTerminalRun, runStatusLabel } from '../api/runStatus';
 import { ApprovalsInbox } from './ApprovalsInbox';
 
-const TERMINAL = new Set(['sealed', 'failed']);
 const POLL_CAP = 120;
 
 // Live execution view. Polls only while the run is active, stops on terminal
@@ -29,7 +29,7 @@ export function RunMonitor({
       setTimedOut(true);
       return;
     }
-    if (run && TERMINAL.has(run.status) && !done) {
+    if (run && isTerminalRun(run.status) && !done) {
       setDone(true);
       onTerminal(runId);
     }
@@ -65,7 +65,7 @@ export function RunMonitor({
   return (
     <div>
       <p className="status-line num" role="status">
-        Status: {run.status} · step: {run.current_step ?? '—'}
+        {runStatusLabel(run.status)}{run.current_step ? ' · ' + run.current_step : ''}
       </p>
       {waiting && (
         <>
@@ -76,7 +76,7 @@ export function RunMonitor({
       {run.status === 'pending_approval' && (
         <p className="status-line">Waiting for execution approval…</p>
       )}
-      {!TERMINAL.has(run.status) &&
+      {!isTerminalRun(run.status) &&
         !waiting &&
         run.status !== 'pending_approval' && (
           <p className="status-line">Running…</p>

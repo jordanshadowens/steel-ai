@@ -1,4 +1,5 @@
 import { authenticatedFetch } from '../auth/session';
+export { isTerminalRun as terminal } from '../api/runStatus';
 
 export type Run = {
   run_id: string;
@@ -53,8 +54,6 @@ export function stepTimings(entries: Entry[], end: number) {
   return rows.sort((left, right) => left.start - right.start);
 }
 
-export const terminal = (status: string) =>
-  ['sealed', 'failed', 'cancelled', 'local_completed', 'local_failed'].includes(status);
 export const activeStep = (run: Run) =>
   ['running', 'local_running'].includes(run.status) ? run.current_step : null;
 
