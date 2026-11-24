@@ -3,8 +3,10 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import demoDefinition from '../creator/metaRadarExample.json';
 import demoCapture from './metaRadarCapture.json';
 import './cloud.css';
+import { RunLogList, SeverityFilter, type MinimumSeverity } from './RunLogList';
 import {
   activeStep,
+  matchesSeverity,
   runEntries,
   runtime,
   stepTimings,
@@ -35,7 +37,8 @@ export function Observability() {
   const [listLoaded, setListLoaded] = useState(false);
   const [mapError, setMapError] = useState('');
   const [filter, setFilter] = useState('');
-  const [errorsOnly, setErrorsOnly] = useState(false);
+  const [severity, setSeverity] = useState<MinimumSeverity>('trace');
+  const [followLogs, setFollowLogs] = useState(true);
   const [runFilter, setRunFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [linkStatus, setLinkStatus] = useState('');
@@ -168,14 +171,14 @@ export function Observability() {
   const timeframe = timeRange === 'all' ? 0 : logEnd - Number(timeRange) * 60_000;
   const logs = source.filter(entry =>
     (!logStep || entry.step_id === logStep) &&
-    (!errorsOnly || entry.level === 'error') &&
+    matchesSeverity(entry, severity) &&
     (kind === 'all' || (entry.kind ?? 'run') === kind) &&
     (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
-    [entry.message, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
+    [entry.message, entry.completion, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
   );
   const logDetail = logs.find(entry => String(entry.id) === inspectedLog);
   const sourceCount = (type: Entry['kind']) => source.filter(entry => (entry.kind ?? 'run') === type).length;
-  const errors = entries.filter(entry => entry.level === 'error').length;
+  const errors = entries.filter(entry => matchesSeverity(entry, 'error')).length;
   const providerCalls = entries.filter(entry => entry.status === 'provider_requested').length;
   const usage = entries.filter(entry => entry.status === 'provider_completed')
     .map(entry => / · (\d+) tokens$/.exec(entry.message)?.[1]).filter(Boolean);
@@ -345,37 +348,15 @@ export function Observability() {
                       onChange={(event) => setFilter(event.target.value)}
                     />
                   </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={errorsOnly}
-                      onChange={(event) => setErrorsOnly(event.target.checked)}
-                    />{' '}
-                    Errors only
-                  </label>
-                  {(filter || errorsOnly || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
-                    setFilter(''); setErrorsOnly(false); setKind('all'); setTimeRange('all'); setLogSelection(undefined);
+                  <SeverityFilter value={severity} onChange={setSeverity} />
+                  <label><input type="checkbox" checked={followLogs} onChange={event => setFollowLogs(event.target.checked)} /> Follow logs</label>
+                  {(filter || severity !== 'trace' || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
+                    setFilter(''); setSeverity('trace'); setKind('all'); setTimeRange('all'); setLogSelection(undefined);
                   }}>Clear filters</button>}
                 </div>
-                <ul className="run-logs" aria-label="Run logs">
-                  {(oldestFirst ? logs : [...logs].reverse()).map((entry) => (
-                    <li key={entry.id}>
-                      <time dateTime={entry.at}>
-                        {entry.at
-                          ? new Date(entry.at).toLocaleTimeString()
-                          : '—'}
-                      </time>
-                      <span data-level={entry.level}>{entry.level}</span>
-                      <button type="button" className="run-log-inspect" aria-expanded={String(entry.id) === inspectedLog} onClick={() => {
-                        setEventLinkStatus('');
-                        setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));
-                      }}>
-                        {entry.kind === 'provider' && <strong>Provider · </strong>}{entry.message}
-                      </button>
-                    </li>
-                  ))}
-                  {!logs.length && <li>No matching log entries.</li>}
-                </ul>
+                <RunLogList entries={oldestFirst ? logs : [...logs].reverse()}
+                  following={followLogs && !paused} newestFirst={!oldestFirst} selected={inspectedLog}
+                  inspect={entry => {setEventLinkStatus(''); setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));}} />
                 {logDetail && <section className="run-log-detail" aria-label="Selected log event">
                   <div><h3>Log event</h3><span className="run-log-detail-actions">
                     <button type="button" className="run-link" onClick={async () => {
@@ -389,6 +370,7 @@ export function Observability() {
                   </span></div>
                   {eventLinkStatus && <small role="status">{eventLinkStatus}</small>}
                   <p>{logDetail.message}</p>
+                  {logDetail.completion && <p>{logDetail.completion}</p>}
                   <dl><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
                   {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
                   {logDetail.step_id && <><dt>Step</dt><dd>{logDetail.step_id}</dd></>}

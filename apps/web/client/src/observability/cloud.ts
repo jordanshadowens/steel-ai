@@ -29,12 +29,19 @@ export type Definition = {
 export type Entry = {
   id: string | number;
   at?: string;
-  level: 'info' | 'error';
+  level: LogLevel;
   kind?: 'run' | 'tool' | 'provider';
   step_id?: string | null;
   status?: string;
   message: string;
+  completion?: string;
 };
+
+export const logLevels = ['trace','debug','info','warn','error','fatal','off'] as const;
+export type LogLevel = Exclude<typeof logLevels[number], 'off'>;
+export function matchesSeverity(entry: Entry, minimum: typeof logLevels[number]) {
+  return logLevels.indexOf(entry.level) >= logLevels.indexOf(minimum);
+}
 
 export function stepTimings(entries: Entry[], end: number) {
   const pending = new Map<string, number>();

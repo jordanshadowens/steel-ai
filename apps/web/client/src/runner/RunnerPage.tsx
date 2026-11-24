@@ -11,6 +11,7 @@ import {
 import { InputForm } from './InputForm';
 import { validateInputs } from './inputPresentation';
 import { RunMonitor } from './RunMonitor';
+import { RunnerLogs } from './RunnerLogs';
 import { ResultsView, fmtValue } from './ResultsView';
 import { DocumentsPanel } from './DocumentsPanel';
 import { ApprovalsInbox } from './ApprovalsInbox';
@@ -147,6 +148,7 @@ export function RunnerPage() {
         {!local && <ViewingRun run={run} onPrepare={(saved, values) => {startNew(); prepareAgain(saved, values);}} />}
         {local && !isTerminalRun(run.status) && <RunMonitor key={run.run_id} runId={run.run_id} onTerminal={() => viewing.refetch()} />}
       </section>}
+      {run && <RunnerLogs key={run.run_id} runId={run.run_id} />}
     </div>;
   }
 
@@ -315,6 +317,7 @@ export function RunnerPage() {
           </section>
         </>
       )}
+      {runId && <RunnerLogs key={runId} runId={runId} />}
 
       </div>
       <aside className="runner-workspace-sidebar">

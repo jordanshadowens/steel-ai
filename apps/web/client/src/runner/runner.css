@@ -28,3 +28,7 @@
 @media (min-width: 900px) {
   .runner-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(255px, .42fr); gap: 18px; align-items: start; }
 }
+
+.runner-logs .runner-detail-actions { align-items: center; }
+.runner-logs .runner-detail-actions h2 { flex: 1 1 140px; margin: 0; }
+.runner-logs label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }

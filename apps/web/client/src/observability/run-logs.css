@@ -1,0 +1,27 @@
+.shared-run-logs {
+  background: #0d1522;
+  color: #edf4ff;
+  border: 1px solid #334763;
+  border-radius: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  max-height: min(420px, 52vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  font: 12px/1.5 ui-monospace, monospace;
+}
+.shared-run-logs li { display: grid; grid-template-columns: 12ch 6ch minmax(0,1fr); padding: 8px 10px; gap: 8px; overflow-wrap: anywhere; }
+.shared-run-logs li + li { border-top: 1px solid #273a53; }
+.shared-run-logs time, .run-log-completion { color: #b5c3d7; }
+.run-log-completion { display: block; }
+.shared-run-logs [data-level=trace] { color: #bfbed6; }
+.shared-run-logs [data-level=debug] { color: #c7b5ff; }
+.shared-run-logs [data-level=info] { color: #9ad7fc; }
+.shared-run-logs [data-level=warn] { color: #ffe0a3; }
+.shared-run-logs [data-level=error], .shared-run-logs [data-level=fatal] { color: #ffafab; }
+.shared-run-logs [data-level=fatal] { font-weight: 800; }
+@media (max-width: 620px) {
+  .shared-run-logs li { grid-template-columns: auto 1fr; }
+  .shared-run-logs li > :nth-child(3) { grid-column: 1 / -1; }
+}

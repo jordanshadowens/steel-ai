@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { stepTimings, type Entry } from './cloud';
+import { matchesSeverity, stepTimings, type Entry } from './cloud';
+
+it('uses minimum severity and hides every level with Off', () => {
+  const error: Entry = {id:'x', level:'error', message:'failed'};
+  expect(matchesSeverity(error, 'warn')).toBe(true);
+  expect(matchesSeverity(error, 'fatal')).toBe(false);
+  expect(matchesSeverity({...error,level:'fatal'}, 'off')).toBe(false);
+});
 
 it('separates retry attempts, coexists with nested steps, and shows unfinished duration', () => {
   function event(id: number, step_id: string, status: string, at: number): Entry {
