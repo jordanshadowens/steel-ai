@@ -1,5 +1,3 @@
-import { AnimatePresence, useReducedMotion } from 'motion/react';
-import * as m from 'motion/react-m';
 import { useHealthQuery } from '../api/steelApi';
 import { navigate, routeHref, useRoute } from './router';
 import type { Route } from './router';
@@ -21,7 +19,7 @@ const DESTINATIONS: Array<{ route: Route; label: string; compact?: string }> = [
   { route: 'creator', label: 'Workflow Creator', compact: 'Creator' },
   { route: 'runner', label: 'Workflow Runner', compact: 'Runner' },
   { route: 'designer', label: 'Data Designer', compact: 'Data' },
-  { route: 'observability', label: 'Observability', compact: 'Runs' },
+  { route: 'observability', label: 'Observability', compact: 'Monitor' },
 ];
 
 function followRoute(event: MouseEvent<HTMLAnchorElement>, route: Route) {
@@ -58,7 +56,6 @@ export function App() {
 function WorkspaceApp() {
   const session = useSyncExternalStore(subscribeSession, getSession);
   const route = useRoute();
-  const reduceMotion = useReducedMotion();
   const health = useHealthQuery(undefined, { pollingInterval: 30000 });
   async function signOut() {
     const state = store.getState();
@@ -75,9 +72,13 @@ function WorkspaceApp() {
 
   return (
     <div className="shell">
+      <a className="shell-skip" href="#workspace-content" onClick={event => {
+        event.preventDefault();
+        document.getElementById('workspace-content')?.focus();
+      }}>Skip to workspace</a>
       <header className={import.meta.env.VITE_STEEL_CLOUD === '1' ? 'shell-nav shell-nav-cloud' : 'shell-nav'}>
         <div className="shell-identity">
-          <a className="shell-brand" href={import.meta.env.VITE_STEEL_CLOUD === '1' ? '/' : routeHref('creator')} onClick={(event) => { if (import.meta.env.VITE_STEEL_CLOUD !== '1') followRoute(event, 'creator'); }}>
+          <a className="shell-brand" href={routeHref('creator')} onClick={event => followRoute(event, 'creator')}>
             <span className="shell-mark" aria-hidden="true"><span /></span>
             {import.meta.env.VITE_STEEL_CLOUD === '1' ? 'Steel Cloud' : 'Steel AI'}
           </a>
@@ -134,15 +135,10 @@ function WorkspaceApp() {
           </button>
         </div>
       )}
-      <main className="shell-main">
-        <AnimatePresence mode="wait" initial={false}>
-          <m.div
+      <main className="shell-main" id="workspace-content" tabIndex={-1}>
+          <div
             key={route}
             className="shell-page"
-            initial={reduceMotion ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduceMotion ? undefined : { opacity: 0 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
             aria-label={
               route === 'creator'
                 ? 'Workflow Creator'
@@ -160,8 +156,7 @@ function WorkspaceApp() {
               {route === 'api-keys' && import.meta.env.VITE_STEEL_CLOUD === '1' && <ApiKeys />}
             </Suspense>
             </WorkspaceViewBoundary>
-          </m.div>
-        </AnimatePresence>
+          </div>
       </main>
     </div>
   );
