@@ -341,6 +341,7 @@ export function Observability() {
                   <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
                     <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
                   </select></label>
+                  <SeverityFilter value={severity} onChange={setSeverity} />
                   <label>
                     Filter logs{' '}
                     <input
@@ -348,7 +349,6 @@ export function Observability() {
                       onChange={(event) => setFilter(event.target.value)}
                     />
                   </label>
-                  <SeverityFilter value={severity} onChange={setSeverity} />
                   <label><input type="checkbox" checked={followLogs} onChange={event => setFollowLogs(event.target.checked)} /> Follow logs</label>
                   {(filter || severity !== 'trace' || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
                     setFilter(''); setSeverity('trace'); setKind('all'); setTimeRange('all'); setLogSelection(undefined);

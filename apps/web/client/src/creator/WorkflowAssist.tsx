@@ -84,6 +84,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const commandLauncher = useRef<HTMLButtonElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
+  const followTranscript = useRef(true);
   const [generate] = useDraftWorkflowMutation();
   const [validate] = useValidateWorkflowMutation();
   const [save] = useSaveWorkflowMutation();
@@ -116,13 +117,24 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
 
   useEffect(() => {
     const log = transcript.current;
-    if (open && log) log.scrollTop = log.scrollHeight;
+    if (open && log && followTranscript.current) log.scrollTop = log.scrollHeight;
   }, [messages, progress, openError, open]);
+
+  useEffect(() => {
+    const log = transcript.current;
+    if (!open || !log || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (followTranscript.current) log.scrollTop = log.scrollHeight;
+    });
+    observer.observe(log);
+    return () => observer.disconnect();
+  }, [open]);
 
   function close() {
     if (request.current) request.current.openWhenSaved = false;
     openRequest.current = null;
     setOpeningDraft(false);
+    followTranscript.current = true;
     setOpen(false);
     const trigger = commandLauncher.current?.getClientRects().length ? commandLauncher.current : launcher.current;
     trigger?.focus({ preventScroll: true });
@@ -181,6 +193,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
 
   function newChat() {
     if (request.current || openRequest.current) return;
+    followTranscript.current = true;
     dispatch(assistConversationCleared());
     setOpenError('');
     composer.current?.focus();
@@ -198,6 +211,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
 
   async function send(description: string) {
     if (!description || request.current) return;
+    followTranscript.current = true;
     const active: AssistRequest = { prompt: description, epoch: getSession().epoch, openWhenSaved: true };
     request.current = active;
     composer.current?.focus({ preventScroll: true });
@@ -359,7 +373,11 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
               </button>
             </div>
           </header>
-          <div className="assist-transcript" role="log" aria-label="Conversation" tabIndex={0} ref={transcript}>
+          <div className="assist-transcript" role="log" aria-label="Conversation" tabIndex={0} ref={transcript}
+            onScroll={event => {
+              const log = event.currentTarget;
+              followTranscript.current = log.scrollHeight - log.clientHeight - log.scrollTop <= 24;
+            }}>
             {messages.length === 0 && (
               <><p className="assist-intro">Describe what the agent should do, what it receives, and what it should return.</p>
               <div className="assist-starters" aria-label="Example prompts">
