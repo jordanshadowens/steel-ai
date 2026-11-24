@@ -1,4 +1,4 @@
-.operations { margin: 24px auto; width: min(calc(100% - 32px), 1440px); padding: 30px; background: #101827; color: #f4f7fc; border-radius: 14px; }
+.operations { margin-inline: auto; width: min(100%, 1500px); padding: clamp(16px, 2.6vw, 36px); color: #f4f7fc; }
 .operations :is(h1, h2, h3, p) { margin: 0; }
 .operations-heading, .run-heading, .log-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .operations-heading { padding-bottom: 22px; border-bottom: 1px solid #34435a; margin-bottom: 24px; }
@@ -17,7 +17,7 @@
 .run-heading h2, .run-id { overflow-wrap: anywhere; }
 .run-status { padding: 2px 9px; border: 1px solid #557097; border-radius: 6px; color: #b8ddff; font-size: 12px; }
 .run-id { font: 12px/1.5 ui-monospace, monospace; padding: 2px 0 14px; }
-.run-map { height: clamp(285px, 40vw, 460px); margin: 8px 0 22px; border: 1px solid #334763; border-radius: 8px; overflow: hidden; background: #0d1522; }
+.run-map { height: clamp(370px, 31svh + 11vw, 460px); margin: 8px 0 22px; border: 1px solid #334763; border-radius: 8px; overflow: hidden; background: #0d1522; }
 .run-map .react-flow { --xy-background-color: #0d1522; --xy-background-pattern-dots-color: #3b506e; }
 .map-step { display: grid; position: relative; width: 185px; min-height: 56px; padding: 9px 12px 9px 26px; background: #19273b; border: 1px solid #3d5475; border-radius: 6px; overflow-wrap: anywhere; }
 .map-step[aria-current=step] { border-color: #91cfff; }
@@ -38,10 +38,7 @@
 .run-logs time { color: #b5c3d7; }
 .run-logs [data-level=info] { color: #9ad7fc; }
 .run-logs [data-level=error] { color: #ffafab; }
-@media (max-width: 800px) { .operations { padding: 18px; margin-bottom: 42px; } }
 @media (max-width: 620px) {
-  header { flex-wrap: wrap; gap: 12px; }
-  nav { flex-wrap: wrap; }
   .operations-grid { grid-template-columns: 1fr; }
   .run-list { max-height: 160px; }
   .operations-heading { align-items: start; flex-direction: column; gap: 8px; }
@@ -101,7 +98,6 @@
 .run-beacon { z-index: 1; pointer-events: none; top: 15px; }
 .run-beacon::before { position: absolute; inset: -6px; content: ''; border: 1px solid #83fbc0; border-radius: 50%; animation: beacon 1.55s .25s ease-out infinite; }
 @media (prefers-reduced-motion: reduce) { .run-beacon::before { animation: none; } }
-@media (max-width: 620px) { .run-map { height: 440px; } }
 
 .run-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 8px; margin: 2px 0 18px; }
 .run-summary > div { display: grid; align-content: start; min-width: 0; gap: 4px; padding: 11px; background: #162236; border: 1px solid #344660; border-radius: 8px; }
@@ -117,7 +113,7 @@
   .run-explorer-filters select { min-width: 0; }
 }
 .run-log-inspect { appearance: none; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; font: inherit; }
-.run-log-inspect:hover, .run-log-inspect[aria-expanded=true] { color: #b8ddff; text-decoration: underline; }
+.run-log-inspect:hover, .run-log-inspect[data-selected=true] { color: #b8ddff; text-decoration: underline; }
 .run-log-detail { margin: auto; padding: 20px; width: min(580px, calc(100% - 32px)); max-height: calc(100dvh - 32px); overflow: auto; border-radius: 10px; border: 1px solid #557097; background: #162236; color: #f4f7fc; overflow-wrap: anywhere; }
 .run-log-detail::backdrop { background: rgb(5 11 20 / 70%); }
 .operations .run-log-detail > p { margin-block: 10px; }
@@ -147,4 +143,23 @@
 .run-investigation > div { min-width: 0; }
 @media (min-width: 1120px) {
   .operations-grid { grid-template-columns: minmax(170px, 230px) minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .run-log-detail[open] { animation: log-event-enter 160ms ease-out both; }
+  @keyframes log-event-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
+    .run-timings { interpolate-size: allow-keywords; }
+    .run-timings::details-content {
+      block-size: 0;
+      opacity: 0;
+      overflow: clip;
+      transition: block-size 210ms ease, opacity 170ms ease, content-visibility 210ms allow-discrete;
+    }
+    .run-timings[open]::details-content { block-size: auto; opacity: 1; }
+  }
 }

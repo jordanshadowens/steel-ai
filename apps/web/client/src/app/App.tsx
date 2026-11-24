@@ -135,7 +135,7 @@ function WorkspaceApp() {
           </button>
         </div>
       )}
-      <main className="shell-main" id="workspace-content" tabIndex={-1}>
+      <main className="shell-main" data-route={route} id="workspace-content" tabIndex={-1}>
           <div
             key={route}
             className="shell-page"

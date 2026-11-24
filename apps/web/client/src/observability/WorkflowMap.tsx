@@ -8,6 +8,7 @@ import {
   ReactFlow,
   useNodesInitialized,
   useReactFlow,
+  useUpdateNodeInternals,
   type Edge,
   type Node,
   type NodeProps,
@@ -30,8 +31,12 @@ type MapNode = Node<
 >;
 const finish = '__steel_workflow_finish__';
 
-function StepNode({ data }: NodeProps<MapNode>) {
+function StepNode({ id, data }: NodeProps<MapNode>) {
   const reduced = useReducedMotion();
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [data.compact, id, updateNodeInternals]);
   return (
     <div className="map-step" data-state={data.status} aria-current={data.current ? 'step' : undefined}>
       <Handle
@@ -73,6 +78,32 @@ function StepNode({ data }: NodeProps<MapNode>) {
 }
 
 const nodeTypes = { workflowStep: StepNode };
+
+function FitOnResize({ frame, compact }: {
+  frame: RefObject<HTMLDivElement | null>;
+  compact: boolean;
+}) {
+  const { fitView } = useReactFlow<MapNode>();
+  const reduced = useReducedMotion();
+  const ready = useNodesInitialized();
+  useEffect(() => {
+    const pane = frame.current;
+    if (!pane || !ready) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const observer = new ResizeObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void fitView({ padding: 0.18, maxZoom: 1, duration: reduced ? 0 : 220 });
+      }, 100);
+    });
+    observer.observe(pane);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
+  }, [compact, fitView, frame, ready, reduced]);
+  return null;
+}
 
 function FollowStep({stepId, frame}: {
   stepId?: string | null;
@@ -239,7 +270,6 @@ export default function WorkflowMap({
     <div className="run-map" role="region" aria-label="Workflow map" ref={frame}>
       <LayoutGroup id={runId}>
         <ReactFlow
-          key={compact ? 'vertical' : 'horizontal'}
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -252,6 +282,7 @@ export default function WorkflowMap({
           fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
         >
           <Controls showInteractive={false} />
+          <FitOnResize frame={frame} compact={compact} />
           <FollowStep stepId={beaconStep} frame={frame} />
         </ReactFlow>
       </LayoutGroup>

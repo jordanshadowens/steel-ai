@@ -237,6 +237,14 @@
   position: relative;
 }
 
+.shell-main[data-route='observability'] {
+  background: #101827;
+  color: #f4f7fc;
+  color-scheme: dark;
+}
+
+.shell-main[data-route='observability'] .shell-page { scrollbar-gutter: stable; }
+
 .shell-page {
   position: absolute;
   inset: 0;
