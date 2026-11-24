@@ -127,8 +127,8 @@
 @media (max-width: 620px) { .run-summary { grid-template-columns: repeat(2,minmax(0,1fr)); } }
 
 .run-timings { margin: 0 0 16px; padding: 10px 12px; background: #162236; border: 1px solid #344660; border-radius: 8px; }
-.run-timings summary { cursor: pointer; font-size: 13px; font-weight: 700; }
-.run-timings summary small { margin-inline-start: 6px; font-weight: 500; }
+.run-timings-toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; min-height: 30px; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; font-size: 13px; font-weight: 700; }
+.run-timings-toggle small { margin-inline-start: 6px; font-weight: 500; }
 .run-timings ol { display: grid; gap: 8px; padding: 0; margin: 12px 0 0; list-style: none; }
 .run-timings li { display: grid; grid-template-columns: minmax(84px,.65fr) minmax(40px,1fr) minmax(110px,.55fr); align-items: center; gap: 8px; font-size: 12px; }
 .run-timings li button { overflow-wrap: anywhere; }
@@ -152,14 +152,12 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  @supports (interpolate-size: allow-keywords) and selector(details::details-content) {
-    .run-timings { interpolate-size: allow-keywords; }
-    .run-timings::details-content {
-      block-size: 0;
-      opacity: 0;
-      overflow: clip;
-      transition: block-size 210ms ease, opacity 170ms ease, content-visibility 210ms allow-discrete;
-    }
-    .run-timings[open]::details-content { block-size: auto; opacity: 1; }
-  }
+  .run-timings-content { transition: grid-template-rows 210ms ease; }
+  .run-timings-chevron { transition: transform 210ms ease; }
 }
+
+.run-timings-content { display: grid; grid-template-rows: 0fr; }
+.run-timings-content[data-open=true] { grid-template-rows: 1fr; }
+.run-timings-content > div { min-height: 0; overflow: clip; }
+.run-timings-chevron { width: 7px; height: 7px; margin-inline-end: 3px; border: solid currentColor; border-width: 0 1px 1px 0; transform: rotate(45deg); }
+.run-timings-toggle[aria-expanded=true] .run-timings-chevron { transform: rotate(225deg); }

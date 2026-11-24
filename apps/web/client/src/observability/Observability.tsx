@@ -49,6 +49,7 @@ export function Observability() {
   const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
   const [inspectedLog, setInspectedLog] = useState(() => initialSearch.get('event') ?? undefined);
   const [refreshedAt, setRefreshedAt] = useState<number>();
+  const [timingOpen, setTimingOpen] = useState(false);
   const eventDialog = useRef<HTMLDialogElement>(null);
   const visibleRuns = runs.filter(run => {
     const search = runFilter.trim().toLowerCase();
@@ -304,9 +305,13 @@ export function Observability() {
                     />
                   </Suspense>
                 )}
-                {timings.length > 0 && <details className="run-timings">
-                  <summary>Step timing <small>{timings.length} {timings.length === 1 ? 'attempt' : 'attempts'}</small></summary>
-                  <ol aria-label="Step timing">
+                {timings.length > 0 && <div className="run-timings">
+                  <button className="run-timings-toggle" type="button" aria-expanded={timingOpen} aria-controls="step-timing-content" onClick={() => setTimingOpen(open => !open)}>
+                    <span>Step timing <small>{timings.length} {timings.length === 1 ? 'attempt' : 'attempts'}</small></span>
+                    <span className="run-timings-chevron" aria-hidden="true" />
+                  </button>
+                  <div className="run-timings-content" id="step-timing-content" data-open={timingOpen} inert={!timingOpen}>
+                  <div><ol aria-label="Step timing">
                     {timings.map((timing, index) => <li key={timing.step + ':' + index}>
                       <button type="button" className="run-log-inspect" title={timing.step} aria-pressed={logStep === timing.step}
                         onClick={() => setLogSelection(logStep === timing.step ? undefined : {runId:run.run_id, step:timing.step})}>{stepNames.get(timing.step) || timing.step}</button>
@@ -315,8 +320,9 @@ export function Observability() {
                       </span>
                       <small>{timing.duration >= 1000 ? (timing.duration/1000).toFixed(1) + ' s' : timing.duration + ' ms'} · {timing.status}</small>
                     </li>)}
-                  </ol>
-                </details>}
+                  </ol></div>
+                  </div>
+                </div>}
                 </div>
                 <div className="run-investigation-logs">
                 {displayed.logs === undefined && (
