@@ -1,0 +1,20 @@
+.workspace-settings > h1 { margin-bottom: 24px; }
+.workspace-settings-layout { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: start; }
+.workspace-settings-layout > nav { display: grid; position: sticky; top: 16px; border-inline-end: 1px solid var(--color-border); padding-inline-end: 12px; }
+.workspace-settings-layout > nav button { border: 0; border-radius: 6px; background: transparent; color: inherit; text-align: start; font: inherit; font-size: 13px; padding: 10px; cursor: pointer; }
+.workspace-settings-layout > nav button:is(:hover, :focus-visible) { background: var(--color-surface-raised); }
+.workspace-settings-list { border-top: 1px solid var(--color-border); }
+.workspace-setting { border-bottom: 1px solid var(--color-border); padding: 18px 0; scroll-margin-top: 12px; min-width: 0; }
+.workspace-setting-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.workspace-setting-heading p { overflow-wrap: anywhere; margin-bottom: 0; }
+.workspace-setting-heading button { flex: none; }
+.workspace-setting .workspace-token-form,
+.workspace-setting .workspace-key-list,
+.workspace-setting .workspace-keys-secret { margin: 16px 0 0; }
+.workspace-setting-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(95px, .33fr); gap: 12px; }
+.workspace-setting textarea { padding: 8px 10px; border: 1px solid var(--color-border); border-radius: 6px; width: 100%; background: var(--color-surface-raised); color: inherit; resize: vertical; font-family: monospace; }
+.workspace-setting-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 720px) {
+  .workspace-settings-layout { grid-template-columns: 1fr; gap: 12px; }
+  .workspace-settings-layout > nav { position: static; display: flex; flex-wrap: wrap; padding: 0; border: 0; }
+}

@@ -72,9 +72,9 @@ export function ApiKeys() {
     finally { changing.current = false; setBusy(false); }
   }
   const label = (key: Key) => key.name || (key.kind === 'developer' ? 'Developer key' : 'Account key');
-  return <section className="workspace-keys">
-    <header className="workspace-keys-title">
-      <div><h1>Personal access tokens</h1><p>Connect a local agent or integration to published workflows in this workspace.</p></div>
+  return <section className="workspace-setting" id="settings-tokens" tabIndex={-1} aria-labelledby="settings-tokens-title">
+    <header className="workspace-setting-heading">
+      <div><h2 id="settings-tokens-title">Personal access tokens</h2><p>Connect a local agent or integration to published workflows in this workspace.</p></div>
       <button className="btn btn-primary" type="button" disabled={busy || !!issued} onClick={() => setCreating(!creating)}>{creating ? 'Close form' : 'Create token'}</button>
     </header>
     {error && <p className="workspace-keys-error" role="alert">{error}</p>}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-keys' | 'connections';
+export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'settings';
 
 // History routing in production (/ → Creator). Before the route cutover the
 // bundle is served from /app/, where pathname routing cannot work, so the
@@ -8,18 +8,17 @@ export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-k
 export function parseRoute(): Route {
   const { pathname, hash } = window.location;
   if (pathname.startsWith('/app')) {
-    if (import.meta.env.VITE_STEEL_CLOUD === '1' && hash.split('?')[0] === '#/connections') return 'connections';
+    if (import.meta.env.VITE_STEEL_CLOUD === '1' && ['#/settings', '#/connections', '#/api-keys'].includes(hash.split('?')[0])) return 'settings';
     if (hash.startsWith('#/runner')) {
       return 'runner';
     }
-    if (hash.startsWith('#/api-keys')) return 'api-keys';
     if (hash.startsWith('#/observability')) return 'observability';
     if (hash.startsWith('#/designer')) {
       return 'designer';
     }
     return 'creator';
   }
-  if (pathname === '/api-keys') return 'api-keys';
+  if (import.meta.env.VITE_STEEL_CLOUD === '1' && ['/settings', '/connections', '/api-keys'].includes(pathname)) return 'settings';
   if (pathname === '/observability') return 'observability';
   if (pathname === '/runner' || pathname.startsWith('/runner/')) {
     return 'runner';

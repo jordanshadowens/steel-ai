@@ -11,8 +11,7 @@ import { store } from '../store/store';
 import { isDirty } from '../store/workflowEditor';
 
 const RunnerPage = lazy(() => import('../runner/RunnerPage').then(({ RunnerPage }) => ({ default: RunnerPage })));
-const ApiKeys = lazy(() => import('../cloud/ApiKeys').then(({ ApiKeys }) => ({ default: ApiKeys })));
-const Connections = lazy(() => import('../cloud/Connections').then(({ Connections }) => ({ default: Connections })));
+const Settings = lazy(() => import('../cloud/Settings').then(({ Settings }) => ({ default: Settings })));
 const Observability = lazy(() => import('../observability/Observability').then(({ Observability }) => ({ default: Observability })));
 const DesignerPage = lazy(() => import('../designer/DesignerPage').then(({ DesignerPage }) => ({ default: DesignerPage })));
 
@@ -21,7 +20,7 @@ const DESTINATIONS: Array<{ route: Route; label: string; compact?: string }> = [
   { route: 'runner', label: 'Workflow Runner', compact: 'Runner' },
   { route: 'designer', label: 'Data Designer', compact: 'Data' },
   { route: 'observability', label: 'Observability', compact: 'Monitor' },
-  { route: 'connections', label: 'Connections' },
+  { route: 'settings', label: 'Settings' },
 ];
 
 function followRoute(event: MouseEvent<HTMLAnchorElement>, route: Route) {
@@ -89,7 +88,7 @@ function WorkspaceApp() {
           )}
         </div>
         <nav aria-label="Primary">
-          {DESTINATIONS.filter(d => !['observability', 'connections'].includes(d.route) || import.meta.env.VITE_STEEL_CLOUD === '1').map((d) => (
+          {DESTINATIONS.filter(d => !['observability', 'settings'].includes(d.route) || import.meta.env.VITE_STEEL_CLOUD === '1').map((d) => (
             <a
               key={d.route}
               href={routeHref(d.route)}
@@ -110,7 +109,6 @@ function WorkspaceApp() {
               ) : d.label}
             </a>
           ))}
-          {import.meta.env.VITE_STEEL_CLOUD === '1' && <a className={route === 'api-keys' ? 'shell-link shell-link-active' : 'shell-link'} href={routeHref('api-keys')} aria-current={route === 'api-keys' ? 'page' : undefined} onClick={(event) => followRoute(event, 'api-keys')}>API keys</a>}
         </nav>
         <div className="shell-user">
           {session.mode === 'account' ? (
@@ -146,8 +144,7 @@ function WorkspaceApp() {
                 ? 'Workflow Creator'
                 : route === 'runner'
                   ? 'Workflow Runner'
-                  : route === 'observability' ? 'Observability' : route === 'api-keys' ? 'API keys'
-                    : route === 'connections' ? 'Connections' : 'Data Designer'
+                  : route === 'observability' ? 'Observability' : route === 'settings' ? 'Settings' : 'Data Designer'
             }
           >
             <WorkspaceViewBoundary>
@@ -156,8 +153,7 @@ function WorkspaceApp() {
               {route === 'runner' && <RunnerPage />}
               {route === 'designer' && <DesignerPage />}
               {route === 'observability' && <Observability />}
-              {route === 'api-keys' && import.meta.env.VITE_STEEL_CLOUD === '1' && <ApiKeys />}
-              {route === 'connections' && <Connections />}
+              {route === 'settings' && <Settings />}
             </Suspense>
             </WorkspaceViewBoundary>
           </div>
