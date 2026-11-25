@@ -1,4 +1,5 @@
 import { authenticatedFetch } from '../auth/session';
+import { runStatusLabel } from '../api/runStatus';
 export { isTerminalRun as terminal } from '../api/runStatus';
 
 export type Run = {
@@ -65,7 +66,7 @@ export const activeStep = (run: Run) =>
   ['running', 'local_running'].includes(run.status) ? run.current_step : null;
 
 export function runEntries(run: Run, calls: Entry[] = []): Entry[] {
-  const status = run.status.replaceAll('_', ' ');
+  const status = runStatusLabel(run.status);
   const hasHistory = calls.some((entry) => entry.kind === 'run');
   const failure = run.snapshot?.error;
   const entries: Entry[] = [
@@ -75,7 +76,7 @@ export function runEntries(run: Run, calls: Entry[] = []): Entry[] {
       level: 'info',
       message: 'Run created',
     },
-    ...calls,
+    ...calls.map(entry => entry.status === 'sealed' ? { ...entry, message: 'Run completed' } : entry),
   ];
   if (!hasHistory || failure) {
     entries.push({
