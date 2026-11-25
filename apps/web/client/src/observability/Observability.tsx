@@ -1,3 +1,4 @@
+import { useListRunsQuery, useListWorkflowsQuery } from '../api/steelApi';
 import { runStatusLabel } from '../api/runStatus';
 import { navigate, routeHref, routeSearch } from '../app/router';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
@@ -29,13 +30,17 @@ const demoRun: RunDetail = {
 export function Observability() {
   const initialSearch = routeSearch();
   const initialRun = initialSearch.get('run') || '';
-  const [runs, setRuns] = useState<Run[]>([]);
+  const runQuery = useListRunsQuery(undefined, { pollingInterval: 4000 });
+  const workflowQuery = useListWorkflowsQuery();
+  const runs = runQuery.data?.runs;
+  const names = new Map(workflowQuery.data?.workflows.map(workflow => [workflow.workflow_id, workflow.name || workflow.workflow_id]));
+  const recentRuns = [...(runs ?? [])].sort((a, b) =>
+    (b.created_at ?? '').localeCompare(a.created_at ?? '') || a.run_id.localeCompare(b.run_id),
+  );
   const [selected, select] = useState(initialRun);
   const [detail, setDetail] = useState<RunDetail>();
   const [definition, setDefinition] = useState<Definition>();
   const [error, setError] = useState('');
-  const [listError, setListError] = useState('');
-  const [listLoaded, setListLoaded] = useState(false);
   const [mapError, setMapError] = useState('');
   const [filter, setFilter] = useState('');
   const [severity, setSeverity] = useState<MinimumSeverity>('trace');
@@ -50,11 +55,14 @@ export function Observability() {
   const [refreshedAt, setRefreshedAt] = useState<number>();
   const [timingOpen, setTimingOpen] = useState(false);
   const eventDialog = useRef<HTMLDialogElement>(null);
-  const visibleRuns = runs.filter(run => {
-    const search = runFilter.trim().toLowerCase();
-    return (statusFilter === 'all' || runStatusLabel(run.status) === statusFilter) &&
-      (run.workflow_id.toLowerCase().includes(search) || run.run_id.toLowerCase().includes(search));
-  });
+  const statuses = [...new Set(recentRuns.map(run => runStatusLabel(run.status)))].sort();
+  const search = runFilter.trim().toLowerCase();
+  const visibleRuns = recentRuns.filter(run =>
+    (statusFilter === 'all' || runStatusLabel(run.status) === statusFilter) &&
+    [run.run_id, run.workflow_id, names.get(run.workflow_id)].some(value => value?.toLowerCase().includes(search)),
+  );
+  const showExample = statusFilter === 'all' && ('meta briefing example ' + demoId).includes(search);
+  const rows = showExample ? [...visibleRuns, demoRun.run] : visibleRuns;
 
   function chooseRun(id: string) {
     setLogViewPaused(undefined);
@@ -65,34 +73,8 @@ export function Observability() {
   }
 
   useEffect(() => {
-    const request = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    async function refresh() {
-      try {
-        const result = await runtime<{ runs: Run[] }>(
-          '/runs',
-          request.signal,
-        );
-        if (request.signal.aborted) return;
-        setRuns(result.runs);
-        setListLoaded(true);
-        setListError('');
-        select((id) => id || result.runs[0]?.run_id || demoId);
-      } catch (cause) {
-        if (!request.signal.aborted)
-          setListError(
-            cause instanceof Error ? cause.message : 'Could not load runs',
-          );
-      } finally {
-        if (!request.signal.aborted) timer = setTimeout(refresh, 4000);
-      }
-    }
-    void refresh();
-    return () => {
-      request.abort();
-      clearTimeout(timer);
-    };
-  }, []);
+    if (runs) select(id => id || runs[0]?.run_id || demoId);
+  }, [runs]);
 
   useEffect(() => {
     if (!selected || selected === demoId) return;
@@ -199,39 +181,37 @@ export function Observability() {
   return (
     <section id="observability" className="operations" aria-label="Workflow runs">
         <div className="operations-grid">
-          <aside aria-label="Recent runs">
-            <h2>Recent runs</h2>
-            <label>Find a run<input value={runFilter} placeholder="Workflow or run ID" onChange={event => setRunFilter(event.target.value)} /></label>
-            <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              {[...new Set(runs.map(item => runStatusLabel(item.status)))].sort().map(status => <option key={status} value={status}>{status}</option>)}
-            </select></label>
-            {runs.length > 0 && visibleRuns.length === 0 && <p>No matching runs.</p>}
-            <div className="run-list">
-            {visibleRuns.map((item) => (
-              <button
-                key={item.run_id}
-                onClick={() => chooseRun(item.run_id)}
-                aria-pressed={item.run_id === selected}
-              >
-                <strong>{item.workflow_id}</strong>
-                <small>
-                  {item.run_id.slice(0, 8)} · v{item.version} ·{' '}
-                  {runStatusLabel(item.status)}
-                </small>
-              </button>
-            ))}
+          <section className="recent-runs" aria-labelledby="recent-runs-title">
+            <div className="recent-runs-toolbar">
+              <h2 id="recent-runs-title">Recent runs</h2>
+              <label>Find a run<input value={runFilter} placeholder="Agent or run ID" onChange={event => setRunFilter(event.target.value)} /></label>
+              <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
+                <option value="all">All statuses</option>
+                {statuses.map(status => <option key={status} value={status}>{status}</option>)}
+              </select></label>
             </div>
-            {listError && <p role="status">{listError}</p>}
-            {!listLoaded && !listError && <p role="status">Loading runs…</p>}
-            {listLoaded && !runs.length && !listError && (
-              <p>No recent runs. Start a published workflow in the Creator.</p>
-            )}
-            <button type="button" aria-pressed={demo} onClick={() => chooseRun(demoId)}>
-              <strong>Meta briefing example</strong>
-              <small>Recorded run</small>
-            </button>
-          </aside>
+            {runQuery.isError && <p role="status">Could not refresh recent runs. <button type="button" className="run-link" onClick={runQuery.refetch}>Retry</button></p>}
+            <div className="run-table-viewport" role="region" aria-label="Scrollable recent runs" tabIndex={0}>
+              <table className="run-table" aria-labelledby="recent-runs-title">
+                <colgroup><col className="run-agent-column" /><col className="run-id-column" /><col className="run-time-column" /><col className="run-status-column" /></colgroup>
+                <thead><tr><th scope="col">Agent name</th><th scope="col">Run ID</th><th scope="col">Started</th><th scope="col">Status</th></tr></thead>
+                <tbody>
+                  {rows.map(item => {
+                    const example = item.run_id === demoId;
+                    const name = example ? 'Meta briefing example' : names.get(item.workflow_id) || item.workflow_id;
+                    const startedAt = example ? demoCapture.logs.find(entry => entry.at)?.at : item.created_at;
+                    return <tr key={item.run_id} data-selected={item.run_id === selected}>
+                      <td><button type="button" className="run-row-button" aria-pressed={item.run_id === selected} onClick={() => chooseRun(item.run_id)}>{name}</button></td>
+                      <td><code title={item.run_id}>{item.run_id}</code></td>
+                      <td>{startedAt ? <time dateTime={startedAt}>{new Date(startedAt).toLocaleString()}</time> : '—'}</td>
+                      <td>{example ? 'Recorded run' : runStatusLabel(item.status)}</td>
+                    </tr>;
+                  })}
+                  {!visibleRuns.length && <tr><td colSpan={4}>{runQuery.isLoading ? 'Loading runs…' : search || statusFilter !== 'all' ? 'No matching runs.' : 'No workspace runs yet.'}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
           <div className="operations-detail">
             {!demo && error && <p role="status">{error}</p>}
             {selected && !run && !error && <p role="status">Loading run…</p>}
