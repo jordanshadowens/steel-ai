@@ -1,3 +1,4 @@
+import { runStatusLabel } from '../api/runStatus';
 import { navigate, routeHref, routeSearch } from '../app/router';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import demoDefinition from '../creator/metaRadarExample.json';
@@ -41,8 +42,6 @@ export function Observability() {
   const [followLogs, setFollowLogs] = useState(true);
   const [runFilter, setRunFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [linkStatus, setLinkStatus] = useState('');
-  const [eventLinkStatus, setEventLinkStatus] = useState('');
   const [oldestFirst, setOldestFirst] = useState(false);
   const [kind, setKind] = useState('all');
   const [timeRange, setTimeRange] = useState('all');
@@ -53,12 +52,11 @@ export function Observability() {
   const eventDialog = useRef<HTMLDialogElement>(null);
   const visibleRuns = runs.filter(run => {
     const search = runFilter.trim().toLowerCase();
-    return (statusFilter === 'all' || run.status === statusFilter) &&
+    return (statusFilter === 'all' || runStatusLabel(run.status) === statusFilter) &&
       (run.workflow_id.toLowerCase().includes(search) || run.run_id.toLowerCase().includes(search));
   });
 
   function chooseRun(id: string) {
-    setLinkStatus('');
     setLogViewPaused(undefined);
     setInspectedLog(undefined);
     setRefreshedAt(undefined);
@@ -199,21 +197,14 @@ export function Observability() {
   const span = Math.max(1, lastEnd - firstStart);
 
   return (
-    <section id="observability" className="operations">
-      <div className="operations-heading">
-        <div>
-          <h1 id="observability-title" tabIndex={-1}>
-            Observability
-          </h1>
-        </div>
-      </div>
+    <section id="observability" className="operations" aria-label="Workflow runs">
         <div className="operations-grid">
           <aside aria-label="Recent runs">
             <h2>Recent runs</h2>
             <label>Find a run<input value={runFilter} placeholder="Workflow or run ID" onChange={event => setRunFilter(event.target.value)} /></label>
             <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
-              {[...new Set(runs.map(item => item.status))].sort().map(status => <option key={status} value={status}>{status.replaceAll('_', ' ')}</option>)}
+              {[...new Set(runs.map(item => runStatusLabel(item.status)))].sort().map(status => <option key={status} value={status}>{status}</option>)}
             </select></label>
             {runs.length > 0 && visibleRuns.length === 0 && <p>No matching runs.</p>}
             <div className="run-list">
@@ -226,7 +217,7 @@ export function Observability() {
                 <strong>{item.workflow_id}</strong>
                 <small>
                   {item.run_id.slice(0, 8)} · v{item.version} ·{' '}
-                  {item.status.replaceAll('_', ' ')}
+                  {runStatusLabel(item.status)}
                 </small>
               </button>
             ))}
@@ -251,27 +242,18 @@ export function Observability() {
                     {run.workflow_id} <small>v{run.version}</small>
                   </h2>
                   <span className="run-status" role="status" data-state={run.status}>
-                    {run.status.replaceAll('_', ' ')}
+                    {runStatusLabel(run.status)}
                     {run.current_step ? ' · ' + run.current_step : ''}
                   </span>
                 </div>
                 <div className="run-meta">
                   <p className="run-id">{demo ? 'Recorded with Meta using a sample maintenance update' : run.run_id}</p>
-                  <button type="button" className="run-link" onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(new URL(routeHref('observability', new URLSearchParams({run: run.run_id})), location.href).href);
-                      setLinkStatus('Run link copied.');
-                    } catch { setLinkStatus('Could not copy the run link.'); }
-                  }}>Copy run link</button>
-                  {linkStatus && <span role="status">{linkStatus}</span>}
                 </div>
                 <div className="run-summary" aria-label="Run summary">
                   <div><small>Completed steps</small><strong>{observedSteps}{displayedDefinition?.steps?.length ? ' / ' + displayedDefinition.steps.length : ''}</strong></div>
                   <div><small>Provider calls</small><strong>{providerCalls}</strong>
                     {usage.length > 0 && <small>{usage.reduce((sum, value) => sum + Number(value), 0).toLocaleString()} tokens reported</small>}</div>
                   <div><small>Error events</small><strong>{errors}</strong></div>
-                  <div><small>Updates</small><strong>{demo ? 'Recorded' : terminal(run.status) ? 'Finished' : error ? 'Reconnecting' : 'Live'}</strong>
-                    {!demo && refreshedAt && <small>{new Date(refreshedAt).toLocaleTimeString()}</small>}</div>
                 </div>
                 <div className="run-investigation">
                 <div className="run-investigation-graph">
@@ -368,26 +350,18 @@ export function Observability() {
                 <RunLogList entries={oldestFirst ? logs : [...logs].reverse()}
                   following={followLogs && !paused && !demo && !terminal(run.status)} newestFirst={!oldestFirst} selected={inspectedLog}
                   onLeaveTail={() => setFollowLogs(false)}
-                  inspect={entry => {setEventLinkStatus(''); setInspectedLog(String(entry.id) === inspectedLog ? undefined : String(entry.id));}} />
+                  inspect={entry => setInspectedLog(String(entry.id))} />
                 {logDetail && <dialog ref={eventDialog} className="run-log-detail" aria-labelledby="log-event-title" onClose={() => setInspectedLog(undefined)}>
-                  <div><h3 id="log-event-title">Log event</h3><span className="run-log-detail-actions">
-                    <button type="button" className="run-link" onClick={async () => {
-                      try {
-                        const params = new URLSearchParams({run:run.run_id, event:String(logDetail.id)});
-                        await navigator.clipboard.writeText(new URL(routeHref('observability', params), location.href).href);
-                        setEventLinkStatus('Event link copied.');
-                      } catch { setEventLinkStatus('Could not copy the event link.'); }
-                    }}>Copy event link</button>
+                  <div><h3 id="log-event-title">Log event</h3>
                     <button type="button" className="run-link" autoFocus onClick={() => eventDialog.current?.close()}>Close</button>
-                  </span></div>
-                  {eventLinkStatus && <small role="status">{eventLinkStatus}</small>}
+                  </div>
                   <p>{logDetail.message}</p>
                   {logDetail.completion && <p>{logDetail.completion}</p>}
                   {logDetail.result_excerpt && <><h4>Step conclusion</h4><p>{logDetail.result_excerpt}</p></>}
                   <dl><dt>Severity</dt><dd>{logDetail.level.toUpperCase()}</dd><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
                   {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
                   {logDetail.step_id && <><dt>Step</dt><dd>{stepNames.get(logDetail.step_id) ?? logDetail.step_id}</dd></>}
-                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status.replaceAll('_', ' ')}</dd></>}</dl>
+                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status === 'sealed' ? 'Run completed' : logDetail.status.replaceAll('_', ' ')}</dd></>}</dl>
                 </dialog>}
                 </div>
                 </div>
