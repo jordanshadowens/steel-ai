@@ -12,6 +12,8 @@ import {
   useValidateWorkflowMutation,
 } from '../api/steelApi';
 import { ModalDialog } from '../app/FocusTrap';
+import { routeHref } from '../app/router';
+import { useConnectionStatus } from '../cloud/connectionStatus';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { RootState } from '../store/store';
 import {
@@ -74,6 +76,9 @@ function DraftMessage({ row, opened, onOpen, loading }: {
 
 export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const [open, setOpen] = useState(false);
+  const cloud = import.meta.env.VITE_STEEL_CLOUD === '1';
+  const {status: connections, error: connectionError} = useConnectionStatus(cloud && open);
+  const providerReady = !cloud || Boolean(connections?.ai);
   const [progress, setProgress] = useState<keyof typeof progressLabels | null>(null);
   const [draftToOpen, setDraftToOpen] = useState<WorkflowVersionRow | null>(null);
   const [openingDraft, setOpeningDraft] = useState(false);
@@ -96,8 +101,8 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const workflowVersion = useAppSelector((state) => state.workflowEditor.openVersion);
 
   useEffect(() => {
-    if (open) composer.current?.focus({ preventScroll: true });
-  }, [open]);
+    if (open && providerReady) composer.current?.focus({ preventScroll: true });
+  }, [open, providerReady]);
 
   useEffect(() => () => {
     const active = request.current;
@@ -210,6 +215,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   }
 
   async function send(description: string) {
+    if (!providerReady) return;
     if (!description || request.current) return;
     followTranscript.current = true;
     const active: AssistRequest = { prompt: description, epoch: getSession().epoch, openWhenSaved: true };
@@ -378,7 +384,13 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
               const log = event.currentTarget;
               followTranscript.current = log.scrollHeight - log.clientHeight - log.scrollTop <= 24;
             }}>
-            {messages.length === 0 && (
+            {!providerReady && (
+              <p className="assist-intro" role="status">
+                {connectionError ? 'Unable to check the AI provider. ' : connections ? 'No AI provider configured. ' : 'Checking AI provider… '}
+                <a href={routeHref('settings', new URLSearchParams({section: 'ai'}))}>Open AI provider settings</a>
+              </p>
+            )}
+            {providerReady && messages.length === 0 && (
               <><p className="assist-intro">Describe what the agent should do, what it receives, and what it should return.</p>
               <div className="assist-starters" aria-label="Example prompts">
                 {starters.map((starter) => (
@@ -415,7 +427,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
             )}
             {openError && <p className="assist-open-error" role="alert">{openError}</p>}
           </div>
-          <form className="assist-composer" onSubmit={submit}>
+          {providerReady && <form className="assist-composer" onSubmit={submit}>
             <label className="assist-sr-only" htmlFor="workflow-assist-prompt">Message AI Assist</label>
             <textarea id="workflow-assist-prompt" ref={composer} rows={2} maxLength={4000}
               placeholder={previous ? 'Ask for a change…' : clarifications.length ? 'Reply to AI Assist…' : 'Describe a workflow…'}
@@ -441,7 +453,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
                 </svg>
               </button>
             )}
-          </form>
+          </form>}
         </section>
       )}
       {draftToOpen && createPortal(

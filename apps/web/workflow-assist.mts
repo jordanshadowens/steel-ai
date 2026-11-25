@@ -75,13 +75,15 @@ function parseClarifications(value: unknown) {
 export async function handleWorkflowAssist(
   req: IncomingMessage,
   res: ServerResponse,
-  {runtime, origin, env, requireBearer = false, authorization: forwardedAuthorization, complete = completeWithConfiguredProvider}: {
+  {runtime, origin, env, requireBearer = false, authorization: forwardedAuthorization, complete = completeWithConfiguredProvider,
+    configError = 'Check the model provider URL, model and key in your Steel configuration.'}: {
     runtime: string;
     origin: string | undefined;
     env: NodeJS.ProcessEnv;
     requireBearer?: boolean;
     authorization?: string;
     complete?: typeof completeWithConfiguredProvider;
+    configError?: string;
   },
 ) {
   const request = new AbortController();
@@ -148,7 +150,7 @@ export async function handleWorkflowAssist(
   ], request.signal);
   if (request.signal.aborted) return;
   if (result.kind === 'config-error') {
-    return reply(503, { error: 'Check the model provider URL, model and key in your Steel configuration.' });
+    return reply(503, { error: configError });
   }
   if (result.kind === 'provider-error') {
     return reply(502, { error: 'The configured model provider did not return a completion. Check its availability and try again.' });

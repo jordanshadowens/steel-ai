@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { routeHref } from '../app/router';
+import { useConnectionStatus } from '../cloud/connectionStatus';
 import type {
   DesignerPublishResult,
   DesignerRecord,
@@ -48,6 +50,8 @@ async function run<T>(
 }
 
 export function DesignerPage() {
+  const cloud = import.meta.env.VITE_STEEL_CLOUD === '1';
+  const {status: connections, error: connectionError} = useConnectionStatus(cloud);
   const [showArchived, setShowArchived] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('schema');
@@ -67,8 +71,9 @@ export function DesignerPage() {
     showArchived ? { include_archived: true } : undefined,
   );
   const types = typesQ.data?.types ?? [];
-  const localModels = typesQ.data?.backend === 'pydantic-postgresql';
-  const selected = localModels ? (selectedId ?? types[0]?.type_id ?? null) : null;
+  const postgresModels = typesQ.data?.backend === 'pydantic-postgresql';
+  const modelEditorAvailable = postgresModels || (cloud && typesQ.isSuccess);
+  const selected = modelEditorAvailable ? (selectedId ?? types[0]?.type_id ?? null) : null;
   const detailQ = useGetDesignerTypeQuery(selected ?? '', { skip: !selected });
   const detail = detailQ.data?.type ?? null;
   const liveSpecQ = useGetDesignerVersionQuery(
@@ -99,7 +104,7 @@ export function DesignerPage() {
   const [updateRecord, updating] = useUpdateDesignerRecordMutation();
   const [deleteRecord] = useDeleteDesignerRecordMutation();
   const [queryRecords] = useQueryDesignerRecordsMutation();
-  if (!localModels) {
+  if (!modelEditorAvailable) {
     return (
       <section className="section-card">
         <h1>Data models</h1>
@@ -107,6 +112,8 @@ export function DesignerPage() {
           <p role="status">Connecting to Data Designer…</p>
         ) : typesQ.error ? (
           <p className="field-error" role="alert">{apiMessage(typesQ.error)}</p>
+        ) : cloud ? (
+          <p>The workspace database is unavailable. <a href={routeHref('settings', new URLSearchParams({section: 'database'}))}>Open database settings</a></p>
         ) : (
           <p>
             Set <code>DATABASE_URL</code> in the Workflow Creator <code>.env</code>{' '}
@@ -140,7 +147,12 @@ export function DesignerPage() {
     <div className="designer-page model-workspace">
       <header className="model-workspace-heading">
         <h1>Data models</h1>
-        <p>Define the fields and validation rules for records in PostgreSQL.</p>
+        <p>Define the fields and validation rules for records in {postgresModels ? 'PostgreSQL' : 'your workspace SQLite database'}.</p>
+        {cloud && <p>
+          {connectionError ? 'Unable to check the PostgreSQL connection. ' :
+            connections && !connections.database ? 'No PostgreSQL connection configured. SQLite is ready to use. ' : ''}
+          <a href={routeHref('settings', new URLSearchParams({section: 'database'}))}>Open database settings</a>
+        </p>}
       </header>
       <TypeList
         types={types}
