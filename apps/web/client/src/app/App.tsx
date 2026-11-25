@@ -12,6 +12,7 @@ import { isDirty } from '../store/workflowEditor';
 
 const RunnerPage = lazy(() => import('../runner/RunnerPage').then(({ RunnerPage }) => ({ default: RunnerPage })));
 const ApiKeys = lazy(() => import('../cloud/ApiKeys').then(({ ApiKeys }) => ({ default: ApiKeys })));
+const Connections = lazy(() => import('../cloud/Connections').then(({ Connections }) => ({ default: Connections })));
 const Observability = lazy(() => import('../observability/Observability').then(({ Observability }) => ({ default: Observability })));
 const DesignerPage = lazy(() => import('../designer/DesignerPage').then(({ DesignerPage }) => ({ default: DesignerPage })));
 
@@ -20,6 +21,7 @@ const DESTINATIONS: Array<{ route: Route; label: string; compact?: string }> = [
   { route: 'runner', label: 'Workflow Runner', compact: 'Runner' },
   { route: 'designer', label: 'Data Designer', compact: 'Data' },
   { route: 'observability', label: 'Observability', compact: 'Monitor' },
+  { route: 'connections', label: 'Connections' },
 ];
 
 function followRoute(event: MouseEvent<HTMLAnchorElement>, route: Route) {
@@ -87,7 +89,7 @@ function WorkspaceApp() {
           )}
         </div>
         <nav aria-label="Primary">
-          {DESTINATIONS.filter(d => d.route !== 'observability' || import.meta.env.VITE_STEEL_CLOUD === '1').map((d) => (
+          {DESTINATIONS.filter(d => !['observability', 'connections'].includes(d.route) || import.meta.env.VITE_STEEL_CLOUD === '1').map((d) => (
             <a
               key={d.route}
               href={routeHref(d.route)}
@@ -144,7 +146,8 @@ function WorkspaceApp() {
                 ? 'Workflow Creator'
                 : route === 'runner'
                   ? 'Workflow Runner'
-                  : route === 'observability' ? 'Observability' : route === 'api-keys' ? 'API keys' : 'Data Designer'
+                  : route === 'observability' ? 'Observability' : route === 'api-keys' ? 'API keys'
+                    : route === 'connections' ? 'Connections' : 'Data Designer'
             }
           >
             <WorkspaceViewBoundary>
@@ -154,6 +157,7 @@ function WorkspaceApp() {
               {route === 'designer' && <DesignerPage />}
               {route === 'observability' && <Observability />}
               {route === 'api-keys' && import.meta.env.VITE_STEEL_CLOUD === '1' && <ApiKeys />}
+              {route === 'connections' && <Connections />}
             </Suspense>
             </WorkspaceViewBoundary>
           </div>

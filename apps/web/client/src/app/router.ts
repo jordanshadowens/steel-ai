@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-keys';
+export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-keys' | 'connections';
 
 // History routing in production (/ → Creator). Before the route cutover the
 // bundle is served from /app/, where pathname routing cannot work, so the
@@ -8,6 +8,7 @@ export type Route = 'creator' | 'runner' | 'designer' | 'observability' | 'api-k
 export function parseRoute(): Route {
   const { pathname, hash } = window.location;
   if (pathname.startsWith('/app')) {
+    if (import.meta.env.VITE_STEEL_CLOUD === '1' && hash.split('?')[0] === '#/connections') return 'connections';
     if (hash.startsWith('#/runner')) {
       return 'runner';
     }
