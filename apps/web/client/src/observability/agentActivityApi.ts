@@ -19,9 +19,12 @@ export type AgentRun = {
 export type Trace = {trace_id: string; span_id: string; parent_span_id?: string};
 export type Verification = {status: string; method?: string; expected?: unknown; observed?: unknown; timestamp?: string};
 export type MonitoredAgent = { id: string; name: string; runs: AgentRun[]; sourceAvailable?: boolean;
-  nextPageToken?: string; schedule?: {state?: string; next?: string} };
+  nextPageToken?: string; schedule?: {state?: string; next?: string};
+  reliability?: 'schedule_overdue' | 'execution_timed_out' | 'heartbeat_expired';
+  alerts?: {code: string; severity: string; executionId?: string; count?: number}[] };
 export type Checkpoint = {
   id: string;
+  executionId?: string;
   timestamp: string;
   step: string;
   severity: string;

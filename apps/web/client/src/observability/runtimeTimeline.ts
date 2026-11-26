@@ -6,6 +6,7 @@ import type { Trace, Verification } from './agentActivityApi';
 type RuntimeEvent = Entry & {
   trace?: Trace;
   duration_ms?: number;
+  usage?: {tokens: number};
   evidence?: {result?: string; reason?: string; policy?: string; outputs?: unknown; verification?: Verification};
 };
 type Cursor = {event: number; tool: number};
@@ -74,6 +75,9 @@ export function useRuntimeTimeline(runId?: string) {
       trace:recorded.trace, verification:recorded.evidence?.verification,
       details:{outputs:recorded.evidence?.outputs, policy:recorded.evidence?.policy}};
   }) : [];
+  const usage = [...new Map(original.map(event => [event.id, event])).values()]
+    .flatMap(event => event.usage ? [event.usage.tokens] : []);
   return {run:current?.run, events, error, loading:Boolean(runId && !current && !error), canPage, paging, loadMore,
+    reportedTokens:usage.length ? usage.reduce((sum, value) => sum + value, 0) : undefined,
     retry: () => setRefresh(current => current + 1)};
 }

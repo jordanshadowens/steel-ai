@@ -14,6 +14,8 @@ function statusLabel(status?: string) {
 
 function operationalState(agent: MonitoredAgent, run?: AgentRun) {
   if (agent.sourceAvailable === false) return 'Unknown';
+  if (agent.reliability === 'heartbeat_expired') return 'Stalled';
+  if (agent.reliability === 'execution_timed_out') return 'Failed';
   if (run?.status === 'started')
     return run.heartbeatAware && Date.now() - Date.parse(run.timestamp) <= 60000 ? 'Running' : 'Unknown';
   if (run?.status === 'waiting' || run?.status === 'retrying') return statusLabel(run.status);
@@ -41,6 +43,10 @@ function AgentOverview({agents, loading, failed, retry, select}: {
         const eligible = terminal.filter(item => item.verification?.status !== 'not_applicable');
         const state = operationalState(agent, run);
         const health = agent.sourceAvailable === false ? 'Log source unavailable'
+          : agent.reliability ? ({
+            schedule_overdue:'Scheduler attempt overdue', execution_timed_out:'Execution timed out',
+            heartbeat_expired:'Active execution heartbeat expired',
+          })[agent.reliability]
           : !run ? 'No recent executions'
           : state === 'Failed' || state === 'Degraded' ? state
           : run.verification?.status === 'verified_success' ? 'Verified check passed' : 'Unknown';

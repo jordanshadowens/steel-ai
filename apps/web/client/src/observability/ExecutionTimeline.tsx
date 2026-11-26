@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
 import { RecordedTable, approved, objectValue } from './RunData';
+import { MemorySimulation } from './MemorySimulation';
 import type { Checkpoint, Trace, Verification } from './agentActivityApi';
 
 export const title = (value?: string) => value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : 'Not recorded';
@@ -11,6 +12,7 @@ export function Timestamp({value}: {value?: string}) {
 
 export type TimelineEvent = {
   id: string; time?: string; step: string; source: string; severity: string;
+  executionId?: string;
   status?: string; duration?: number; result?: string; why?: string; trace?: Trace;
   links?: Trace[]; verification?: Verification; details?: Record<string, unknown>;
 };
@@ -19,7 +21,7 @@ export function checkpointEvent(entry: Checkpoint): TimelineEvent {
   const output = objectValue(entry.outputs) ? entry.outputs : undefined;
   const result = output?.outcome ?? output?.status ?? (output?.ready !== undefined ? (output.ready ? 'Ready' : 'Readiness checks failed') : undefined);
   return {
-    id: 'agent:' + entry.id, time: entry.timestamp, step: title(entry.step), source: title(entry.source ?? 'agent'),
+    id: 'agent:' + entry.id, executionId:entry.executionId, time: entry.timestamp, step: title(entry.step), source: title(entry.source ?? 'agent'),
     severity: entry.severity, status: entry.status, duration: entry.duration,
     result: typeof result === 'string' ? title(result) : undefined, why: entry.reason,
     trace: entry.trace, links: entry.spanLinks, verification: entry.verification,
@@ -65,8 +67,9 @@ function spans(events: TimelineEvent[], collapsed: Set<string>) {
   return {rows, children};
 }
 
-export function ExecutionTimeline({events, loading, failed, retry, initialEvent}: {
+export function ExecutionTimeline({events, loading, failed, retry, initialEvent, openExecution}: {
   events: TimelineEvent[]; loading?: boolean; failed?: boolean; retry?: () => void; initialEvent?: string;
+  openExecution?: (executionId: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(initialEvent ? [initialEvent] : []));
   const [collapsed, setCollapsed] = useState(new Set<string>());
@@ -116,7 +119,10 @@ export function ExecutionTimeline({events, loading, failed, retry, initialEvent}
             <td>{event.source}</td><td>{event.severity}</td><td>{title(event.status)}</td><td>{duration(event.duration)}</td>
             <td>{event.result ?? 'Not recorded'}</td><td>{event.why ?? 'Not recorded'}</td></tr>
           {expanded.has(event.id) && <tr className="obs-evidence"><td colSpan={8}>
+            {event.executionId && openExecution && <button type="button" className="run-link"
+              onClick={() => openExecution(event.executionId!)}>Open execution</button>}
             <RecordedTable value={{...event.details, verification:event.verification, trace:event.trace, span_links:event.links}} />
+            <MemorySimulation event={event} events={ordered} />
             <details><summary>View redacted event data</summary>
               <pre>{JSON.stringify(approved(event), null, 2)}</pre></details>
           </td></tr>}
