@@ -2,8 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { completeWithConfiguredProvider } from './assist-provider.mjs';
 
-const instructions = `You author draft workflows for Steel Workflow Creator.
+const instructions = `You author draft workflows and data models for Steel.
 Return one JSON object with no surrounding commentary.
+For a request to create a data model, return {"dataModel":{"name":"Purchase Request","fields":[{"name":"amount","ftype":"decimal","required":true}]}}.
+Model fields use name (an ASCII identifier), ftype (text, integer, decimal, boolean, date, timestamp, or enum), and optional boolean required, unique, and repeated. For enum fields provide validation.options as an array of strings. Repeated fields cannot be unique. Create one model with fields per response. Ask which model to create first if more than one is requested. Do not generate records, relationships, or changes to existing data models. An explicit request for a data model takes precedence over earlier workflow context.
 When given a previous draft, apply the user's requested revisions. Preserve its workflow ID and unrelated steps.
 If an essential detail is missing, ask one focused question with {"message":"Your question"}.
 When the user asks about the draft without requesting changes, answer with {"message":"Your answer"}.
@@ -70,6 +72,35 @@ function parseClarifications(value: unknown) {
       { role: 'assistant' as const, content: JSON.stringify({ message: turn.reply }) },
     ];
   }).flat();
+}
+
+function parseDataModel(value: unknown) {
+  if (!isObject(value) || typeof value.name !== 'string' || !value.name.trim() ||
+    value.name.trim().length > 80 || !Array.isArray(value.fields) || !value.fields.length || value.fields.length > 50) {
+    throw new Error('Invalid data model.');
+  }
+  const names = new Set<string>();
+  const fields = value.fields.map((field: unknown) => {
+    if (!isObject(field) || typeof field.name !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field.name) ||
+      names.has(field.name) || typeof field.ftype !== 'string' ||
+      !['text', 'integer', 'decimal', 'boolean', 'date', 'timestamp', 'enum'].includes(field.ftype) ||
+      [field.required, field.unique, field.repeated].some((flag) => flag !== undefined && typeof flag !== 'boolean') ||
+      (field.unique && field.repeated)) {
+      throw new Error('Invalid data model field.');
+    }
+    names.add(field.name);
+    const options: unknown = isObject(field.validation) ? field.validation.options : undefined;
+    if (field.ftype === 'enum' && (!Array.isArray(options) || !options.length || options.length > 50 ||
+      options.some((option) => typeof option !== 'string' || !option.trim() || option.length > 120) ||
+      new Set(options).size !== options.length)) {
+      throw new Error('Invalid enum choices.');
+    }
+    return {
+      name: field.name, ftype: field.ftype, required: field.required === true, unique: field.unique === true,
+      repeated: field.repeated === true, default: null, validation: field.ftype === 'enum' ? { options } : {},
+    };
+  });
+  return { format: 'steel-schema/1', types: [{ name: value.name.trim(), fields, relationships: [] }] };
 }
 
 export async function handleWorkflowAssist(
@@ -161,11 +192,14 @@ export async function handleWorkflowAssist(
       resultObject.message.trim() && resultObject.message.length <= 2000) {
       return reply(200, { message: resultObject.message.trim() });
     }
+    if (Object.hasOwn(resultObject, 'dataModel')) {
+      return reply(200, { modelSchema: parseDataModel(resultObject.dataModel) });
+    }
     const definition = parseWorkflowDraft(resultObject);
     if (previous) definition.workflow_id = previous.workflow_id;
     return reply(200, { definition });
   } catch {
-    return reply(502, { error: 'The model returned an invalid workflow. Try rephrasing the description.' });
+    return reply(502, { error: 'The provider returned an invalid draft. Try rephrasing the description.' });
   }
 }
 

@@ -237,7 +237,45 @@ def field_change(conn, entry, field, body):
     return {"ok": True, "field": field}
 
 
+def import_model(conn, body, validate_only):
+    doc = body.get("doc")
+    types = doc.get("types") if isinstance(doc, dict) and doc.get("format") == "steel-schema/1" else None
+    if not isinstance(types, list) or len(types) != 1 or not isinstance(types[0], dict):
+        raise RequestError("Local Data Designer imports one model at a time.")
+    model = types[0]
+    name = model.get("name")
+    fields = model.get("fields")
+    if (not isinstance(name, str) or not name.strip() or len(name) > 80
+            or not isinstance(fields, list) or not 1 <= len(fields) <= 50
+            or model.get("relationships") or body.get("prefix")):
+        raise RequestError("Provide one named model with fields and no relationships or prefix.")
+    name = name.strip()
+    prepared = []
+    for position, field in enumerate(fields):
+        if (not isinstance(field, dict) or not isinstance(field.get("name"), str)
+                or not isinstance(field.get("ftype"), str)
+                or not isinstance(field.get("validation", {}), dict)
+                or any(not isinstance(field.get(key, False), bool) for key in ("required", "unique", "repeated"))
+                or (field.get("unique") and field.get("repeated"))):
+            raise RequestError("Invalid model field.")
+        prepared.append({
+            "name": field["name"], "ftype": field["ftype"], "required": field.get("required", False),
+            "unique": field.get("unique", False), "repeated": field.get("repeated", False),
+            "default": field.get("default"), "validation": field.get("validation", {}),
+            "status": "active", "position": position, "field_id": uuid4().hex,
+        })
+    model_for(prepared)
+    if validate_only:
+        taken = conn.execute("SELECT 1 FROM steel_designer.types WHERE name = %s", (name,)).fetchone()
+        return {"ok": not taken, "errors": [], "warnings": [], "creates": [] if taken else [name],
+                "conflicts": [{"name": name, "reason": "name already exists"}] if taken else []}
+    result = new_type(conn, name, prepared)
+    return {"ok": True, "created": [{"name": name, "type_id": result["type"]["type_id"]}], "relationships": 0}
+
+
 def handle(conn, method, parts, query, body):
+    if method == "POST" and parts in (["import"], ["import", "validate"]):
+        return import_model(conn, body, parts == ["import", "validate"])
     if parts in (["workspace"], ["types"]) and method == "GET":
         rows = conn.execute("SELECT data FROM steel_designer.types ORDER BY name").fetchall()
         return {"workspace": WORKSPACE, "backend": "pydantic-postgresql", "types": [detail(row["data"]) for row in rows

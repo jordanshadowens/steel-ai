@@ -7,12 +7,14 @@ import { getSession, sessionIsCurrent } from '../auth/session';
 import {
   steelApi,
   useDraftWorkflowMutation,
+  useImportDesignerSchemaMutation,
   useSaveWorkflowMutation,
   useSaveWorkflowVersionMutation,
   useValidateWorkflowMutation,
+  useValidateDesignerImportMutation,
 } from '../api/steelApi';
 import { ModalDialog } from '../app/FocusTrap';
-import { routeHref } from '../app/router';
+import { navigate, routeHref } from '../app/router';
 import { useConnectionStatus } from '../cloud/connectionStatus';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import type { RootState } from '../store/store';
@@ -30,6 +32,8 @@ const progressLabels = {
   generate: 'Designing workflow',
   revise: 'Revising draft',
   validate: 'Checking workflow',
+  validateModel: 'Checking data model',
+  saveModel: 'Saving data model draft',
   save: 'Saving draft',
   confirm: 'Checking whether the draft was saved',
 };
@@ -37,6 +41,7 @@ const progressLabels = {
 const starters = [
   'Route purchase requests for approval',
   'Summarize a customer support request',
+  'Create a data model for purchase requests',
 ];
 
 function Sparkle() {
@@ -92,6 +97,8 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const followTranscript = useRef(true);
   const [generate] = useDraftWorkflowMutation();
   const [validate] = useValidateWorkflowMutation();
+  const [validateModel] = useValidateDesignerImportMutation();
+  const [importModel] = useImportDesignerSchemaMutation();
   const [save] = useSaveWorkflowMutation();
   const [saveVersion] = useSaveWorkflowVersionMutation();
   const dispatch = useAppDispatch();
@@ -227,6 +234,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
     setProgress(previous ? 'revise' : 'generate');
     const before = store.getState().workflowEditor;
     const base = previous;
+    let creatingModel = false;
     try {
       const currentBase = base && before.draft?.workflow_id === base.workflow_id &&
         before.openVersion !== null && before.openVersion >= base.version && !isDirty(before)
@@ -242,6 +250,30 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
       if (!isCurrent()) return;
       if ('message' in result) {
         dispatch(assistReplyAdded({ prompt: description, reply: result.message }));
+        return;
+      }
+      if ('modelSchema' in result) {
+        creatingModel = true;
+        const payload = { doc: result.modelSchema };
+        setProgress('validateModel');
+        const check = validateModel(payload);
+        active.abort = check.abort;
+        const report = await check.unwrap();
+        if (!isCurrent()) return;
+        if (!report.ok) {
+          const issues = [
+            ...report.errors.map(({ message }) => message),
+            ...report.conflicts.map(({ name, reason }) => `${name}: ${reason}`),
+          ];
+          throw new Error(issues.slice(0, 2).join(' ') || 'The generated data model did not pass validation.');
+        }
+        active.abort = undefined;
+        setProgress('saveModel');
+        const saved = await importModel(payload).unwrap();
+        if (!isCurrent()) return;
+        const model = saved.created?.[0];
+        if (!saved.ok || !model) throw new Error('Could not confirm the save. Check Data Designer for the draft.');
+        dispatch(assistMessageAdded({ kind: 'model', name: model.name, id: model.type_id }));
         return;
       }
       const definition = currentBase ? {
@@ -304,7 +336,9 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
       if (!isCurrent()) return;
       const response = cause as { status?: number | string; originalStatus?: number } | null;
       let text: string;
-      if (response?.status === 409) {
+      if (creatingModel) {
+        text = workflowErrorMessage(cause) || 'Could not save the data model. Check Data Designer before trying again.';
+      } else if (response?.status === 409) {
         text = base ? 'This draft could not be updated. Check its status in the workflow library.'
           : 'That workflow ID already exists. Try specifying a different ID.';
       } else if (response?.status === 404 || response?.originalStatus === 404) {
@@ -391,7 +425,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
               </p>
             )}
             {providerReady && messages.length === 0 && (
-              <><p className="assist-intro">Describe what the agent should do, what it receives, and what it should return.</p>
+              <><p className="assist-intro">Describe a workflow or a data model you want to create.</p>
               <div className="assist-starters" aria-label="Example prompts">
                 {starters.map((starter) => (
                   <button type="button" key={starter} onClick={() => {
@@ -408,6 +442,19 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
                   <DraftMessage row={message.row} opened={message.opened} loading={openingDraft}
                     onOpen={workflowId === message.row.workflow_id && workflowVersion === message.row.version
                       ? undefined : () => requestOpenDraft(message.row)} />
+                ) : message.kind === 'model' ? (
+                  <div className="assist-draft">
+                    <strong>{message.name}</strong>
+                    <span>Data model draft</span>
+                    <a className="assist-text-button" href={routeHref('designer', new URLSearchParams({ model: message.id }))}
+                      onClick={(event) => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+                        event.preventDefault();
+                        navigate('designer', new URLSearchParams({ model: message.id }));
+                      }}>
+                      Open in Data Designer
+                    </a>
+                  </div>
                 ) : (
                   <p><span className="assist-sr-only">{message.kind === 'prompt' ? 'You: ' : 'AI Assist: '}</span>{message.text}</p>
                 )}
@@ -430,7 +477,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
           {providerReady && <form className="assist-composer" onSubmit={submit}>
             <label className="assist-sr-only" htmlFor="workflow-assist-prompt">Message AI Assist</label>
             <textarea id="workflow-assist-prompt" ref={composer} rows={2} maxLength={4000}
-              placeholder={previous ? 'Ask for a change…' : clarifications.length ? 'Reply to AI Assist…' : 'Describe a workflow…'}
+              placeholder={clarifications.length ? 'Reply to AI Assist…' : previous ? 'Ask for a change…' : 'Describe what you want to create…'}
               value={prompt} onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -438,7 +485,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
                   void send(prompt.trim());
                 }
               }} />
-            {progress && progress !== 'save' && progress !== 'confirm' ? (
+            {progress && progress !== 'save' && progress !== 'saveModel' && progress !== 'confirm' ? (
               <button className="assist-send" type="button" aria-label="Stop response" onClick={stop}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <rect x="6" y="6" width="12" height="12" rx="2" />

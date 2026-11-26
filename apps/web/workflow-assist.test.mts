@@ -40,7 +40,9 @@ test('AI Assist passes context to the configured provider and cancels disconnect
     }
     const content = messages.at(-1).content === 'Draft a purchase workflow'
       ? { message: 'Who should approve purchases?' }
-      : { ...workflow, workflow_id: 'model-returned-a-different-id', status: 'published' };
+      : messages.at(-1).content === 'Create a purchase data model'
+        ? { dataModel: { name: 'Purchases', fields: [{ name: 'amount', ftype: 'decimal', required: true }] } }
+        : { ...workflow, workflow_id: 'model-returned-a-different-id', status: 'published' };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }));
   });
@@ -94,6 +96,15 @@ test('AI Assist passes context to the configured provider and cancels disconnect
     { role: 'assistant', content: '{"message":"Who should approve purchases?"}' },
     { role: 'user', content: 'The budget owner' },
   ]);
+
+  const model = await send({ prompt: 'Create a purchase data model', previous: workflow });
+  assert.equal(model.status, 200);
+  assert.deepEqual(await model.json(), { modelSchema: {
+    format: 'steel-schema/1',
+    types: [{ name: 'Purchases', fields: [{
+      name: 'amount', ftype: 'decimal', required: true, unique: false, repeated: false, default: null, validation: {},
+    }], relationships: [] }],
+  } });
 
   const cancel = new AbortController();
   const stopped = assert.rejects(send({ prompt: 'Wait for cancellation' }, { signal: cancel.signal }), {

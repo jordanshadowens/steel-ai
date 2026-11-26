@@ -216,6 +216,42 @@ test('AI Assist keeps the chat open and saves follow-ups as draft versions', asy
   await expect(chat.getByRole('button', { name: 'Close AI Assist' })).toBeInViewport({ ratio: 1 });
 });
 
+test('AI Assist saves a data model draft and opens that model in Data Designer', async ({ page }) => {
+  const workflows = await mockCreator(page);
+  const doc = { format: 'steel-schema/1', types: [{ name: 'Purchases', fields: [
+    { name: 'amount', ftype: 'decimal', required: true },
+  ], relationships: [] }] };
+  const model = { name: 'Purchases', type_id: 'purchases-draft', fields: [], version: 0, status: 'active' };
+  const operations: string[] = [];
+  await page.route('**/api/workflows/assist', (route) => route.fulfill({ json: { modelSchema: doc } }));
+  await page.route('**/api/designer/**', async (route) => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === '/api/designer/import/validate' || pathname === '/api/designer/import') {
+      operations.push(pathname);
+      expect(route.request().postDataJSON()).toEqual({ doc });
+      await route.fulfill({ json: pathname.endsWith('/validate')
+        ? { ok: true, errors: [], conflicts: [], warnings: [], creates: [model.name] }
+        : { ok: true, created: [model], relationships: 0 } });
+      return;
+    }
+    await route.fulfill({ json: pathname.endsWith('/purchases-draft')
+      ? { type: model }
+      : { backend: 'pydantic-postgresql', types: [model] } });
+  });
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  const composer = chat.getByRole('textbox');
+  await composer.fill('Create a Purchase data model with a required amount');
+  await composer.press('Enter');
+  await expect(chat.getByText('Data model draft', { exact: true })).toBeVisible();
+  expect(operations).toEqual(['/api/designer/import/validate', '/api/designer/import']);
+  expect(workflows).toHaveLength(0);
+  const selected = page.waitForRequest('**/api/designer/types/purchases-draft');
+  await chat.getByRole('link', { name: 'Open in Data Designer' }).click();
+  await selected;
+  await expect(page).toHaveURL(/designer\?model=purchases-draft$/);
+});
+
 test('AI Assist visibly expands and brightens its launcher halo', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await mockCreator(page);

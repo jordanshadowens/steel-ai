@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { routeHref } from '../app/router';
+import { routeHref, routeSearch } from '../app/router';
 import { useConnectionStatus } from '../cloud/connectionStatus';
 import type {
   DesignerPublishResult,
@@ -53,7 +53,7 @@ export function DesignerPage() {
   const cloud = import.meta.env.VITE_STEEL_CLOUD === '1';
   const {status: connections, error: connectionError} = useConnectionStatus(cloud);
   const [showArchived, setShowArchived] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => routeSearch().get('model'));
   const [tab, setTab] = useState<Tab>('schema');
   const [typeError, setTypeError] = useState<string | null>(null);
   const [schemaError, setSchemaError] = useState<string | null>(null);

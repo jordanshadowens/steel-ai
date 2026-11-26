@@ -6,7 +6,8 @@ export type AssistMessage =
   | { kind: 'prompt'; text: string }
   | { kind: 'reply'; text: string }
   | { kind: 'error'; text: string; prompt: string }
-  | { kind: 'draft'; row: WorkflowVersionRow; opened: boolean };
+  | { kind: 'draft'; row: WorkflowVersionRow; opened: boolean }
+  | { kind: 'model'; name: string; id: string };
 
 interface AssistConversation {
   messages: AssistMessage[];
@@ -28,6 +29,10 @@ const conversation = createSlice({
       state.messages.push(action.payload);
       if (action.payload.kind === 'draft') {
         state.previous = action.payload.row;
+        state.clarifications = [];
+      }
+      if (action.payload.kind === 'model') {
+        state.previous = undefined;
         state.clarifications = [];
       }
     },

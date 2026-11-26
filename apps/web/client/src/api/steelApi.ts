@@ -73,7 +73,7 @@ export const steelApi = createApi({
   ],
   endpoints: (build) => ({
     draftWorkflow: build.mutation<
-      { definition: WorkflowDefinition } | { message: string },
+      { definition: WorkflowDefinition } | { message: string } | { modelSchema: Record<string, unknown> },
       { prompt: string; previous?: WorkflowDefinition; clarifications?: { prompt: string; reply: string }[] }
     >({
       query: (body) => ({
