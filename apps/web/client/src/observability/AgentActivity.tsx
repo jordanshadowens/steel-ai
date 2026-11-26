@@ -14,6 +14,7 @@ function statusLabel(status?: string) {
 
 const historyStatuses = ['started','waiting','retrying','succeeded','failed','cancelled','observed'];
 const historyOutcomes = ['verified_success','verified_failure','partially_successful','unverified','verification_unavailable','not_applicable'];
+const historySeverities = ['DEFAULT','DEBUG','INFO','NOTICE','WARNING','ERROR','CRITICAL','ALERT','EMERGENCY'];
 
 function versionLabel(run: AgentRun) {
   const workflow = run.workflowVersion && 'Workflow v' + run.workflowVersion;
@@ -25,12 +26,13 @@ function operationalState(agent: MonitoredAgent, run?: AgentRun) {
   if (agent.sourceAvailable === false) return 'Unknown';
   if (agent.reliability === 'heartbeat_expired') return 'Stalled';
   if (agent.reliability === 'execution_timed_out') return 'Failed';
-  if (run?.status === 'started')
-    return run.heartbeatAware && Date.now() - Date.parse(run.timestamp) <= (agent.heartbeatExpirySeconds ?? 60) * 1000 ? 'Running' : 'Unknown';
-  if (run?.status === 'waiting' || run?.status === 'retrying') return statusLabel(run.status);
+  if (run?.status === 'started' || run?.status === 'retrying')
+    return run.heartbeatAware && Date.now() - Date.parse(run.timestamp) <= (agent.heartbeatExpirySeconds ?? 60) * 1000
+      ? statusLabel(run.status) : 'Unknown';
+  if (run?.status === 'waiting') return 'Waiting';
   if (agent.schedule?.state === 'PAUSED' || agent.schedule?.state === 'DISABLED') return 'Disabled';
   if (run?.status === 'failed') return 'Failed';
-  if (run?.verification?.status === 'partially_successful') return 'Degraded';
+  if (run?.verification && ['partially_successful','verified_failure'].includes(run.verification.status)) return 'Degraded';
   return run?.status === 'succeeded' ? 'Idle' : 'Unknown';
 }
 
@@ -124,6 +126,8 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
   const [status, setStatus] = useState('');
   const [outcome, setOutcome] = useState('');
   const [version, setVersion] = useState('');
+  const [severity, setSeverity] = useState('');
+  const [resource, setResource] = useState('');
   const [from, setFrom] = useState('');
   const [through, setThrough] = useState('');
   const [search, setSearch] = useState<HistorySearch>();
@@ -146,9 +150,10 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
       event.preventDefault();
       setPrior([]);
       setPageToken(undefined);
-      setSearch(filter.trim() || status || outcome || version.trim() || from || through ? {
+      setSearch(filter.trim() || status || outcome || version.trim() || severity || resource.trim() || from || through ? {
         execution:filter.trim() || undefined, status:status || undefined, outcome:outcome || undefined,
-        version:version.trim() || undefined, from:from ? new Date(from + 'T00:00:00').toISOString() : undefined,
+        version:version.trim() || undefined, severity:severity || undefined, resource:resource.trim() || undefined,
+        from:from ? new Date(from + 'T00:00:00').toISOString() : undefined,
         to:through ? new Date(through + 'T23:59:59.999').toISOString() : undefined,
       } : undefined);
     }}>
@@ -160,6 +165,10 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
         <option value="">All outcomes</option>{historyOutcomes.map(value =>
           <option key={value} value={value}>{title(value)}</option>)}</select></label>
       <label>Version<input maxLength={120} value={version} onChange={event => setVersion(event.target.value)} /></label>
+      <label>Checkpoint severity<select value={severity} onChange={event => setSeverity(event.target.value)}>
+        <option value="">All severities</option>{historySeverities.map(value =>
+          <option key={value} value={value}>{value}</option>)}</select></label>
+      <label>Resource<input maxLength={200} value={resource} onChange={event => setResource(event.target.value)} /></label>
       <label>From<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
       <label>Through<input type="date" value={through} min={from || undefined} onChange={event => setThrough(event.target.value)} /></label>
       <button type="submit" className="run-link">Search executions</button>

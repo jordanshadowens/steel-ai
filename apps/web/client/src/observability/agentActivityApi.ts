@@ -45,7 +45,8 @@ export type Checkpoint = {
   error?: {code: string};
 };
 type StepsQuery = { agentId: string; runId: string; pageToken?: string; latest?: boolean };
-export type HistorySearch = {execution?: string; status?: string; outcome?: string; version?: string; from?: string; to?: string};
+export type HistorySearch = {execution?: string; status?: string; outcome?: string; version?: string;
+  severity?: string; resource?: string; from?: string; to?: string};
 const path = '/observability/agent-runs';
 const api = steelApi.injectEndpoints({
   endpoints: build => ({

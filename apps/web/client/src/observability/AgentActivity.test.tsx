@@ -84,8 +84,11 @@ it('requests a bounded history search and compares recorded technical status and
   expect(comparison.getByText('Partially successful')).toBeTruthy();
   expect(comparison.getByText('Verified success')).toBeTruthy();
   fireEvent.change(screen.getByLabelText('Outcome'), {target:{value:'partially_successful'}});
+  fireEvent.change(screen.getByLabelText('Checkpoint severity'), {target:{value:'WARNING'}});
+  fireEvent.change(screen.getByLabelText('Resource'), {target:{value:'staging/revision'}});
   fireEvent.click(screen.getByRole('button',{name:'Search executions'}));
-  expect(list).toHaveBeenCalledWith(expect.objectContaining({agent:'security',outcome:'partially_successful'}),expect.anything());
+  expect(list).toHaveBeenCalledWith(expect.objectContaining({agent:'security',outcome:'partially_successful',
+    severity:'WARNING',resource:'staging/revision'}),expect.anything());
   const history = within(screen.getByRole('table',{name:'Execution history'}));
   expect(history.queryByRole('button',{name:previous.id})).toBeNull();
 });
