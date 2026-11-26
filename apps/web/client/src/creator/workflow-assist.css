@@ -111,6 +111,15 @@
 
 .assist-header h2 { margin: 0; font-size: 15px; }
 .assist-heading { min-width: 0; }
+.assist-workflow-target {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 3px;
+  font-size: 11px;
+}
+.assist-workflow-target input { flex: none; margin: 0; }
+.assist-workflow-target span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .assist-heading p {
   margin: 3px 0 0;
   color: #d3dfff;

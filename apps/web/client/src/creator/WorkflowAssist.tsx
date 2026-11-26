@@ -81,6 +81,7 @@ function DraftMessage({ row, opened, onOpen, loading }: {
 
 export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const [open, setOpen] = useState(false);
+  const [createNew, setCreateNew] = useState(false);
   const cloud = import.meta.env.VITE_STEEL_CLOUD === '1';
   const {status: connections, error: connectionError} = useConnectionStatus(cloud && open);
   const providerReady = !cloud || Boolean(connections?.ai);
@@ -106,6 +107,8 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
   const { messages, previous, clarifications, composer: prompt } = useAppSelector((state) => state.workflowAssist);
   const workflowId = useAppSelector((state) => state.workflowEditor.openWorkflowId);
   const workflowVersion = useAppSelector((state) => state.workflowEditor.openVersion);
+  const workflowName = useAppSelector((state) => state.workflowEditor.draft?.name);
+  const hasOpenWorkflow = Boolean(workflowId && workflowVersion !== null);
 
   useEffect(() => {
     if (open && providerReady) composer.current?.focus({ preventScroll: true });
@@ -231,15 +234,14 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
     const isCurrent = () => request.current === active && sessionIsCurrent(active.epoch);
     dispatch(assistMessageAdded({ kind: 'prompt', text: description }));
     setPrompt('');
-    setProgress(previous ? 'revise' : 'generate');
     const before = store.getState().workflowEditor;
-    const base = previous;
+    const openBase = before.openVersion !== null && before.openWorkflowId ? before.draft : null;
+    const currentBase = createNew ? undefined : openBase ?? (!before.draft ? previous?.definition : undefined);
+    const baseId = currentBase ? (openBase ? before.openWorkflowId : previous?.workflow_id) : undefined;
+    const baseVersion = currentBase ? (openBase ? before.openVersion : previous?.version) ?? 0 : 0;
+    setProgress(baseId ? 'revise' : 'generate');
     let creatingModel = false;
     try {
-      const currentBase = base && before.draft?.workflow_id === base.workflow_id &&
-        before.openVersion !== null && before.openVersion >= base.version && !isDirty(before)
-        ? before.draft
-        : base?.definition;
       const generation = generate({
         prompt: description,
         previous: currentBase,
@@ -277,7 +279,10 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
         return;
       }
       const definition = currentBase ? {
+        ...currentBase,
         ...result.definition,
+        workflow_id: baseId ?? currentBase.workflow_id,
+        status: 'draft',
         policy: currentBase.policy ?? result.definition.policy,
         limits: currentBase.limits ?? result.definition.limits,
       } : result.definition;
@@ -300,8 +305,8 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
       const payload = { definition, created_by: 'ai_assist' };
       let row: WorkflowVersionRow | undefined;
       try {
-        const saved = base
-          ? await saveVersion({ id: base.workflow_id, ...payload }).unwrap()
+        const saved = baseId
+          ? await saveVersion({ id: baseId, ...payload }).unwrap()
           : await save(payload).unwrap();
         if (!saved.ok || !saved.row) throw new Error('Missing save acknowledgement.');
         row = saved.row;
@@ -313,7 +318,6 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
           subscribe: false, forceRefetch: true,
         }));
         if (!isCurrent()) return;
-        const baseVersion = currentBase === before.draft ? before.openVersion ?? 0 : base?.version ?? 0;
         row = findMatchingSave(latest.data?.versions ?? [], definition, baseVersion);
         if (!row) {
           dispatch(assistMessageAdded({
@@ -330,6 +334,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
         !isDirty(current) && (!current.draft || current.openVersion !== null);
       if (opened) {
         openDraft(row);
+        setCreateNew(false);
       }
       dispatch(assistMessageAdded({ kind: 'draft', row, opened }));
     } catch (cause) {
@@ -339,10 +344,10 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
       if (creatingModel) {
         text = workflowErrorMessage(cause) || 'Could not save the data model. Check Data Designer before trying again.';
       } else if (response?.status === 409) {
-        text = base ? 'This draft could not be updated. Check its status in the workflow library.'
+        text = baseId ? 'This draft could not be updated. Check its status in the workflow library.'
           : 'That workflow ID already exists. Try specifying a different ID.';
       } else if (response?.status === 404 || response?.originalStatus === 404) {
-        text = base ? 'This draft could not be found. Check the workflow library.'
+        text = baseId ? 'This draft could not be found. Check the workflow library.'
           : 'AI Assist is unavailable on this server. Open Creator from your local Steel setup.';
       } else {
         text = serverErrorList(cause).slice(0, 2).join(' ') ||
@@ -389,10 +394,12 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
           <header className="assist-header">
             <div className="assist-heading">
               <h2 id="assist-title">AI Assist</h2>
-              {previous && (
-                <p title={previous.definition.name || previous.workflow_id}>
-                  {previous.definition.name || previous.workflow_id} · v{previous.version}
-                </p>
+              {hasOpenWorkflow && (
+                <label className="assist-workflow-target" title={workflowName || workflowId || undefined}>
+                  <input type="checkbox" checked={!createNew} disabled={!!progress}
+                    onChange={(event) => setCreateNew(!event.target.checked)} />
+                  <span>{`Edit ${workflowName || workflowId} · v${workflowVersion}`}</span>
+                </label>
               )}
             </div>
             <div className="assist-header-actions">
@@ -477,7 +484,7 @@ export function WorkflowAssist({ dock }: { dock: HTMLDivElement | null }) {
           {providerReady && <form className="assist-composer" onSubmit={submit}>
             <label className="assist-sr-only" htmlFor="workflow-assist-prompt">Message AI Assist</label>
             <textarea id="workflow-assist-prompt" ref={composer} rows={2} maxLength={4000}
-              placeholder={clarifications.length ? 'Reply to AI Assist…' : previous ? 'Ask for a change…' : 'Describe what you want to create…'}
+              placeholder={clarifications.length ? 'Reply to AI Assist…' : hasOpenWorkflow && !createNew ? 'Ask for a change…' : 'Describe what you want to create…'}
               value={prompt} onChange={(event) => setPrompt(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {

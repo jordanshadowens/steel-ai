@@ -43,9 +43,10 @@ function parseModelObject(text: string) {
   return value;
 }
 
-function parseWorkflowDraft(value: Record<string, unknown>) {
-  const { workflow_id, name, inputs, steps, outputs } = value;
-  if (typeof workflow_id !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(workflow_id) ||
+function parseWorkflowDraft(value: Record<string, unknown>, existingId?: string) {
+  const workflow_id = existingId ?? value.workflow_id;
+  const { name, inputs, steps, outputs } = value;
+  if (typeof workflow_id !== 'string' || (!existingId && !/^[a-z0-9][a-z0-9_-]{0,79}$/.test(workflow_id)) ||
     typeof name !== 'string' || !name.trim() || !Array.isArray(inputs) ||
     !Array.isArray(steps) || !steps.length || !isObject(outputs)) {
     throw new Error('The workflow is missing required fields.');
@@ -56,6 +57,22 @@ function parseWorkflowDraft(value: Record<string, unknown>) {
     status: 'draft',
     policy: { execution_approval: 'first_run', skill_approval: 'new_names', four_eyes: false },
     limits: { max_rounds: 40, max_iterations: 100 },
+  };
+}
+
+function parsePreviousWorkflow(value: unknown) {
+  if (!isObject(value) || typeof value.workflow_id !== 'string' || !value.workflow_id.trim() ||
+    (value.inputs !== undefined && !Array.isArray(value.inputs)) ||
+    (value.steps !== undefined && !Array.isArray(value.steps)) ||
+    (value.outputs !== undefined && !isObject(value.outputs))) {
+    throw new Error('Invalid previous draft.');
+  }
+  return {
+    workflow_id: value.workflow_id,
+    name: typeof value.name === 'string' && value.name.trim() ? value.name : value.workflow_id,
+    inputs: value.inputs ?? [],
+    steps: value.steps ?? [],
+    outputs: value.outputs ?? {},
   };
 }
 
@@ -149,7 +166,7 @@ export async function handleWorkflowAssist(
     return reply(502, { error: 'Unable to verify access to the Steel workspace.' });
   }
   let prompt: string;
-  let previous: ReturnType<typeof parseWorkflowDraft> | undefined;
+  let previous: ReturnType<typeof parsePreviousWorkflow> | undefined;
   let clarifications: ReturnType<typeof parseClarifications>;
   try {
     const chunks: Buffer[] = [];
@@ -162,8 +179,7 @@ export async function handleWorkflowAssist(
     const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     prompt = typeof body?.prompt === 'string' ? body.prompt.trim() : '';
     if (!prompt || prompt.length > 4000) throw new Error('Invalid prompt.');
-    if (body.previous !== undefined && !isObject(body.previous)) throw new Error('Invalid previous draft.');
-    if (body.previous) previous = parseWorkflowDraft(body.previous);
+    if (body.previous !== undefined) previous = parsePreviousWorkflow(body.previous);
     clarifications = parseClarifications(body.clarifications);
   } catch {
     return reply(400, { error: 'The message or draft context is invalid. Messages must be 1–4,000 characters.' });
@@ -195,8 +211,7 @@ export async function handleWorkflowAssist(
     if (Object.hasOwn(resultObject, 'dataModel')) {
       return reply(200, { modelSchema: parseDataModel(resultObject.dataModel) });
     }
-    const definition = parseWorkflowDraft(resultObject);
-    if (previous) definition.workflow_id = previous.workflow_id;
+    const definition = parseWorkflowDraft(resultObject, previous?.workflow_id);
     return reply(200, { definition });
   } catch {
     return reply(502, { error: 'The provider returned an invalid draft. Try rephrasing the description.' });

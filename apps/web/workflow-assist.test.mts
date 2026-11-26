@@ -84,11 +84,11 @@ test('AI Assist passes context to the configured provider and cancels disconnect
 
   const result = await send({
     prompt: 'The budget owner',
-    previous: workflow,
+    previous: { workflow_id: 'LegacyWorkflow', steps: workflow.steps },
     clarifications: [{ prompt: 'Draft a purchase workflow', reply: 'Who should approve purchases?' }],
   });
   const { definition } = await result.json();
-  assert.equal(definition.workflow_id, workflow.workflow_id);
+  assert.equal(definition.workflow_id, 'LegacyWorkflow');
   assert.equal(definition.status, 'draft');
   assert.equal(providerCalls[1].authorization, 'Bearer synthetic-provider');
   assert.deepEqual(providerCalls[1].messages.slice(-3), [

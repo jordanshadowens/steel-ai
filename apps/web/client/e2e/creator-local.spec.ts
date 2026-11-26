@@ -216,6 +216,30 @@ test('AI Assist keeps the chat open and saves follow-ups as draft versions', asy
   await expect(chat.getByRole('button', { name: 'Close AI Assist' })).toBeInViewport({ ratio: 1 });
 });
 
+test('AI Assist adds a step to a workflow opened before the chat', async ({ page }) => {
+  const rows = await mockCreator(page, { assist: ({ previous }) => {
+    expect(previous?.workflow_id).toBe('test-flow');
+    const start = previous?.steps?.[0];
+    expect(start).toBeDefined();
+    return { ...previous, workflow_id: 'test-flow', steps: [
+      { ...start!, on_success: 'review' },
+      { step_id: 'review', type: 'human_approval', name: 'Review request', on_success: 'end' },
+    ] };
+  } });
+  await createDraft(page);
+  await page.getByRole('button', { name: 'AI Assist', exact: true }).click();
+  const chat = page.getByRole('region', { name: 'AI Assist' });
+  await expect(chat.getByRole('checkbox', { name: /Edit .* v1/ })).toBeChecked();
+  const composer = chat.getByRole('textbox');
+  await composer.fill('Add an approval step');
+  await composer.press('Enter');
+  await expect(chat.getByText('Draft v2 · Opened in canvas')).toBeVisible();
+  expect(rows.map(({ workflow_id, version }) => [workflow_id, version])).toEqual([
+    ['test-flow', 2], ['test-flow', 1],
+  ]);
+  expect(rows[0].definition.steps?.map(({ step_id }) => step_id)).toEqual(['start', 'review']);
+});
+
 test('AI Assist saves a data model draft and opens that model in Data Designer', async ({ page }) => {
   const workflows = await mockCreator(page);
   const doc = { format: 'steel-schema/1', types: [{ name: 'Purchases', fields: [
