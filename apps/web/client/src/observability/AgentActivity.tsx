@@ -57,6 +57,7 @@ function AgentOverview({agents, loading, failed, retry, select}: {
           : agent.reliability ? ({
             schedule_overdue:'Scheduler attempt overdue', execution_timed_out:'Execution timed out',
             heartbeat_expired:'Active execution heartbeat expired',
+            completion_checkpoint_missing:'Platform finished. Agent completion checkpoint missing.',
           })[agent.reliability]
           : !run ? 'No recent executions'
           : state === 'Failed' || state === 'Degraded' ? state

@@ -12,6 +12,12 @@ type RuntimeEvent = Entry & {
 type Cursor = {event: number; tool: number};
 type Detail = {run: Run; logs?: RuntimeEvent[]; next?: Cursor};
 
+function providerTokens(event: RuntimeEvent) {
+  const count = event.usage?.tokens;
+  return event.status === 'provider_completed' && typeof count === 'number' && Number.isSafeInteger(count) && count >= 0
+    ? count : undefined;
+}
+
 export function useRuntimeTimeline(runId?: string) {
   const [detail, setDetail] = useState<Detail>();
   const [older, setOlder] = useState<RuntimeEvent[]>([]);
@@ -64,20 +70,21 @@ export function useRuntimeTimeline(runId?: string) {
     } catch { if (!signal.aborted) setError(true); }
     finally { setPaging(false); }
   }
-  const original = [...older, ...(current?.logs ?? [])];
-  const events: TimelineEvent[] = current ? original.map(entry => {
-    const recorded = entry as RuntimeEvent;
+  const original = current ? [...new Map([...older, ...(current.logs ?? [])].map(event => [event.id, event])).values()] : [];
+  const events: TimelineEvent[] = original.map(entry => {
     return {id: 'runtime:' + entry.id, time:entry.at, step:title(entry.step_id ?? entry.status ?? 'workflow'),
       source:entry.kind === 'tool' ? 'Runtime tool' : entry.kind === 'provider' ? 'Runtime provider' : 'Runtime',
-      severity:entry.level.toUpperCase(), status:entry.status, duration:recorded.duration_ms,
-      result:recorded.evidence?.result ?? entry.message,
-      why:recorded.evidence?.reason ?? entry.result_excerpt ?? entry.completion,
-      trace:recorded.trace, verification:recorded.evidence?.verification,
-      details:{outputs:recorded.evidence?.outputs, policy:recorded.evidence?.policy}};
-  }) : [];
-  const usage = [...new Map(original.map(event => [event.id, event])).values()]
-    .flatMap(event => event.usage ? [event.usage.tokens] : []);
+      severity:entry.level.toUpperCase(), status:entry.status, duration:entry.duration_ms,
+      result:entry.evidence?.result ?? entry.message,
+      why:entry.evidence?.reason ?? entry.result_excerpt ?? entry.completion,
+      trace:entry.trace, verification:entry.evidence?.verification,
+      details:{outputs:entry.evidence?.outputs, policy:entry.evidence?.policy,
+        ...(entry.status === 'provider_completed' && {reported_model_tokens:providerTokens(entry) ?? 'Unavailable'})}};
+  });
+  const completions = original.filter(event => event.status === 'provider_completed');
+  const measured = completions.map(providerTokens).filter(count => count !== undefined);
   return {run:current?.run, events, error, loading:Boolean(runId && !current && !error), canPage, paging, loadMore,
-    reportedTokens:usage.length ? usage.reduce((sum, value) => sum + value, 0) : undefined,
+    providerCompletions:completions.length, measuredProviderCompletions:measured.length,
+    reportedTokens:measured.length ? measured.reduce((sum, value) => sum + value, 0) : undefined,
     retry: () => setRefresh(current => current + 1)};
 }

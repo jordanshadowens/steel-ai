@@ -22,10 +22,13 @@ function WorkflowDetail({id, event}: {id: string; event?: string}) {
           version:String(run.run.version)}))}>Inspect version in Creator</a></div>
       <div className="run-table-viewport">
         <table className="run-table" aria-label="Workflow run summary">
-          <thead><tr>{['Run ID', 'Version', 'Started', 'Status', 'Outcome', 'Current step','Reported tokens in loaded events'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
+          <thead><tr>{['Run ID', 'Version', 'Started', 'Status', 'Outcome', 'Current step','Reported tokens in loaded events',
+            'Provider completions with token counts'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
           <tbody><tr><td><code>{id}</code></td><td>{run.run.version}</td><td><Timestamp value={run.run.created_at} /></td>
             <td>{runStatusLabel(run.run.status)}</td><td>{title(verification?.status ?? 'unverified')}</td>
-            <td>{title(run.run.current_step ?? undefined)}</td><td>{run.reportedTokens?.toLocaleString() ?? 'Unavailable'}</td></tr></tbody>
+            <td>{title(run.run.current_step ?? undefined)}</td><td>{run.reportedTokens?.toLocaleString() ?? 'Unavailable'}</td>
+            <td>{run.providerCompletions ? `${run.measuredProviderCompletions}/${run.providerCompletions}` : 'Unavailable'}</td>
+          </tr></tbody>
         </table>
       </div>
     </>}

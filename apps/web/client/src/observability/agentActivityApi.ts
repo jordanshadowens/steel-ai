@@ -22,7 +22,7 @@ export type Verification = {status: string; method?: string; expected?: unknown;
 export type MonitoredAgent = { id: string; name: string; runs: AgentRun[]; sourceAvailable?: boolean;
   nextPageToken?: string; schedule?: {state?: string; next?: string};
   heartbeatExpirySeconds?: number;
-  reliability?: 'schedule_overdue' | 'execution_timed_out' | 'heartbeat_expired';
+  reliability?: 'schedule_overdue' | 'execution_timed_out' | 'heartbeat_expired' | 'completion_checkpoint_missing';
   alerts?: {code: string; severity: string; executionId?: string; count?: number; at?: string}[] };
 export type Checkpoint = {
   id: string;
