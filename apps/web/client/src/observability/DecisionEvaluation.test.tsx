@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it } from 'vitest';
 import { DecisionEvaluation } from './DecisionEvaluation';
 import type { TimelineEvent } from './ExecutionTimeline';
@@ -28,4 +28,17 @@ it('compares the security recommendation against recorded findings and retains c
   }} />);
   expect(screen.getByText('Matches recorded review recommendation')).toBeTruthy();
   expect(screen.getByText('no_matching_source_events')).toBeTruthy();
+});
+
+it('simulates an alternate audit threshold using the recorded finding count', () => {
+  render(<DecisionEvaluation event={{
+    id:'review-audit', step:'Decide security review', source:'Agent', severity:'INFO',
+    operation:'decide_security_review', eventType:'decision.made',
+    details:{inputs:{events_reviewed:4},outputs:{finding_count:3,review_recommended:true,coverage:'reviewed'}},
+  }} />);
+  fireEvent.change(screen.getByRole('spinbutton',{name:'Minimum matched findings'}),{target:{value:'4'}});
+  fireEvent.click(screen.getByRole('button',{name:'Simulate'}));
+  expect(screen.getByText('Simulated review recommended')).toBeTruthy();
+  expect(screen.getByText('false')).toBeTruthy();
+  expect(screen.getByText('Matches recorded review recommendation')).toBeTruthy();
 });

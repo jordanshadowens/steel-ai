@@ -23,6 +23,7 @@ export type MonitoredAgent = { id: string; name: string; runs: AgentRun[]; sourc
   nextPageToken?: string; schedule?: {state?: string; next?: string};
   heartbeatExpirySeconds?: number;
   reliability?: 'schedule_overdue' | 'execution_timed_out' | 'heartbeat_expired' | 'completion_checkpoint_missing';
+  alertRules?: {executionFailures: number; stepFailures: number; heartbeatExpirySeconds: number; scheduleGraceSeconds?: number};
   alerts?: {code: string; severity: string; executionId?: string; count?: number; at?: string}[] };
 export type Checkpoint = {
   id: string;
@@ -44,6 +45,7 @@ export type Checkpoint = {
   evidenceRefs?: string[];
   error?: {code: string};
 };
+export type DecisionPage = {steps: Checkpoint[]; evidence?: Checkpoint[]; evidencePartial?: boolean; nextPageToken?: string};
 type StepsQuery = { agentId: string; runId: string; pageToken?: string; latest?: boolean };
 export type HistorySearch = {execution?: string; status?: string; outcome?: string; version?: string;
   severity?: string; resource?: string; from?: string; to?: string};
@@ -60,7 +62,10 @@ const api = steelApi.injectEndpoints({
         timeout: 30000,
       }),
     }),
+    getAgentDecisions: build.query<DecisionPage, {agent: string; execution?: string; pageToken?: string}>({
+      query: params => ({url:path + '/logs', params:{...params, decisions:'1'}, timeout:15000}),
+    }),
   }),
 });
 
-export const {useListAgentRunsQuery, useGetAgentStepsQuery} = api;
+export const {useListAgentRunsQuery, useGetAgentStepsQuery, useGetAgentDecisionsQuery} = api;

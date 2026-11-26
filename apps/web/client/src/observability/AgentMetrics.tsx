@@ -21,6 +21,7 @@ const ratio = (count: number, total: number) => total ? `${(100 * count / total)
 export function AgentMetrics() {
   const {currentData} = useListAgentRunsQuery(undefined, {pollingInterval:60000});
   const alerts = currentData?.agents.flatMap(agent => (agent.alerts ?? []).map(alert => ({...alert, agent:agent.name, agentId:agent.id}))) ?? [];
+  const rules = currentData?.agents.filter(agent => agent.alertRules) ?? [];
   const [hours, setHours] = useState('6');
   const [report, setReport] = useState<Report>();
   const [error, setError] = useState(false);
@@ -58,6 +59,20 @@ export function AgentMetrics() {
         </tr>)}</tbody>
       </table>
     </div>}
+    {rules.length > 0 && <details>
+      <summary>Alert rules</summary>
+      <div className="run-table-viewport" role="region" aria-label="Operational alert thresholds" tabIndex={0}>
+        <table className="run-table" aria-label="Operational alert thresholds">
+          <thead><tr>{['Agent','Consecutive failed executions','Repeated failures in a step','Heartbeat expiry','Schedule grace'].map(label =>
+            <th key={label} scope="col">{label}</th>)}</tr></thead>
+          <tbody>{rules.map(agent => <tr key={agent.id}>
+            <th scope="row">{agent.name}</th><td>{agent.alertRules?.executionFailures}</td><td>{agent.alertRules?.stepFailures}</td>
+            <td>{agent.alertRules?.heartbeatExpirySeconds} s</td>
+            <td>{agent.alertRules?.scheduleGraceSeconds === undefined ? 'Not applicable' : agent.alertRules.scheduleGraceSeconds + ' s'}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>
+    </details>}
     <p className="obs-note">Counts use the latest recorded state per execution in the selected window. Technical success and retry rates use terminal executions.</p>
     <div className="run-table-viewport" role="region" aria-label="Agent execution metrics" tabIndex={0}>
       <table className="run-table" aria-label="Agent execution metrics">

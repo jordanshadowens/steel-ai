@@ -2,8 +2,9 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it, vi } from 'vitest';
 import { AgentActivity } from './AgentActivity';
 
-const {list, details, runtime} = vi.hoisted(() => ({list: vi.fn(), details: vi.fn(), runtime:vi.fn()}));
-vi.mock('./agentActivityApi', () => ({useListAgentRunsQuery:list, useGetAgentStepsQuery:details}));
+const {list, details, runtime, decisions} = vi.hoisted(() => ({list: vi.fn(), details: vi.fn(), runtime:vi.fn(), decisions:vi.fn()}));
+vi.mock('./agentActivityApi', () => ({useListAgentRunsQuery:list, useGetAgentStepsQuery:details,
+  useGetAgentDecisionsQuery:(...args: unknown[]) => decisions(...args) ?? {}}));
 vi.mock('./runtimeTimeline', () => ({useRuntimeTimeline:runtime}));
 afterEach(() => {cleanup(); vi.resetAllMocks();});
 
@@ -80,6 +81,8 @@ it('requests a bounded history search and compares recorded technical status and
   render(<AgentActivity selected={selection} select={vi.fn()} openWorkflow={vi.fn()} />);
   fireEvent.change(screen.getByLabelText('Compare with'), {target:{value:previous.id}});
   const comparison = within(screen.getByRole('table',{name:'Execution comparison'}));
+  expect(decisions).toHaveBeenCalledWith({agent:'security',execution:latest.id}, {skip:false});
+  expect(decisions).toHaveBeenCalledWith({agent:'security',execution:previous.id}, {skip:false});
   expect(comparison.getAllByText('Completed')).toHaveLength(2);
   expect(comparison.getByText('Partially successful')).toBeTruthy();
   expect(comparison.getByText('Verified success')).toBeTruthy();

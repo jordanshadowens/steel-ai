@@ -1,6 +1,5 @@
 import { Fragment, useState } from 'react';
 import { RecordedTable, approved, objectValue } from './RunData';
-import { MemorySimulation } from './MemorySimulation';
 import { DecisionEvaluation } from './DecisionEvaluation';
 import type { Checkpoint, Trace, Verification } from './agentActivityApi';
 
@@ -126,8 +125,7 @@ export function ExecutionTimeline({events, loading, failed, retry, initialEvent,
             {event.executionId && openExecution && <button type="button" className="run-link"
               onClick={() => openExecution(event.executionId!)}>Open execution</button>}
             <RecordedTable value={{...event.details, verification:event.verification, trace:event.trace, span_links:event.links}} />
-            <DecisionEvaluation event={event} />
-            <MemorySimulation event={event} events={ordered} />
+            <DecisionEvaluation event={event} events={ordered} />
             <details><summary>View redacted event data</summary>
               <pre>{JSON.stringify(approved(event), null, 2)}</pre></details>
           </td></tr>}

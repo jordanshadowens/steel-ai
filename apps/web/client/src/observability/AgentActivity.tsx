@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { routeHref } from '../app/router';
 import { checkpointEvent, duration, ExecutionTimeline, Timestamp, title } from './ExecutionTimeline';
-import { type AgentRun, type HistorySearch, type MonitoredAgent, useGetAgentStepsQuery, useListAgentRunsQuery } from './agentActivityApi';
+import { type AgentRun, type HistorySearch, type MonitoredAgent, useGetAgentDecisionsQuery, useGetAgentStepsQuery, useListAgentRunsQuery } from './agentActivityApi';
 import { useRuntimeTimeline } from './runtimeTimeline';
+import { DecisionComparisonCell } from './DecisionRecords';
 
 export type AgentSelection = {agentId: string; runId?: string};
 
@@ -143,6 +144,8 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
   const runId = selected.runId ?? runs[0]?.id;
   const run = runs.find(item => item.id === runId) ?? agent.runs.find(item => item.id === runId);
   const compare = compareId === runId ? undefined : runs.find(item => item.id === compareId);
+  const currentDecisions = useGetAgentDecisionsQuery({agent:agent.id, execution:run?.id}, {skip:!run || !compare});
+  const priorDecisions = useGetAgentDecisionsQuery({agent:agent.id, execution:compare?.id}, {skip:!run || !compare});
   const next = remote ? extra?.nextPageToken : agent.nextPageToken;
   const sourceUnavailable = remote ? extra?.sourceAvailable === false : agent.sourceAvailable === false;
   return <section aria-label={agent.name + ' executions'} className="obs-execution">
@@ -211,6 +214,10 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
           <tr><th scope="row">Duration</th><td>{duration(run.duration)}</td><td>{duration(compare.duration)}</td></tr>
           <tr><th scope="row">Version</th><td>{versionLabel(run)}</td><td>{versionLabel(compare)}</td></tr>
           <tr><th scope="row">Summary</th><td>{run.summary ?? 'Not recorded'}</td><td>{compare.summary ?? 'Not recorded'}</td></tr>
+          <tr><th scope="row">Decision evidence</th>
+            <td><DecisionComparisonCell page={currentDecisions.currentData} error={currentDecisions.isError} /></td>
+            <td><DecisionComparisonCell page={priorDecisions.currentData} error={priorDecisions.isError} /></td>
+          </tr>
         </tbody>
       </table>
     </div>}

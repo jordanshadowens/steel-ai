@@ -1,43 +1,37 @@
-import { objectValue, RecordedTable } from './RunData';
+import { useState } from 'react';
+import { RecordedTable } from './RunData';
+import { evaluateDecision, type DecisionCheck } from './decisionChecks';
 import type { TimelineEvent } from './ExecutionTimeline';
 
-export function DecisionEvaluation({event}: {event: TimelineEvent}) {
-  if (event.eventType !== 'decision.made') return null;
-  const { inputs, outputs } = event.details ?? {};
-  if (!objectValue(inputs) || !objectValue(outputs)) return null;
+function DecisionSimulation({simulation}: {simulation: NonNullable<DecisionCheck['simulation']>}) {
+  const [selected, setSelected] = useState(String(simulation.initial));
+  const [output, setOutput] = useState<Record<string, unknown>>();
+  return <details>
+    <summary>Simulate with recorded evidence</summary>
+    <form className="obs-toolbar" onSubmit={event => {
+      event.preventDefault();
+      const value = Number(selected);
+      if (!selected.trim() || !Number.isFinite(value) || (!simulation.fractional && !Number.isSafeInteger(value))
+          || value < simulation.min || (simulation.max !== undefined && value > simulation.max)) return;
+      setOutput(simulation.replay(value));
+    }}>
+      <label>{simulation.label}<input type="number" step={simulation.fractional ? 'any' : 1}
+        min={simulation.min} max={simulation.max} required value={selected}
+        onChange={event => {setSelected(event.target.value); setOutput(undefined);}} /></label>
+      <button type="submit" className="run-link">Simulate</button>
+    </form>
+    {output && <RecordedTable value={output} />}
+  </details>;
+}
 
-  if (event.operation === 'verify_staging') {
-    const endpoints = inputs.endpoint_http_status;
-    const services = inputs.service_health;
-    const expectedServices = ['steel-web-staging', 'steel-portal-staging'];
-    const expectedEndpoints = ['/app/', '/cloud-runtime/api/runtime-config'];
-    if (typeof outputs.ready !== 'boolean' || !objectValue(services) || !objectValue(endpoints)
-      || !expectedServices.every(service => typeof services[service] === 'boolean')
-      || !expectedEndpoints.every(endpoint => Number.isSafeInteger(endpoints[endpoint]))) {
-      return <RecordedTable value={{policy_check:'Unavailable. A serving-state or HTTP observation is missing.'}} />;
-    }
-    const ready = expectedServices.every(service => services[service] === true)
-      && expectedEndpoints.every(endpoint => endpoints[endpoint] === 200);
-    return <RecordedTable value={{
-      policy_check: ready === outputs.ready ? 'Matches recorded readiness' : 'Differs from recorded readiness',
-      criteria:'Both services must be ready and both endpoints must return HTTP 200.',
-      reevaluated_readiness:ready,
-    }} />;
-  }
-
-  if (event.operation === 'decide_security_review') {
-    const count = outputs.finding_count;
-    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0
-      || typeof outputs.review_recommended !== 'boolean') {
-      return <RecordedTable value={{policy_check:'Unavailable. The finding count or review decision is missing.'}} />;
-    }
-    const recommended = count > 0;
-    return <RecordedTable value={{
-      policy_check: recommended === outputs.review_recommended ? 'Matches recorded review recommendation' : 'Differs from recorded review recommendation',
-      criteria:'Recommend review when an audited event matches a finding rule.',
-      recorded_coverage:outputs.coverage,
-      reevaluated_review_recommended:recommended,
-    }} />;
-  }
-  return null;
+export function DecisionEvaluation({event, events, check}: {
+  event: TimelineEvent; events?: readonly TimelineEvent[]; check?: DecisionCheck;
+}) {
+  const result = check ?? evaluateDecision(event, events);
+  if (!result) return null;
+  return <>
+    <RecordedTable value={{policy_check:result.message, recorded_decision:result.recorded,
+      replayed_decision:result.replayed, ...result.evidence}} />
+    {result.simulation && <DecisionSimulation key={event.id} simulation={result.simulation} />}
+  </>;
 }
