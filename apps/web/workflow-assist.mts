@@ -31,7 +31,7 @@ For a branch use conditional_routing with config.rules, for example [{"when":{"r
 For a loop use iteration with config.over set to a list reference, config.max_iterations, and config.body containing the steps run per item. Body steps route only within the body or to "end". Keep approvals and nested loops outside the body.
 For a deferred calculation use skill_execution with config.calculation_nl, deferred:true, inputs_mapping and on_miss:"propose".
 Use input_collection and output_composition as shown. Never invent a saved skill, data source, credential or integration. If unsupported external actions are essential, explain the limitation in a message instead of generating fake steps.
-For a workflow, only return workflow_id, name, inputs, steps and outputs. Do not call tools, run, or publish the workflow.`;
+For a workflow, return workflow_id, name, inputs, steps and outputs. When the user provides a YAML or JSON alert_rules section, include it as a top-level alert_rules array. Preserve the supplied id, source_id, trigger, threshold, notify and dedup_key values. Merge rules into the existing array by id and preserve unrelated rules. These declarations are stored workflow metadata. Do not claim that Steel subscribes to an external trigger or delivers notifications from them. For a metadata-only change, copy the existing inputs, steps and outputs. Do not call tools, run, or publish the workflow.`;
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -40,6 +40,18 @@ function parseModelObject(text: string) {
   const json = text.trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, '$1');
   const value: unknown = JSON.parse(json);
   if (!isObject(value)) throw new Error('Expected a workflow object.');
+  return value;
+}
+
+function parseAlertRules(value: unknown) {
+  if (!Array.isArray(value)) throw new Error('alert_rules must be an array.');
+  const ids = new Set<string>();
+  for (const rule of value) {
+    if (!isObject(rule) || typeof rule.id !== 'string' || !rule.id.trim() || ids.has(rule.id)) {
+      throw new Error('Each alert rule needs a unique id.');
+    }
+    ids.add(rule.id);
+  }
   return value;
 }
 
@@ -53,6 +65,7 @@ function parseWorkflowDraft(value: Record<string, unknown>, existingId?: string)
   }
   return {
     workflow_id, name, inputs, steps, outputs,
+    ...(value.alert_rules !== undefined ? { alert_rules: parseAlertRules(value.alert_rules) } : {}),
     version: 1,
     status: 'draft',
     policy: { execution_approval: 'first_run', skill_approval: 'new_names', four_eyes: false },
@@ -73,6 +86,7 @@ function parsePreviousWorkflow(value: unknown) {
     inputs: value.inputs ?? [],
     steps: value.steps ?? [],
     outputs: value.outputs ?? {},
+    ...(value.alert_rules !== undefined ? { alert_rules: parseAlertRules(value.alert_rules) } : {}),
   };
 }
 

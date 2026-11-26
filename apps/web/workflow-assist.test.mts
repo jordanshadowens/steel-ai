@@ -14,6 +14,23 @@ test('AI Assist passes context to the configured provider and cancels disconnect
     steps: [{ step_id: 'collect', type: 'input_collection', on_success: 'end' }],
     outputs: {},
   };
+  const rule = {
+    id: 'vm-memory-high', source_id: 'vm-memory', trigger: 'cloud_monitoring_incident_opened',
+    threshold: { operator: 'greater_than', value: 90, unit: 'percent', duration: '10m' },
+    notify: 'platform', dedup_key: ['rule_id', 'resource_id'],
+  };
+  const rulePrompt = `Can you add this to the workflow?
+alert_rules:
+  - id: vm-memory-high
+    source_id: vm-memory
+    trigger: cloud_monitoring_incident_opened
+    threshold:
+      operator: greater_than
+      value: 90
+      unit: percent
+      duration: 10m
+    notify: platform
+    dedup_key: [rule_id, resource_id]`;
   const started = Promise.withResolvers<void>();
   const closed = Promise.withResolvers<void>();
   const providerCalls: { authorization?: string; messages: { role: string; content: string }[] }[] = [];
@@ -42,7 +59,9 @@ test('AI Assist passes context to the configured provider and cancels disconnect
       ? { message: 'Who should approve purchases?' }
       : messages.at(-1).content === 'Create a purchase data model'
         ? { dataModel: { name: 'Purchases', fields: [{ name: 'amount', ftype: 'decimal', required: true }] } }
-        : { ...workflow, workflow_id: 'model-returned-a-different-id', status: 'published' };
+        : messages.at(-1).content === rulePrompt
+          ? { ...workflow, alert_rules: [rule] }
+          : { ...workflow, workflow_id: 'model-returned-a-different-id', status: 'published' };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }));
   });
@@ -105,6 +124,15 @@ test('AI Assist passes context to the configured provider and cancels disconnect
       name: 'amount', ftype: 'decimal', required: true, unique: false, repeated: false, default: null, validation: {},
     }], relationships: [] }],
   } });
+
+  const alertDraft = await send({ prompt: rulePrompt, previous: workflow });
+  assert.equal(alertDraft.status, 200);
+  const { definition: withRule } = await alertDraft.json();
+  assert.deepEqual(withRule.alert_rules, [rule]);
+  assert.deepEqual(withRule.steps, workflow.steps);
+  await send({ prompt: 'Does the workflow have an alert rule?', previous: withRule });
+  const previousContext = providerCalls.at(-1)?.messages.find(({ role }) => role === 'assistant');
+  assert.deepEqual(JSON.parse(previousContext!.content).alert_rules, [rule]);
 
   const cancel = new AbortController();
   const stopped = assert.rejects(send({ prompt: 'Wait for cancellation' }, { signal: cancel.signal }), {
