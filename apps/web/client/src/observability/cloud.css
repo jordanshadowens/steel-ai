@@ -194,13 +194,15 @@
 .obs-execution { display: grid; gap: 12px; min-width: 0; }
 .obs-note { color: #b5c3d7; font-size: .85rem; }
 .obs-execution .run-table { table-layout: auto; min-width: 700px; }
-.obs-execution .run-table :is(td, th) { vertical-align: top; overflow-wrap: anywhere; white-space: normal; }
+.obs-execution .run-table :is(td, th) { vertical-align: top; white-space: normal; }
 .obs-execution .run-table th[scope=row] { text-align: start; }
-.obs-execution .run-table td code { white-space: normal; }
-.obs-timeline .run-table { min-width: 920px; }
-.obs-timeline .run-table td:nth-child(8) { min-width: 18rem; }
+.obs-execution .run-table :is(td code, .run-row-button) { white-space: normal; overflow-wrap: anywhere; }
+.obs-execution .run-table time { white-space: nowrap; }
+.obs-timeline .run-table { min-width: 960px; }
+.obs-timeline .run-table > thead th:nth-child(2) { min-width: 10rem; }
+.obs-timeline .run-table > thead th:nth-child(8) { min-width: 16rem; }
 .obs-values { width: 100%; border-collapse: collapse; }
-.obs-values :is(td,th) { padding: 6px 8px; vertical-align: top; border: 1px solid #334763; text-align: start; }
+.obs-values :is(td,th) { padding: 6px 8px; vertical-align: top; border: 1px solid #334763; text-align: start; overflow-wrap: anywhere; }
 .obs-values th { color: #c8def7; }
 .obs-evidence td > details { margin-block-start: 8px; }
 .obs-evidence pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }

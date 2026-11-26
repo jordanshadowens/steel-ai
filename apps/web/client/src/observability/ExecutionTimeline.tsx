@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react';
 import { RecordedTable, approved, objectValue } from './RunData';
+import { DecisionEvaluation } from './DecisionEvaluation';
 import type { Checkpoint, Trace, Verification } from './agentActivityApi';
 
 export const title = (value?: string) => value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : 'Not recorded';
@@ -11,6 +12,9 @@ export function Timestamp({value}: {value?: string}) {
 
 export type TimelineEvent = {
   id: string; time?: string; step: string; source: string; severity: string;
+  executionId?: string;
+  operation?: string;
+  eventType?: string;
   status?: string; duration?: number; result?: string; why?: string; trace?: Trace;
   links?: Trace[]; verification?: Verification; details?: Record<string, unknown>;
 };
@@ -19,7 +23,8 @@ export function checkpointEvent(entry: Checkpoint): TimelineEvent {
   const output = objectValue(entry.outputs) ? entry.outputs : undefined;
   const result = output?.outcome ?? output?.status ?? (output?.ready !== undefined ? (output.ready ? 'Ready' : 'Readiness checks failed') : undefined);
   return {
-    id: 'agent:' + entry.id, time: entry.timestamp, step: title(entry.step), source: title(entry.source ?? 'agent'),
+    id: 'agent:' + entry.id, executionId:entry.executionId, time: entry.timestamp, step: title(entry.step), source: title(entry.source ?? 'agent'),
+    operation: entry.step, eventType: entry.eventType,
     severity: entry.severity, status: entry.status, duration: entry.duration,
     result: typeof result === 'string' ? title(result) : undefined, why: entry.reason,
     trace: entry.trace, links: entry.spanLinks, verification: entry.verification,
@@ -65,32 +70,49 @@ function spans(events: TimelineEvent[], collapsed: Set<string>) {
   return {rows, children};
 }
 
-export function ExecutionTimeline({events, loading, failed, retry, initialEvent}: {
+export function ExecutionTimeline({events, loading, failed, retry, initialEvent, openExecution, replayEnabled}: {
   events: TimelineEvent[]; loading?: boolean; failed?: boolean; retry?: () => void; initialEvent?: string;
+  openExecution?: (executionId: string) => void;
+  replayEnabled?: boolean;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(initialEvent ? [initialEvent] : []));
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const [showTrace, setShowTrace] = useState(false);
   const [filter, setFilter] = useState('');
   const [severity, setSeverity] = useState('');
+  const [replay, setReplay] = useState<{events: TimelineEvent[]; position: number}>();
   const ordered = sortedEvents(events);
-  const visible = ordered.filter(event => (!severity || event.severity === severity) &&
+  const recorded = replay?.events ?? ordered;
+  const visible = replay ? [replay.events[replay.position]] : ordered.filter(event => (!severity || event.severity === severity) &&
     [event.step, event.result, event.why, event.source].some(value => value?.toLowerCase().includes(filter.trim().toLowerCase())));
-  const hierarchy = spans(ordered, collapsed);
+  const hierarchy = spans(recorded, collapsed);
   const toggle = (key: string, setter: typeof setExpanded) => setter(current => {
     const next = new Set(current);
     if (next.has(key)) next.delete(key);
     else next.add(key);
     return next;
   });
+  function showRecordedEvent(captured: TimelineEvent[], position: number) {
+    setReplay({events:captured, position});
+    setExpanded(current => new Set([...current, captured[position].id]));
+  }
   return <>
     <div className="obs-toolbar">
       <h3>Execution timeline</h3>
-      <label>Find an event<input value={filter} onChange={event => setFilter(event.target.value)} /></label>
-      <label>Severity<select value={severity} onChange={event => setSeverity(event.target.value)}>
+      {!replay && <label>Find an event<input value={filter} onChange={event => setFilter(event.target.value)} /></label>}
+      {!replay && <label>Severity<select value={severity} onChange={event => setSeverity(event.target.value)}>
         <option value="">All severities</option>{[...new Set(ordered.map(event => event.severity))].map(level =>
-          <option key={level} value={level}>{level}</option>)}</select></label>
+          <option key={level} value={level}>{level}</option>)}</select></label>}
       <button type="button" className="run-link" aria-expanded={showTrace} onClick={() => setShowTrace(value => !value)}>Span hierarchy</button>
+      {replayEnabled && (replay ? <>
+        <button type="button" className="run-link" disabled={replay.position === 0}
+          onClick={() => showRecordedEvent(replay.events, replay.position - 1)}>Previous event</button>
+        <span role="status">Event {replay.position + 1} of {replay.events.length}</span>
+        <button type="button" className="run-link" disabled={replay.position + 1 === replay.events.length}
+          onClick={() => showRecordedEvent(replay.events, replay.position + 1)}>Next event</button>
+        <button type="button" className="run-link" onClick={() => setReplay(undefined)}>Exit replay</button>
+      </> : <button type="button" className="run-link" disabled={!ordered.length}
+        onClick={() => showRecordedEvent(ordered, 0)}>Replay loaded events</button>)}
     </div>
     {showTrace && <div className="run-table-viewport" role="region" aria-label="Span hierarchy" tabIndex={0}>
       <table className="run-table" aria-label="Span hierarchy"><thead><tr><th scope="col">Operation</th><th scope="col">Source</th>
@@ -116,13 +138,16 @@ export function ExecutionTimeline({events, loading, failed, retry, initialEvent}
             <td>{event.source}</td><td>{event.severity}</td><td>{title(event.status)}</td><td>{duration(event.duration)}</td>
             <td>{event.result ?? 'Not recorded'}</td><td>{event.why ?? 'Not recorded'}</td></tr>
           {expanded.has(event.id) && <tr className="obs-evidence"><td colSpan={8}>
+            {event.executionId && openExecution && <button type="button" className="run-link"
+              onClick={() => openExecution(event.executionId!)}>Open execution</button>}
             <RecordedTable value={{...event.details, verification:event.verification, trace:event.trace, span_links:event.links}} />
+            <DecisionEvaluation event={event} events={recorded} />
             <details><summary>View redacted event data</summary>
               <pre>{JSON.stringify(approved(event), null, 2)}</pre></details>
           </td></tr>}
         </Fragment>)}
-        {loading && <tr><td colSpan={8} role="status">Loading execution events…</td></tr>}
-        {failed && <tr><td colSpan={8} role="alert">Could not load execution events. {retry &&
+        {!replay && loading && <tr><td colSpan={8} role="status">Loading execution events…</td></tr>}
+        {!replay && failed && <tr><td colSpan={8} role="alert">Could not load execution events. {retry &&
           <button type="button" className="run-link" onClick={retry}>Retry</button>}</td></tr>}
         {!visible.length && !loading && !failed && <tr><td colSpan={8}>
           {ordered.length ? 'No matching events in this page.' : 'No events recorded.'}</td></tr>}</tbody>

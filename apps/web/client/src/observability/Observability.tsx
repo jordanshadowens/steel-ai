@@ -3,6 +3,9 @@ import { useListRunsQuery, useListWorkflowsQuery } from '../api/steelApi';
 import { runStatusLabel } from '../api/runStatus';
 import { navigate, routeHref, routeSearch } from '../app/router';
 import { AgentActivity, type AgentSelection } from './AgentActivity';
+import { AgentLogs } from './AgentLogs';
+import { AgentMetrics } from './AgentMetrics';
+import { AgentEvaluations } from './AgentEvaluations';
 import { ExecutionTimeline, Timestamp, title } from './ExecutionTimeline';
 import { useRuntimeTimeline } from './runtimeTimeline';
 import './cloud.css';
@@ -19,14 +22,17 @@ function WorkflowDetail({id, event}: {id: string; event?: string}) {
           version:String(run.run.version)}))}>Inspect version in Creator</a></div>
       <div className="run-table-viewport">
         <table className="run-table" aria-label="Workflow run summary">
-          <thead><tr>{['Run ID', 'Version', 'Started', 'Status', 'Outcome', 'Current step'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
+          <thead><tr>{['Run ID', 'Version', 'Started', 'Status', 'Outcome', 'Current step','Reported tokens in loaded events',
+            'Provider completions with token counts'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
           <tbody><tr><td><code>{id}</code></td><td>{run.run.version}</td><td><Timestamp value={run.run.created_at} /></td>
             <td>{runStatusLabel(run.run.status)}</td><td>{title(verification?.status ?? 'unverified')}</td>
-            <td>{title(run.run.current_step ?? undefined)}</td></tr></tbody>
+            <td>{title(run.run.current_step ?? undefined)}</td><td>{run.reportedTokens?.toLocaleString() ?? 'Unavailable'}</td>
+            <td>{run.providerCompletions ? `${run.measuredProviderCompletions}/${run.providerCompletions}` : 'Unavailable'}</td>
+          </tr></tbody>
         </table>
       </div>
     </>}
-    <ExecutionTimeline events={run.events} loading={run.loading} failed={run.error} retry={run.retry}
+    <ExecutionTimeline events={run.events} loading={run.loading} failed={run.error} retry={run.retry} replayEnabled
       initialEvent={event ? 'runtime:' + event : undefined} />
     {run.canPage && <button type="button" className="run-link" disabled={run.paging} onClick={() => void run.loadMore()}>Load older Runtime events</button>}
   </div>;
@@ -80,6 +86,9 @@ export function Observability() {
   const selection: AgentSelection | undefined = agent ? {agentId:agent, runId:search.get('execution') ?? undefined} : undefined;
   const workflows = Boolean(run || search.get('view') === 'workflow-runs');
   const executions = Boolean(selection || search.get('view') === 'executions');
+  const logs = search.get('view') === 'logs' && !workflows && !selection;
+  const metrics = search.get('view') === 'metrics' && !workflows && !selection;
+  const evaluations = search.get('view') === 'evaluations' && !workflows && !selection;
   function openWorkflow(id: string) {navigate('observability', new URLSearchParams({run:id}));}
   function openAgent(value: AgentSelection) {
     const query = new URLSearchParams({agent:value.agentId});
@@ -88,13 +97,21 @@ export function Observability() {
   }
   return <section id="observability" className="operations" aria-label="Observability">
     <nav className="obs-toolbar obs-nav" aria-label="Observability views">
-      <button type="button" className="run-link" aria-pressed={!workflows && !executions} onClick={() => navigate('observability')}>Agents</button>
+      <button type="button" className="run-link" aria-pressed={!workflows && !executions && !logs && !metrics && !evaluations} onClick={() => navigate('observability')}>Agents</button>
       <button type="button" className="run-link" aria-pressed={!workflows && executions}
         onClick={() => {if (!executions || workflows) navigate('observability', new URLSearchParams({view:'executions'}));}}>Executions</button>
       <button type="button" className="run-link" aria-pressed={workflows}
         onClick={() => navigate('observability', new URLSearchParams({view:'workflow-runs'}))}>Workflow Runs</button>
+      <button type="button" className="run-link" aria-pressed={logs}
+        onClick={() => navigate('observability', new URLSearchParams({view:'logs'}))}>Logs</button>
+      <button type="button" className="run-link" aria-pressed={metrics}
+        onClick={() => navigate('observability', new URLSearchParams({view:'metrics'}))}>Metrics</button>
+      <button type="button" className="run-link" aria-pressed={evaluations}
+        onClick={() => navigate('observability', new URLSearchParams({view:'evaluations'}))}>Evaluations</button>
     </nav>
-    {workflows ? <WorkflowRuns selected={run} event={search.get('event') ?? undefined} select={openWorkflow} />
+    {evaluations ? <AgentEvaluations openExecution={(agentId, runId) => openAgent({agentId, runId})} />
+      : metrics ? <AgentMetrics /> : logs ? <AgentLogs openExecution={(agentId, runId) => openAgent({agentId, runId})} />
+      : workflows ? <WorkflowRuns selected={run} event={search.get('event') ?? undefined} select={openWorkflow} />
       : <AgentActivity selected={selection} executions={executions} select={openAgent} openWorkflow={openWorkflow} />}
   </section>;
 }
