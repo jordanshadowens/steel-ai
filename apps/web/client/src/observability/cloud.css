@@ -162,3 +162,45 @@
   .recent-runs-toolbar h2 { flex-basis: 100%; }
   .recent-runs-toolbar label { flex: 1 1 125px; }
 }
+
+.run-data {
+  margin: 12px 0;
+}
+.run-data summary {
+  cursor: pointer;
+}
+.agent-execution-detail { display: grid; gap: 12px; min-width: 0; }
+.agent-execution-detail h4, .agent-execution-detail h5 { margin: 0; }
+.agent-execution-detail > label { max-width: 48rem; }
+.agent-checkpoint { border-bottom: 1px solid #334763; padding-block: 7px; min-width: 0; }
+.agent-checkpoint summary { cursor: pointer; overflow-wrap: anywhere; }
+.agent-checkpoint summary span { margin-inline-start: 12px; color: #b5c3d7; font-size: 12px; }
+.agent-checkpoint h5, .agent-checkpoint p, .agent-checkpoint pre { margin: 8px 0; }
+.agent-checkpoint pre { padding: 10px; background: #0d1522; }
+.run-data details {
+  margin: 8px 0;
+}
+.run-data-json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 24rem;
+  overflow: auto;
+}
+
+.obs-toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-block: 12px; }
+.obs-toolbar > :is(h2,h3) { margin-inline-end: auto; }
+.obs-nav { align-items: center; border-block-end: 1px solid #334763; padding-block-end: 12px; }
+.obs-nav .run-link[aria-pressed=true] { background: #314d6f; color: white; }
+.obs-execution { display: grid; gap: 12px; min-width: 0; }
+.obs-note { color: #b5c3d7; font-size: .85rem; }
+.obs-execution .run-table { table-layout: auto; min-width: 700px; }
+.obs-execution .run-table :is(td, th) { vertical-align: top; overflow-wrap: anywhere; white-space: normal; }
+.obs-execution .run-table th[scope=row] { text-align: start; }
+.obs-execution .run-table td code { white-space: normal; }
+.obs-timeline .run-table { min-width: 920px; }
+.obs-timeline .run-table td:nth-child(8) { min-width: 18rem; }
+.obs-values { width: 100%; border-collapse: collapse; }
+.obs-values :is(td,th) { padding: 6px 8px; vertical-align: top; border: 1px solid #334763; text-align: start; }
+.obs-values th { color: #c8def7; }
+.obs-evidence td > details { margin-block-start: 8px; }
+.obs-evidence pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
