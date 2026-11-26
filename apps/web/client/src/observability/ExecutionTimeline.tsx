@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { RecordedTable, approved, objectValue } from './RunData';
 import { MemorySimulation } from './MemorySimulation';
+import { DecisionEvaluation } from './DecisionEvaluation';
 import type { Checkpoint, Trace, Verification } from './agentActivityApi';
 
 export const title = (value?: string) => value ? value.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()) : 'Not recorded';
@@ -13,6 +14,8 @@ export function Timestamp({value}: {value?: string}) {
 export type TimelineEvent = {
   id: string; time?: string; step: string; source: string; severity: string;
   executionId?: string;
+  operation?: string;
+  eventType?: string;
   status?: string; duration?: number; result?: string; why?: string; trace?: Trace;
   links?: Trace[]; verification?: Verification; details?: Record<string, unknown>;
 };
@@ -22,6 +25,7 @@ export function checkpointEvent(entry: Checkpoint): TimelineEvent {
   const result = output?.outcome ?? output?.status ?? (output?.ready !== undefined ? (output.ready ? 'Ready' : 'Readiness checks failed') : undefined);
   return {
     id: 'agent:' + entry.id, executionId:entry.executionId, time: entry.timestamp, step: title(entry.step), source: title(entry.source ?? 'agent'),
+    operation: entry.step, eventType: entry.eventType,
     severity: entry.severity, status: entry.status, duration: entry.duration,
     result: typeof result === 'string' ? title(result) : undefined, why: entry.reason,
     trace: entry.trace, links: entry.spanLinks, verification: entry.verification,
@@ -122,6 +126,7 @@ export function ExecutionTimeline({events, loading, failed, retry, initialEvent,
             {event.executionId && openExecution && <button type="button" className="run-link"
               onClick={() => openExecution(event.executionId!)}>Open execution</button>}
             <RecordedTable value={{...event.details, verification:event.verification, trace:event.trace, span_links:event.links}} />
+            <DecisionEvaluation event={event} />
             <MemorySimulation event={event} events={ordered} />
             <details><summary>View redacted event data</summary>
               <pre>{JSON.stringify(approved(event), null, 2)}</pre></details>

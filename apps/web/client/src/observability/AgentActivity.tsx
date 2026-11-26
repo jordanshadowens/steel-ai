@@ -112,6 +112,11 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
 }) {
   const [filter, setFilter] = useState('');
   const [status, setStatus] = useState('');
+  const [outcome, setOutcome] = useState('');
+  const [version, setVersion] = useState('');
+  const [from, setFrom] = useState('');
+  const [through, setThrough] = useState('');
+  const [compareId, setCompareId] = useState('');
   const [pageToken, setPageToken] = useState<string>();
   const [prior, setPrior] = useState<AgentRun[]>([]);
   const page = useListAgentRunsQuery(pageToken ? {agent: agent.id, pageToken} : undefined, {skip: !pageToken});
@@ -120,19 +125,36 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
     .sort((left, right) => right.timestamp.localeCompare(left.timestamp) || left.id.localeCompare(right.id));
   const runId = selected.runId ?? runs[0]?.id;
   const run = runs.find(item => item.id === runId);
+  const compare = compareId === runId ? undefined : runs.find(item => item.id === compareId);
   const next = pageToken ? extra?.nextPageToken : agent.nextPageToken;
+  const start = from ? new Date(from + 'T00:00:00').getTime() : -Infinity;
+  const end = through ? new Date(through + 'T23:59:59.999').getTime() : Infinity;
+  const visible = runs.filter(item => {
+    const time = Date.parse(item.started ?? item.timestamp);
+    return item.id.toLowerCase().includes(filter.trim().toLowerCase()) && (!status || item.status === status)
+      && (!outcome || item.verification?.status === outcome) && (!version || item.version === version)
+      && time >= start && time <= end;
+  });
   return <section aria-label={agent.name + ' executions'} className="obs-execution">
     <div className="obs-toolbar"><h2>{agent.name} executions</h2>
       <label>Execution ID<input value={filter} onChange={event => setFilter(event.target.value)} /></label>
       <label>Status<select value={status} onChange={event => setStatus(event.target.value)}>
         <option value="">All statuses</option>{[...new Set(runs.map(item => item.status))].map(value =>
           <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+      <label>Outcome<select value={outcome} onChange={event => setOutcome(event.target.value)}>
+        <option value="">All outcomes</option>{[...new Set(runs.flatMap(item => item.verification ? [item.verification.status] : []))].map(value =>
+          <option key={value} value={value}>{title(value)}</option>)}</select></label>
+      <label>Version<select value={version} onChange={event => setVersion(event.target.value)}>
+        <option value="">All versions</option>{[...new Set(runs.flatMap(item => item.version ? [item.version] : []))].map(value =>
+          <option key={value} value={value}>{value}</option>)}</select></label>
+      <label>From<input type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
+      <label>Through<input type="date" value={through} min={from || undefined} onChange={event => setThrough(event.target.value)} /></label>
     </div>
     <div className="run-table-viewport" role="region" aria-label="Execution history" tabIndex={0}>
       <table className="run-table" aria-label="Execution history">
         <thead><tr>{['Execution ID', 'Trigger', 'Started', 'Finished', 'Duration', 'Status', 'Outcome', 'Summary', 'Version'].map(field =>
           <th key={field} scope="col">{field}</th>)}</tr></thead>
-        <tbody>{runs.filter(item => item.id.toLowerCase().includes(filter.trim().toLowerCase()) && (!status || item.status === status)).map(item =>
+        <tbody>{visible.map(item =>
           <tr key={item.id} data-selected={item.id === runId}><th scope="row">
             <button className="run-row-button" type="button" aria-pressed={item.id === runId}
               onClick={() => select({agentId:agent.id, runId:item.id})}>{item.id}</button></th>
@@ -140,7 +162,7 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
             <td>{duration(item.duration)}</td><td>{statusLabel(item.status)}</td><td>{title(item.verification?.status)}</td>
             <td>{item.summary ?? 'Not recorded'}</td><td>{item.version ?? 'Not recorded'}</td></tr>)}
         {agent.sourceAvailable === false ? <tr><td colSpan={9}>Log source unavailable.</td></tr>
-          : !runs.length && <tr><td colSpan={9}>No recent executions.</td></tr>}
+          : !visible.length && <tr><td colSpan={9}>{runs.length ? 'No matching loaded executions.' : 'No recent executions.'}</td></tr>}
         {pageToken && (page.isError || extra?.sourceAvailable === false) && <tr><td colSpan={9}>Could not read the next page.
           <button className="run-link" type="button" onClick={() => void page.refetch()}>Retry history</button></td></tr>}</tbody>
       </table>
@@ -149,6 +171,23 @@ function AgentExecutions({agent, selected, select, openWorkflow}: {
       setPrior(value => [...value, ...(extra?.runs ?? [])]);
       setPageToken(next);
     }}>Load more executions</button>}
+    {run && runs.length > 1 && <div className="obs-toolbar"><label>Compare with<select value={compare?.id ?? ''}
+      onChange={event => setCompareId(event.target.value)}>
+      <option value="">Select an execution</option>{runs.filter(item => item.id !== run.id).map(item =>
+        <option key={item.id} value={item.id}>{item.id}</option>)}</select></label></div>}
+    {run && compare && <div className="run-table-viewport" role="region" aria-label="Execution comparison" tabIndex={0}>
+      <table className="run-table" aria-label="Execution comparison">
+        <thead><tr><th scope="col">Field</th><th scope="col">{run.id}</th><th scope="col">{compare.id}</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Started</th><td><Timestamp value={run.started} /></td><td><Timestamp value={compare.started} /></td></tr>
+          <tr><th scope="row">Status</th><td>{statusLabel(run.status)}</td><td>{statusLabel(compare.status)}</td></tr>
+          <tr><th scope="row">Outcome</th><td>{title(run.verification?.status)}</td><td>{title(compare.verification?.status)}</td></tr>
+          <tr><th scope="row">Duration</th><td>{duration(run.duration)}</td><td>{duration(compare.duration)}</td></tr>
+          <tr><th scope="row">Version</th><td>{run.version ?? 'Not recorded'}</td><td>{compare.version ?? 'Not recorded'}</td></tr>
+          <tr><th scope="row">Summary</th><td>{run.summary ?? 'Not recorded'}</td><td>{compare.summary ?? 'Not recorded'}</td></tr>
+        </tbody>
+      </table>
+    </div>}
     {runId && <AgentTimeline key={runId} agentId={agent.id} runId={runId} workflowRunId={run?.workflowRunId}
       live={!run || ['started','waiting','retrying'].includes(run.status)} openWorkflow={openWorkflow} />}
   </section>;
