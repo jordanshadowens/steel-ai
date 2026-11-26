@@ -46,10 +46,10 @@ export function AgentMetrics() {
     </div>
     {alerts.length > 0 && <div className="run-table-viewport" role="region" aria-label="Operational alerts" tabIndex={0}>
       <table className="run-table" aria-label="Operational alerts">
-        <thead><tr>{['Agent','Alert','Severity','Execution','Count'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
+        <thead><tr>{['Agent','Alert','Severity','Execution','Observed','Count'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
         <tbody>{alerts.map(alert => <tr key={alert.agent + '/' + alert.code}>
           <th scope="row">{alert.agent}</th><td>{title(alert.code)}</td><td>{title(alert.severity)}</td>
-          <td>{alert.executionId ?? 'Not recorded'}</td><td>{alert.count ?? 'Not recorded'}</td>
+          <td>{alert.executionId ?? 'Not recorded'}</td><td><Timestamp value={alert.at} /></td><td>{alert.count ?? 'Not recorded'}</td>
         </tr>)}</tbody>
       </table>
     </div>}

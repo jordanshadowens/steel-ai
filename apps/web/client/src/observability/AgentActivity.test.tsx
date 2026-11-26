@@ -68,20 +68,24 @@ it('requests no traces when the account has no monitored agents or the list fail
   expect(details).not.toHaveBeenCalled();
 });
 
-it('filters loaded history and compares recorded technical status and verified outcomes', () => {
+it('requests a bounded history search and compares recorded technical status and verified outcomes', () => {
   const latest = {...security.runs[0], version:'release-2', verification:{status:'partially_successful'}};
   const previous = {...latest,id:'security-job-11', timestamp:'2026-01-01T03:04:05Z',version:'release-1',
     verification:{status:'verified_success'}};
-  list.mockReturnValue({currentData:{agents:[{...security,runs:[latest,previous]}]}});
+  list.mockImplementation((query?: {outcome?: string}) => ({currentData:{agents:[
+    {...security,runs:query?.outcome ? [latest] : [latest,previous]},
+  ]}}));
   details.mockReturnValue({currentData:{steps:[]}});
   runtime.mockReturnValue({events:[]});
   render(<AgentActivity selected={selection} select={vi.fn()} openWorkflow={vi.fn()} />);
-  const history = within(screen.getByRole('table',{name:'Execution history'}));
-  fireEvent.change(screen.getByLabelText('Outcome'), {target:{value:'partially_successful'}});
-  expect(history.queryByRole('button',{name:previous.id})).toBeNull();
   fireEvent.change(screen.getByLabelText('Compare with'), {target:{value:previous.id}});
   const comparison = within(screen.getByRole('table',{name:'Execution comparison'}));
   expect(comparison.getAllByText('Completed')).toHaveLength(2);
   expect(comparison.getByText('Partially successful')).toBeTruthy();
   expect(comparison.getByText('Verified success')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Outcome'), {target:{value:'partially_successful'}});
+  fireEvent.click(screen.getByRole('button',{name:'Search executions'}));
+  expect(list).toHaveBeenCalledWith(expect.objectContaining({agent:'security',outcome:'partially_successful'}),expect.anything());
+  const history = within(screen.getByRole('table',{name:'Execution history'}));
+  expect(history.queryByRole('button',{name:previous.id})).toBeNull();
 });
