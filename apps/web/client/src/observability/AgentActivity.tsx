@@ -108,7 +108,7 @@ function AgentTimeline({agentId, runId, workflowRunId, live, openWorkflow}: {
       event.preventDefault();
       openWorkflow(linked);
     }}>Open Steel workflow run</a>}
-    <ExecutionTimeline events={[...steps.map(checkpointEvent), ...workflow.events]}
+    <ExecutionTimeline events={[...steps.map(checkpointEvent), ...workflow.events]} replayEnabled
       loading={(query.isFetching && !query.currentData) || workflow.loading}
       failed={current.isError || workflow.error} retry={() => {void current.refetch(); if (workflow.error) workflow.retry();}} />
     <div className="obs-toolbar">

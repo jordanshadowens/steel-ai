@@ -32,7 +32,7 @@ function WorkflowDetail({id, event}: {id: string; event?: string}) {
         </table>
       </div>
     </>}
-    <ExecutionTimeline events={run.events} loading={run.loading} failed={run.error} retry={run.retry}
+    <ExecutionTimeline events={run.events} loading={run.loading} failed={run.error} retry={run.retry} replayEnabled
       initialEvent={event ? 'runtime:' + event : undefined} />
     {run.canPage && <button type="button" className="run-link" disabled={run.paging} onClick={() => void run.loadMore()}>Load older Runtime events</button>}
   </div>;
