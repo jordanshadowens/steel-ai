@@ -133,14 +133,22 @@ function typePath(type: DesignerTypeRow) {
   return `/types/${encodeURIComponent(type.type_id)}`;
 }
 
-function verifyPublished(model: SetupType, published: SetupType) {
-  const live = new Map(published.fields.map((field) => [field.name, field]));
+async function verifyPublished(request: DesignerRequest, model: SetupType, type: DesignerTypeRow) {
+  const { spec } = responseObject(await request(`${typePath(type)}/versions/${type.version}`));
+  if (!object(spec) || spec.type_id !== type.type_id || spec.version !== type.version ||
+      spec.status !== 'published' || !Array.isArray(spec.fields)) {
+    throw new Error(`The ${model.name} model changed. Check setup again.`);
+  }
+  // An immutable version can retain an earlier model name after a rename.
+  const fields = spec.fields.filter((field): field is SetupField =>
+    object(field) && field.status === 'active' && typeof field.name === 'string' && typeof field.ftype === 'string');
+  const live = new Map(fields.map((field) => [field.name, field]));
   const shared = sharedFields.get(model.name);
   const incompatible = shared ? shared.some((name) => !live.has(name)) :
     model.fields.some((field) => {
       const current = live.get(field.name);
       return !current || !equal(fieldShape(current), fieldShape(field));
-    }) || published.fields.some((field) => !model.fields.some(({ name }) => name === field.name) &&
+    }) || fields.some((field) => !model.fields.some(({ name }) => name === field.name) &&
       ((field.required && field.default == null) || (field.unique && field.default != null)));
   if (incompatible) throw new Error(`Review the published ${model.name} schema before applying setup.`);
 }
@@ -173,17 +181,12 @@ async function verifyDraft(request: DesignerRequest, model: SetupType, type: Des
 }
 
 async function planSetup(request: DesignerRequest, bundle: WorkspaceSetup) {
-  const published = new Map(parseTypes(await request('/export')).map((type) => [type.name, type]));
   const known = await typesByName(request);
   const missing: SetupType[] = [];
   for (const model of bundle.schema.types) {
-    const live = published.get(model.name);
     const existing = known.get(model.name);
-    if (live) {
-      if (!existing || existing.status !== 'active' || existing.version < 1) {
-        throw new Error(`The ${model.name} model changed. Check setup again.`);
-      }
-      verifyPublished(model, live);
+    if (existing && existing.status === 'active' && existing.version > 0) {
+      await verifyPublished(request, model, existing);
       continue;
     }
     if (existing) await verifyDraft(request, model, existing, known);
@@ -194,7 +197,7 @@ async function planSetup(request: DesignerRequest, bundle: WorkspaceSetup) {
   for (const name of bindingTypes) {
     if (!bundle.bindings[name].length) continue;
     const type = known.get(name);
-    const response = type && published.has(name) ?
+    const response = type && type.version > 0 ?
       responseObject(await request(`${typePath(type)}/records?limit=${recordReadLimit}`)) : { records: [] };
     if (!Array.isArray(response.records)) throw new Error(`Data Designer did not return ${name} records.`);
     const rows = response.records as DesignerRecord[];

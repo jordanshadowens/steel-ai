@@ -23,16 +23,12 @@ function fixture() {
   const records: Array<{ values: typeof binding }> = [];
   const writes: string[] = [];
 
-  function addType(model: typeof spec, version = 0) {
+  function addType(model: typeof spec, version = 0, publishedName = model.name) {
     types.set(model.name, { type_id: `ut_${model.name}`, name: model.name, status: 'active', version });
-    specs.set(model.name, model);
+    specs.set(model.name, { ...model, name: publishedName });
   }
 
   async function request(path: string, body?: unknown) {
-    if (path === '/export') {
-      return { format: 'steel-schema/1', types: [...types.values()]
-        .filter(({ version }) => version > 0).map(({ name }) => specs.get(name)) };
-    }
     if (path === '/types?include_archived=1') return { types: [...types.values()] };
     if (path === '/import/validate') return { ok: true };
     if (body !== undefined) writes.push(path);
@@ -54,6 +50,10 @@ function fixture() {
     }
     const model = specs.get(name);
     if (model) {
+      if (path.includes('/versions/')) {
+        return { spec: { ...types.get(name), name: model.name, status: 'published',
+          fields: model.fields.map((field) => ({ ...field, status: 'active' })) } };
+      }
       return { type: { ...types.get(name), draft_sha256: name, relationships: [],
         fields: model.fields.map((field) => ({ ...field, status: 'active' })) } };
     }
@@ -94,6 +94,20 @@ it('blocks conflicting published fields, drafts, and stored bindings before any 
   stored.records.push({ values: { ...binding, selector: 'different selector' } });
   await expect(applyWorkspaceSetup(stored.request, bundle)).rejects.toThrow('existing MetricBinding record');
   expect(stored.writes).toEqual([]);
+});
+
+it('reuses the current named model when its published version retains a previous name', async () => {
+  const bundle = parseWorkspaceSetup(JSON.stringify(packageDocument));
+  const { request, writes, addType } = fixture();
+  addType(spec, 1, 'PreviousMetricBinding');
+  expect(await prepareWorkspaceSetup(request, bundle)).toEqual({
+    missingModels: ['MetricPoint'], missingBindings: 1,
+  });
+  expect(writes).toEqual([]);
+  expect(await applyWorkspaceSetup(request, bundle)).toEqual({
+    publishedModels: ['MetricPoint'], insertedBindings: 1,
+  });
+  expect(writes).not.toContain('/types/ut_MetricBinding/publish');
 });
 
 it('rejects unrelated model names and unscoped or duplicate bindings', () => {
