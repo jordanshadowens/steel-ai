@@ -1,354 +1,114 @@
+import { useEffect, useState } from 'react';
 import { useListRunsQuery, useListWorkflowsQuery } from '../api/steelApi';
 import { runStatusLabel } from '../api/runStatus';
 import { navigate, routeHref, routeSearch } from '../app/router';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import demoDefinition from '../creator/metaRadarExample.json';
-import demoCapture from './metaRadarCapture.json';
+import { AgentActivity, type AgentSelection } from './AgentActivity';
+import { AgentLogs } from './AgentLogs';
+import { AgentMetrics } from './AgentMetrics';
+import { AgentEvaluations } from './AgentEvaluations';
+import { ExecutionTimeline, Timestamp, title } from './ExecutionTimeline';
+import { useRuntimeTimeline } from './runtimeTimeline';
 import './cloud.css';
-import { RunLogList, SeverityFilter, type MinimumSeverity } from './RunLogList';
-import {
-  activeStep,
-  matchesSeverity,
-  runEntries,
-  runtime,
-  stepTimings,
-  terminal,
-  type Definition,
-  type Entry,
-  type Run,
-} from './cloud';
 
-const WorkflowMap = lazy(() => import('./WorkflowMap'));
+function WorkflowDetail({id, event}: {id: string; event?: string}) {
+  const run = useRuntimeTimeline(id);
+  const verification = run.events.filter(entry => entry.verification).sort((left, right) =>
+    (right.time ?? '').localeCompare(left.time ?? '')).at(0)?.verification;
+  return <div className="obs-execution">
+    {run.run && <>
+      <div className="obs-toolbar"><h3>{run.run.workflow_id}</h3>
+        <a className="run-link" href={routeHref('runner', new URLSearchParams({run:id}))}>Open in Runner</a>
+        <a className="run-link" href={routeHref('creator', new URLSearchParams({workflow:run.run.workflow_id,
+          version:String(run.run.version)}))}>Inspect version in Creator</a></div>
+      <div className="run-table-viewport">
+        <table className="run-table" aria-label="Workflow run summary">
+          <thead><tr>{['Run ID', 'Version', 'Started', 'Status', 'Outcome', 'Current step','Reported tokens in loaded events'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
+          <tbody><tr><td><code>{id}</code></td><td>{run.run.version}</td><td><Timestamp value={run.run.created_at} /></td>
+            <td>{runStatusLabel(run.run.status)}</td><td>{title(verification?.status ?? 'unverified')}</td>
+            <td>{title(run.run.current_step ?? undefined)}</td><td>{run.reportedTokens?.toLocaleString() ?? 'Unavailable'}</td></tr></tbody>
+        </table>
+      </div>
+    </>}
+    <ExecutionTimeline events={run.events} loading={run.loading} failed={run.error} retry={run.retry}
+      initialEvent={event ? 'runtime:' + event : undefined} />
+    {run.canPage && <button type="button" className="run-link" disabled={run.paging} onClick={() => void run.loadMore()}>Load older Runtime events</button>}
+  </div>;
+}
 
-type RunDetail = { run: Run; logs?: Entry[] };
-type Version = { version: number; definition: Definition };
-const demoId = 'meta-briefing-example';
-const demoRun: RunDetail = {
-  run: { run_id: demoId, workflow_id: demoDefinition.workflow_id, version: 1, status: 'sealed' },
-  logs: demoCapture.logs as Entry[],
-};
-export function Observability() {
-  const initialSearch = routeSearch();
-  const initialRun = initialSearch.get('run') || '';
-  const runQuery = useListRunsQuery(undefined, { pollingInterval: 4000 });
+function WorkflowRuns({selected, event, select}: {selected?: string; event?: string; select: (id: string) => void}) {
+  const runQuery = useListRunsQuery(undefined, {pollingInterval:10000});
   const workflowQuery = useListWorkflowsQuery();
-  const runs = runQuery.data?.runs;
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
   const names = new Map(workflowQuery.data?.workflows.map(workflow => [workflow.workflow_id, workflow.name || workflow.workflow_id]));
-  const recentRuns = [...(runs ?? [])].sort((a, b) =>
-    (b.created_at ?? '').localeCompare(a.created_at ?? '') || a.run_id.localeCompare(b.run_id),
-  );
-  const [selected, select] = useState(initialRun);
-  const [detail, setDetail] = useState<RunDetail>();
-  const [definition, setDefinition] = useState<Definition>();
-  const [error, setError] = useState('');
-  const [mapError, setMapError] = useState('');
-  const [filter, setFilter] = useState('');
-  const [severity, setSeverity] = useState<MinimumSeverity>('trace');
-  const [followLogs, setFollowLogs] = useState(true);
-  const [runFilter, setRunFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [oldestFirst, setOldestFirst] = useState(false);
-  const [kind, setKind] = useState('all');
-  const [timeRange, setTimeRange] = useState('all');
-  const [logViewPaused, setLogViewPaused] = useState<{runId: string; entries: Entry[]}>();
-  const [inspectedLog, setInspectedLog] = useState(() => initialSearch.get('event') ?? undefined);
-  const [refreshedAt, setRefreshedAt] = useState<number>();
-  const [timingOpen, setTimingOpen] = useState(false);
-  const eventDialog = useRef<HTMLDialogElement>(null);
-  const statuses = [...new Set(recentRuns.map(run => runStatusLabel(run.status)))].sort();
-  const search = runFilter.trim().toLowerCase();
-  const visibleRuns = recentRuns.filter(run =>
-    (statusFilter === 'all' || runStatusLabel(run.status) === statusFilter) &&
-    [run.run_id, run.workflow_id, names.get(run.workflow_id)].some(value => value?.toLowerCase().includes(search)),
-  );
-  const showExample = statusFilter === 'all' && ('meta briefing example ' + demoId).includes(search);
-  const rows = showExample ? [...visibleRuns, demoRun.run] : visibleRuns;
+  const runs = [...(runQuery.data?.runs ?? [])].sort((left, right) =>
+    (right.created_at ?? '').localeCompare(left.created_at ?? '') || left.run_id.localeCompare(right.run_id));
+  const visible = runs.filter(run => (!status || run.status === status) &&
+    [run.run_id, run.workflow_id, names.get(run.workflow_id)].some(value => value?.toLowerCase().includes(search.trim().toLowerCase())));
+  return <section className="obs-execution" aria-label="Workflow runs">
+    <div className="obs-toolbar"><h2>Workflow runs</h2>
+      <label>Find a run<input value={search} onChange={e => setSearch(e.target.value)} /></label>
+      <label>Status<select value={status} onChange={e => setStatus(e.target.value)}>
+        <option value="">All statuses</option>{[...new Set(runs.map(run => run.status))].map(value =>
+          <option key={value} value={value}>{runStatusLabel(value)}</option>)}</select></label>
+    </div>
+    <div className="run-table-viewport" role="region" aria-label="Workflow history" tabIndex={0}>
+      <table className="run-table" aria-label="Workflow history">
+        <thead><tr>{['Workflow', 'Run ID', 'Version', 'Started', 'Status'].map(field => <th key={field} scope="col">{field}</th>)}</tr></thead>
+        <tbody>{visible.map(run => <tr key={run.run_id} data-selected={selected === run.run_id}>
+          <th scope="row"><button type="button" className="run-row-button" aria-pressed={selected === run.run_id}
+            onClick={() => select(run.run_id)}>{names.get(run.workflow_id) ?? run.workflow_id}</button></th>
+          <td><code>{run.run_id}</code></td><td>{run.version}</td>
+          <td><Timestamp value={run.created_at} /></td><td>{runStatusLabel(run.status)}</td></tr>)}
+        {runQuery.isError ? <tr><td colSpan={5} role="alert">Could not load workflow runs. <button type="button" className="run-link"
+          onClick={() => void runQuery.refetch()}>Retry</button></td></tr>
+          : !visible.length && <tr><td colSpan={5}>{runQuery.isLoading ? 'Loading workflow runs…'
+            : runs.length ? 'No matching workflow runs.' : 'No workspace runs yet.'}</td></tr>}</tbody>
+      </table>
+    </div>
+    {selected && <WorkflowDetail key={selected} id={selected} event={event} />}
+  </section>;
+}
 
-  function chooseRun(id: string) {
-    setLogViewPaused(undefined);
-    setInspectedLog(undefined);
-    setRefreshedAt(undefined);
-    select(id);
-    history.replaceState(history.state, '', routeHref('observability', new URLSearchParams({run: id})));
+export function Observability() {
+  const [search, setSearch] = useState(routeSearch);
+  useEffect(() => {
+    const update = () => setSearch(routeSearch());
+    window.addEventListener('popstate', update);
+    window.addEventListener('hashchange', update);
+    return () => {window.removeEventListener('popstate', update); window.removeEventListener('hashchange', update);};
+  }, []);
+  const run = search.get('run') ?? undefined;
+  const agent = search.get('agent');
+  const selection: AgentSelection | undefined = agent ? {agentId:agent, runId:search.get('execution') ?? undefined} : undefined;
+  const workflows = Boolean(run || search.get('view') === 'workflow-runs');
+  const executions = Boolean(selection || search.get('view') === 'executions');
+  const logs = search.get('view') === 'logs' && !workflows && !selection;
+  const metrics = search.get('view') === 'metrics' && !workflows && !selection;
+  const evaluations = search.get('view') === 'evaluations' && !workflows && !selection;
+  function openWorkflow(id: string) {navigate('observability', new URLSearchParams({run:id}));}
+  function openAgent(value: AgentSelection) {
+    const query = new URLSearchParams({agent:value.agentId});
+    if (value.runId) query.set('execution', value.runId);
+    navigate('observability', query);
   }
-
-  useEffect(() => {
-    if (runs) select(id => id || runs[0]?.run_id || demoId);
-  }, [runs]);
-
-  useEffect(() => {
-    if (!selected || selected === demoId) return;
-    const request = new AbortController();
-    let timer: ReturnType<typeof setTimeout>;
-    let versionLoaded = false;
-    setDefinition(undefined);
-    setError('');
-    setMapError('');
-    async function refresh() {
-      let finished = false;
-      try {
-        const result = await runtime<RunDetail>(
-          '/runs/' + encodeURIComponent(selected) + '?logs=1',
-          request.signal,
-        );
-        if (request.signal.aborted) return;
-        setDetail(result);
-        setRefreshedAt(Date.now());
-        setError('');
-        finished = terminal(result.run.status);
-        if (!versionLoaded) {
-          try {
-            const workflowPath =
-              '/workflows/' + encodeURIComponent(result.run.workflow_id);
-            const query = new URLSearchParams({
-              version: String(result.run.version),
-              include_deleted: '1',
-            });
-            const versions = await runtime<{ versions: Version[] }>(
-              workflowPath + '?' + query,
-              request.signal,
-            );
-            if (request.signal.aborted) return;
-            const version = versions.versions.find(
-              (item) => item.version === result.run.version,
-            );
-            setDefinition(version?.definition);
-            setMapError(version ? '' : 'This workflow version is unavailable.');
-            versionLoaded = true;
-          } catch {
-            if (!request.signal.aborted)
-              setMapError('Could not load the workflow definition. Retrying…');
-          }
-        }
-      } catch (cause) {
-        if (!request.signal.aborted)
-          setError(
-            cause instanceof Error ? cause.message : 'Could not load run',
-          );
-      } finally {
-        if (!request.signal.aborted && (!finished || !versionLoaded))
-          timer = setTimeout(refresh, 1800);
-      }
-    }
-    void refresh();
-    return () => {
-      request.abort();
-      clearTimeout(timer);
-    };
-  }, [selected]);
-
-  const demo = selected === demoId;
-  const displayed = demo ? demoRun : detail?.run.run_id === selected ? detail : undefined;
-  const [logSelection, setLogSelection] = useState<{ runId: string; step: string }>();
-  const run = displayed?.run;
-  const displayedDefinition = demo ? demoDefinition : definition;
-  const logStep = logSelection?.runId === run?.run_id ? logSelection?.step : undefined;
-  const active = run && activeStep(run);
-  const entries = run ? runEntries(run, displayed?.logs) : [];
-  const paused = logViewPaused?.runId === run?.run_id ? logViewPaused : undefined;
-  const source = paused?.entries ?? entries;
-  const end = Date.parse(run?.updated_at || entries.at(-1)?.at || '') || Date.now();
-  const logEnd = paused ? (Date.parse(source.at(-1)?.at || '') || end) : end;
-  const timeframe = timeRange === 'all' ? 0 : logEnd - Number(timeRange) * 60_000;
-  const logs = source.filter(entry =>
-    (!logStep || entry.step_id === logStep) &&
-    matchesSeverity(entry, severity) &&
-    (kind === 'all' || (entry.kind ?? 'run') === kind) &&
-    (!timeframe || Date.parse(entry.at || '') >= timeframe) &&
-    [entry.message, entry.completion, entry.result_excerpt, entry.step_id, entry.status].join(' ').toLowerCase().includes(filter.trim().toLowerCase()),
-  );
-  const logDetail = entries.find(entry => String(entry.id) === inspectedLog);
-  const hasLogDetail = Boolean(logDetail);
-  useEffect(() => {
-    const dialog = eventDialog.current;
-    if (hasLogDetail && dialog && !dialog.open) dialog.showModal();
-  }, [hasLogDetail]);
-  const sourceCount = (type: Entry['kind']) => source.filter(entry => (entry.kind ?? 'run') === type).length;
-  const errors = entries.filter(entry => matchesSeverity(entry, 'error')).length;
-  const providerCalls = Math.max(
-    entries.filter(entry => entry.status === 'provider_requested').length,
-    entries.filter(entry => entry.status === 'provider_completed' || entry.status === 'provider_failed').length,
-  );
-  const usage = entries.filter(entry => entry.status === 'provider_completed')
-    .map(entry => / · (\d+) tokens$/.exec(entry.message)?.[1]).filter(Boolean);
-  const stepNames = new Map(displayedDefinition?.steps?.map(step => [step.step_id,step.name || step.step_id]));
-  const observedSteps = new Set(entries.filter(entry => entry.status === 'step_completed' && (!stepNames.size || stepNames.has(entry.step_id ?? ''))).map(entry => entry.step_id)).size;
-  const timings = stepTimings(entries, active ? (refreshedAt ?? end) : end);
-  const firstStart = Math.min(...timings.map(timing => timing.start));
-  const lastEnd = Math.max(...timings.map(timing => timing.start + timing.duration));
-  const span = Math.max(1, lastEnd - firstStart);
-
-  return (
-    <section id="observability" className="operations" aria-label="Workflow runs">
-        <div className="operations-grid">
-          <section className="recent-runs" aria-labelledby="recent-runs-title">
-            <div className="recent-runs-toolbar">
-              <h2 id="recent-runs-title">Recent runs</h2>
-              <label>Find a run<input value={runFilter} placeholder="Agent or run ID" onChange={event => setRunFilter(event.target.value)} /></label>
-              <label>Status<select value={statusFilter} onChange={event => setStatusFilter(event.target.value)}>
-                <option value="all">All statuses</option>
-                {statuses.map(status => <option key={status} value={status}>{status}</option>)}
-              </select></label>
-            </div>
-            {runQuery.isError && <p role="status">Could not refresh recent runs. <button type="button" className="run-link" onClick={runQuery.refetch}>Retry</button></p>}
-            <div className="run-table-viewport" role="region" aria-label="Scrollable recent runs" tabIndex={0}>
-              <table className="run-table" aria-labelledby="recent-runs-title">
-                <colgroup><col className="run-agent-column" /><col className="run-id-column" /><col className="run-time-column" /><col className="run-status-column" /></colgroup>
-                <thead><tr><th scope="col">Agent name</th><th scope="col">Run ID</th><th scope="col">Started</th><th scope="col">Status</th></tr></thead>
-                <tbody>
-                  {rows.map(item => {
-                    const example = item.run_id === demoId;
-                    const name = example ? 'Meta briefing example' : names.get(item.workflow_id) || item.workflow_id;
-                    const startedAt = example ? demoCapture.logs.find(entry => entry.at)?.at : item.created_at;
-                    return <tr key={item.run_id} data-selected={item.run_id === selected}>
-                      <td><button type="button" className="run-row-button" aria-pressed={item.run_id === selected} onClick={() => chooseRun(item.run_id)}>{name}</button></td>
-                      <td><code title={item.run_id}>{item.run_id}</code></td>
-                      <td>{startedAt ? <time dateTime={startedAt}>{new Date(startedAt).toLocaleString()}</time> : '—'}</td>
-                      <td>{example ? 'Recorded run' : runStatusLabel(item.status)}</td>
-                    </tr>;
-                  })}
-                  {!visibleRuns.length && <tr><td colSpan={4}>{runQuery.isLoading ? 'Loading runs…' : search || statusFilter !== 'all' ? 'No matching runs.' : 'No workspace runs yet.'}</td></tr>}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <div className="operations-detail">
-            {!demo && error && <p role="status">{error}</p>}
-            {selected && !run && !error && <p role="status">Loading run…</p>}
-            {run && (
-              <>
-                <div className="run-heading">
-                  <h2>
-                    {run.workflow_id} <small>v{run.version}</small>
-                  </h2>
-                  <span className="run-status" role="status" data-state={run.status}>
-                    {runStatusLabel(run.status)}
-                    {run.current_step ? ' · ' + run.current_step : ''}
-                  </span>
-                </div>
-                <div className="run-meta">
-                  <p className="run-id">{demo ? 'Recorded with Meta using a sample maintenance update' : run.run_id}</p>
-                </div>
-                <div className="run-summary" aria-label="Run summary">
-                  <div><small>Completed steps</small><strong>{observedSteps}{displayedDefinition?.steps?.length ? ' / ' + displayedDefinition.steps.length : ''}</strong></div>
-                  <div><small>Provider calls</small><strong>{providerCalls}</strong>
-                    {usage.length > 0 && <small>{usage.reduce((sum, value) => sum + Number(value), 0).toLocaleString()} tokens reported</small>}</div>
-                  <div><small>Error events</small><strong>{errors}</strong></div>
-                </div>
-                <div className="run-investigation">
-                <div className="run-investigation-graph">
-                <div className="run-map-heading">
-                  <h3>Workflow map</h3>
-                  {!demo && <a href={routeHref('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}))} onClick={(event) => {
-                    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                    event.preventDefault();
-                    navigate('creator', new URLSearchParams({workflow: run.workflow_id, version: String(run.version)}));
-                  }}>Inspect version in Creator</a>}
-                  {!demo && <a href={routeHref('runner', new URLSearchParams({run: run.run_id}))} onClick={(event) => {
-                    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                    event.preventDefault();
-                    navigate('runner', new URLSearchParams({run: run.run_id}));
-                  }}>Open run details</a>}
-                </div>
-                {!demo && mapError && <p role="status">{mapError}</p>}
-                {displayedDefinition && (
-                  <Suspense
-                    fallback={<p role="status">Loading workflow map…</p>}
-                  >
-                    <WorkflowMap
-                      key={run.run_id}
-                      definition={displayedDefinition}
-                      current={run.current_step}
-                      active={active}
-                      runId={run.run_id}
-                      events={displayed.logs}
-                      selected={logStep}
-                      onSelect={step => setLogSelection(step ? { runId: run.run_id, step } : undefined)}
-                    />
-                  </Suspense>
-                )}
-                {timings.length > 0 && <div className="run-timings">
-                  <button className="run-timings-toggle" type="button" aria-expanded={timingOpen} aria-controls="step-timing-content" onClick={() => setTimingOpen(open => !open)}>
-                    <span>Step timing <small>{timings.length} {timings.length === 1 ? 'attempt' : 'attempts'}</small></span>
-                    <span className="run-timings-chevron" aria-hidden="true" />
-                  </button>
-                  <div className="run-timings-content" id="step-timing-content" data-open={timingOpen} inert={!timingOpen}>
-                  <div><ol aria-label="Step timing">
-                    {timings.map((timing, index) => <li key={timing.step + ':' + index}>
-                      <button type="button" className="run-log-inspect" title={timing.step} aria-pressed={logStep === timing.step}
-                        onClick={() => setLogSelection(logStep === timing.step ? undefined : {runId:run.run_id, step:timing.step})}>{stepNames.get(timing.step) || timing.step}</button>
-                      <span className="run-timing-track" aria-hidden="true">
-                        <span data-state={timing.status} style={{insetInlineStart:(timing.start-firstStart)/span*100+'%',width:timing.duration/span*100+'%'}} />
-                      </span>
-                      <small>{timing.duration >= 1000 ? (timing.duration/1000).toFixed(1) + ' s' : timing.duration + ' ms'} · {timing.status}</small>
-                    </li>)}
-                  </ol></div>
-                  </div>
-                </div>}
-                </div>
-                <div className="run-investigation-logs">
-                {displayed.logs === undefined && (
-                  <p>
-                    Tool logs are unavailable on this runtime. Showing run
-                    status.
-                  </p>
-                )}
-                <div className="log-heading run-explorer-heading">
-                  <h3>Run logs {!demo && !terminal(run.status) && <span className="run-log-live" role="status">{paused ? 'Paused' : error ? 'Reconnecting' : 'Live'}</span>} <small>{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</small></h3>
-                  {logStep && <button type="button" className="run-link" onClick={() => setLogSelection(undefined)}>Show all steps</button>}
-                  {!demo && (!terminal(run.status) || paused) && <button type="button" className="run-link" onClick={() => setLogViewPaused(paused ? undefined : {runId:run.run_id, entries})}>
-                    {paused ? 'Resume log updates' : 'Pause log updates'}
-                  </button>}
-                  {paused && <small role="status">Log updates paused</small>}
-                </div>
-                <div className="log-heading run-explorer-filters">
-                  <label>Source <select value={kind} onChange={event => setKind(event.target.value)}>
-                    <option value="all">All sources</option>
-                    <option value="run">Run events ({sourceCount('run')})</option>
-                    <option value="provider">Provider ({sourceCount('provider')})</option>
-                    <option value="tool">Tools ({sourceCount('tool')})</option>
-                  </select></label>
-                  <label>Time window <select value={timeRange} onChange={event => setTimeRange(event.target.value)}>
-                    <option value="all">Entire run</option><option value="5">Last 5 minutes</option><option value="15">Last 15 minutes</option><option value="60">Last hour</option>
-                  </select></label>
-                  <label>Order <select value={oldestFirst ? 'oldest' : 'newest'} onChange={event => setOldestFirst(event.target.value === 'oldest')}>
-                    <option value="newest">Newest first</option><option value="oldest">Oldest first</option>
-                  </select></label>
-                  <SeverityFilter value={severity} onChange={setSeverity} />
-                  <label>
-                    Filter logs{' '}
-                    <input
-                      value={filter}
-                      onChange={(event) => setFilter(event.target.value)}
-                    />
-                  </label>
-                  {!demo && !terminal(run.status) && <label><input type="checkbox" checked={followLogs} onChange={event => setFollowLogs(event.target.checked)} /> Follow logs</label>}
-                  {(filter || severity !== 'trace' || kind !== 'all' || timeRange !== 'all' || logStep) && <button type="button" className="run-link" onClick={() => {
-                    setFilter(''); setSeverity('trace'); setKind('all'); setTimeRange('all'); setLogSelection(undefined);
-                  }}>Clear filters</button>}
-                </div>
-                <RunLogList entries={oldestFirst ? logs : [...logs].reverse()}
-                  following={followLogs && !paused && !demo && !terminal(run.status)} newestFirst={!oldestFirst} selected={inspectedLog}
-                  onLeaveTail={() => setFollowLogs(false)}
-                  inspect={entry => setInspectedLog(String(entry.id))} />
-                {logDetail && <dialog ref={eventDialog} className="run-log-detail" aria-labelledby="log-event-title" onClose={() => setInspectedLog(undefined)}>
-                  <div><h3 id="log-event-title">Log event</h3>
-                    <button type="button" className="run-link" autoFocus onClick={() => eventDialog.current?.close()}>Close</button>
-                  </div>
-                  <p>{logDetail.message}</p>
-                  {logDetail.completion && <p>{logDetail.completion}</p>}
-                  {logDetail.result_excerpt && <><h4>Step conclusion</h4><p>{logDetail.result_excerpt}</p></>}
-                  <dl><dt>Severity</dt><dd>{logDetail.level.toUpperCase()}</dd><dt>Source</dt><dd>{logDetail.kind ?? 'run'}</dd>
-                  {logDetail.at && <><dt>Timestamp</dt><dd>{logDetail.at}</dd></>}
-                  {logDetail.step_id && <><dt>Step</dt><dd>{stepNames.get(logDetail.step_id) ?? logDetail.step_id}</dd></>}
-                  {logDetail.status && <><dt>Event</dt><dd>{logDetail.status === 'sealed' ? 'Run completed' : logDetail.status.replaceAll('_', ' ')}</dd></>}</dl>
-                </dialog>}
-                </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-    </section>
-  );
+  return <section id="observability" className="operations" aria-label="Observability">
+    <nav className="obs-toolbar obs-nav" aria-label="Observability views">
+      <button type="button" className="run-link" aria-pressed={!workflows && !executions && !logs && !metrics && !evaluations} onClick={() => navigate('observability')}>Agents</button>
+      <button type="button" className="run-link" aria-pressed={!workflows && executions}
+        onClick={() => {if (!executions || workflows) navigate('observability', new URLSearchParams({view:'executions'}));}}>Executions</button>
+      <button type="button" className="run-link" aria-pressed={workflows}
+        onClick={() => navigate('observability', new URLSearchParams({view:'workflow-runs'}))}>Workflow Runs</button>
+      <button type="button" className="run-link" aria-pressed={logs}
+        onClick={() => navigate('observability', new URLSearchParams({view:'logs'}))}>Logs</button>
+      <button type="button" className="run-link" aria-pressed={metrics}
+        onClick={() => navigate('observability', new URLSearchParams({view:'metrics'}))}>Metrics</button>
+      <button type="button" className="run-link" aria-pressed={evaluations}
+        onClick={() => navigate('observability', new URLSearchParams({view:'evaluations'}))}>Evaluations</button>
+    </nav>
+    {evaluations ? <AgentEvaluations openExecution={(agentId, runId) => openAgent({agentId, runId})} />
+      : metrics ? <AgentMetrics /> : logs ? <AgentLogs openExecution={(agentId, runId) => openAgent({agentId, runId})} />
+      : workflows ? <WorkflowRuns selected={run} event={search.get('event') ?? undefined} select={openWorkflow} />
+      : <AgentActivity selected={selection} executions={executions} select={openAgent} openWorkflow={openWorkflow} />}
+  </section>;
 }
