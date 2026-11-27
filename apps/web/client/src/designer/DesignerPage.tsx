@@ -6,6 +6,7 @@ import type {
   DesignerRecord,
 } from '../api/contracts';
 import {
+  steelApi,
   useAddDesignerFieldMutation,
   useArchiveDesignerTypeMutation,
   useCreateDesignerTypeMutation,
@@ -26,10 +27,12 @@ import {
   useUpdateDesignerRecordMutation,
   useValidateDesignerDraftMutation,
 } from '../api/steelApi';
+import { useAppDispatch } from '../store/hooks';
 import { TypeList } from './TypeList';
 import { FieldEditor, type FieldPayload } from './FieldEditor';
 import { RecordForm, RecordGrid } from './RecordViews';
 import { apiMessage } from './valueInputs';
+import { WorkspaceSetupImport } from './WorkspaceSetupImport';
 import './designer.css';
 
 const SECTIONS = { schema: 'Fields', records: 'Records' } as const;
@@ -50,6 +53,7 @@ async function run<T>(
 }
 
 export function DesignerPage() {
+  const dispatch = useAppDispatch();
   const cloud = import.meta.env.VITE_STEEL_CLOUD === '1';
   const {status: connections, error: connectionError} = useConnectionStatus(cloud);
   const [showArchived, setShowArchived] = useState(false);
@@ -153,6 +157,7 @@ export function DesignerPage() {
             connections && !connections.database ? 'No PostgreSQL connection configured. SQLite is ready to use. ' : ''}
           <a href={routeHref('settings', new URLSearchParams({section: 'database'}))}>Open database settings</a>
         </p>}
+        {cloud && !postgresModels && <WorkspaceSetupImport onRefresh={() => dispatch(steelApi.util.invalidateTags(['DesignerType', 'DesignerRecord']))} />}
       </header>
       <TypeList
         types={types}
